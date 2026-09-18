@@ -1,0 +1,42 @@
+# 实现本模型的代码仓库 / cargo workspace。
+# 每个 `path` 相对本文件所在目录（jumo/model/）解析。
+
+[[workspaces]]
+name = "wist-agentd"
+path = "../../../wist/wist-agentd"
+
+[[workspaces]]
+name = "wist-center"
+path = "../../../wist/wist-center"
+
+[[workspaces]]
+name = "wist-contracts"
+path = "../../../wist/wist-contracts"
+
+[[workspaces]]
+name = "wist-control"
+path = "../../../wist/wist-control"
+
+[[workspaces]]
+name = "wist-delivery"
+path = "../../../wist/wist-delivery"
+
+[[workspaces]]
+name = "wist-error"
+path = "../../../wist/wist-error"
+
+[[workspaces]]
+name = "wist-gateway"
+path = "../../../wist/wist-gateway"
+
+[[workspaces]]
+name = "wist-metrics"
+path = "../../../wist/wist-metrics"
+
+[[workspaces]]
+name = "wist-shared"
+path = "../../../wist/wist-shared"
+
+[[workspaces]]
+name = "wist-validate"
+path = "../../../wist/wist-validate"
