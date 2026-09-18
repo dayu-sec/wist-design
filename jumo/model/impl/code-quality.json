@@ -1,7 +1,7 @@
 {
   "schema": 6,
   "generated_at": "1789139535",
-  "project": "/Users/zuowenjian/devspace/rust/x-topology/warp-insight",
+  "project": "/Users/zuowenjian/devspace/rust/x-topology/wist",
   "metrics_algorithm_version": "rust-v2",
   "config": {
     "file_code_lines": 1000,

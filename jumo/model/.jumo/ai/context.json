@@ -1,5 +1,5 @@
 {
-  "project_root": "/Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model",
+  "project_root": "/Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model",
   "selected": {
     "kind": "file",
     "name": "crates/warp-agentd/src/telemetry/logs/files/delivery_support.rs"
@@ -7,7 +7,7 @@
   "diagnostics": [],
   "related_files": [
     {
-      "path": "/Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model/impl/code-quality.json"
+      "path": "/Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model/impl/code-quality.json"
     }
   ],
   "source_snippets": [],
@@ -32,7 +32,7 @@
       "`crates/warp-agentd/src/telemetry/logs/files/delivery_support.rs:54` `replay_spool_if_present` 圈复杂度 3 · 长度 11 行"
     ],
     "warnings": [],
-    "report_path": "/Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model/impl/code-quality.json",
-    "rerun_command": "jumo-code code-quality /Users/zuowenjian/devspace/rust/x-topology/warp-insight --out /Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model/impl/code-quality.json"
+    "report_path": "/Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model/impl/code-quality.json",
+    "rerun_command": "jumo-code code-quality /Users/zuowenjian/devspace/rust/x-topology/wist --out /Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model/impl/code-quality.json"
   }
 }

@@ -3,7 +3,7 @@
 This file is context for `.jumo/ai/ai-task.md`. Follow the selected AI task, not a generic fix task.
 
 ## Project
-/Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model
+/Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model
 
 ## Active View
 Code Quality
@@ -39,14 +39,14 @@ file `crates/warp-agentd/src/telemetry/logs/files/delivery_support.rs`
 - 无
 
 ### 报告与复算
-- 报告：`/Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model/impl/code-quality.json`
-- 复算命令：`jumo-code code-quality /Users/zuowenjian/devspace/rust/x-topology/warp-insight --out /Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model/impl/code-quality.json`
+- 报告：`/Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model/impl/code-quality.json`
+- 复算命令：`jumo-code code-quality /Users/zuowenjian/devspace/rust/x-topology/wist --out /Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model/impl/code-quality.json`
 
 ## Diagnostics
 - none
 
 ## Related Files
-- /Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model/impl/code-quality.json
+- /Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model/impl/code-quality.json
 
 ## Source Snippets
 No source snippets were available.

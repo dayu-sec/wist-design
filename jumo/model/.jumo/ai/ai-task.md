@@ -11,7 +11,7 @@ Code Quality
 
 当前选中：file `crates/warp-agentd/src/telemetry/logs/files/delivery_support.rs`
 
-目标质量信息（任务开始前采集，来自 `/Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model/impl/code-quality.json`）：
+目标质量信息（任务开始前采集，来自 `/Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model/impl/code-quality.json`）：
 目标：file `crates/warp-agentd/src/telemetry/logs/files/delivery_support.rs`
 - 代码行 56 行（拆分敏感）
 - 文件复杂度密度 214.3/KLOC（5/10 档）（拆分敏感）
@@ -35,7 +35,7 @@ Code Quality
 
 验证与对比（必须执行，结论只认这份对照）
 1. 完成改动后重算报告，命令必须与下面完全一致（写入 Studio 正在读取的同一份报告，否则界面不会更新）：
-   jumo-code code-quality /Users/zuowenjian/devspace/rust/x-topology/warp-insight --out /Users/zuowenjian/devspace/rust/x-topology/warp-insight/jumo/model/impl/code-quality.json
+   jumo-code code-quality /Users/zuowenjian/devspace/rust/x-topology/wist --out /Users/zuowenjian/devspace/rust/x-topology/wist-design/jumo/model/impl/code-quality.json
 2. 按**同一目标、同一口径**与上面的「基线度量」逐项比较（也可读报告的同名字段）：
    - 稳健指标（可直接判定好坏）：最大圈复杂度、最长函数、超圈复杂度函数数、超长函数数、告警数。只接受持平或改善；退化必须说明原因或回退。
    - 结构敏感指标（**不可单独作为改善证据**）：代码行、每千行复杂度密度、文件数。拆分或搬移代码必然改变它们，必须同时给出模块 subtree 口径的数字才能下结论。
