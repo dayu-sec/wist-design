@@ -4,10 +4,12 @@
 [[workspaces]]
 name = "wist-agentd"
 path = "../../../wist/wist-agentd"
+crates = ["wist-agentd-bin", "wist-upgrader"]
 
 [[workspaces]]
 name = "wist-center"
 path = "../../../wist/wist-center"
+crates = ["warp-insight-center"]
 
 [[workspaces]]
 name = "wist-contracts"
@@ -28,6 +30,7 @@ path = "../../../wist/wist-error"
 [[workspaces]]
 name = "wist-gateway"
 path = "../../../wist/wist-gateway"
+crates = ["warp-gateway"]
 
 [[workspaces]]
 name = "wist-metrics"
