@@ -1,0 +1,10 @@
+// warp-insight 生成与部署目标
+// WistCenter 上级聚合控制中心服务：网关列表监管、发布/升级。
+
+target<bin,http> warp-insight-center {
+  modules Control.InsightCenterApp.WistCenter
+  modules Control.Gateway.Supervision, Control.Gateway.Security
+  modules Control.InsightCenter.PlatformRelease, Control.Gateway.Identity, Control.Gateway.Management
+  modules Control.InsightCenterApp.AdminFacingInterface, Control.GatewayApp.FacingInterface
+  modules Control.GatewayApp.Application
+}

@@ -1,0 +1,11 @@
+module<ui> GatewayApp.WebFrontend {
+  meta {
+    label zh "WistGateway 前端 WEB"
+    label en "WistGateway Web Frontend"
+    summary zh "WistGateway 的浏览器端 WEB 前端，承载主界面、Agent 控制界面，并通过后端 WEB 服务接口完成管理操作。"
+    tags "admin", "web", "frontend"
+  }
+
+  layer Application
+  depends Control.GatewayApp.UserFacingInterface
+}
