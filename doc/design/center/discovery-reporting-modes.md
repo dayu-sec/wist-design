@@ -1,7 +1,8 @@
 # 发现上报的模式与规则
 
 > 本文档是「观测怎么变成一条上报」的**规则权威来源**。
-> 观测侧的权威来源是 `jumo/model/static/discovery/aspect-policies.mju`（各方向的观测频率区间、是否基线、平台、产出）。
+> 观测侧的权威来源是 `jumo/model/content/aspect-policies.toml`（各方向的观测频率区间、是否基线、平台、产出）；
+> 类型与字段语义在 `jumo/model/static/discovery/module/Probe/items.mju`。
 
 ## 1. 为什么这份知识不放进 jumo 模型
 
@@ -15,7 +16,7 @@
 
 | 内容 | 放哪 | 理由 |
 |---|---|---|
-| 有哪些方向、每方向的观测频率区间、是否基线、平台、产出 | 模型（`aspect-policies.mju`） | 结构性、参与代码生成 |
+| 有哪些方向、每方向的观测频率区间、是否基线、平台、产出 | **值**在 `content/aspect-policies.toml`；**类型**在模型 `Discovery.Probe` | 值是策展数据（与用途规则表同约定）；结构参与代码生成 |
 | 上报**范围** × **触发**、逐方向取值、判定规则 | 本文档 | 策略表格 + 依据，改动频繁，靠网关装载时校验 |
 
 ## 2. 两个正交维度

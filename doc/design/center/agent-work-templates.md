@@ -100,9 +100,13 @@ Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkl
 两个文件里 `spec_fragment` 的写法（`glob:` / `exporter:` / `predicate:` / `interval:`）是**待定约定**，
 loader 尚未实现；`rule_ref` 为空 = 规则未就绪，因此 `status` 必为 `draft`。
 
-发现方向的周期策略**不在 TOML 里**：`interval:` 最终要进工作 spec，与模型放两处必然漂移，
-所以值直接由模型发布 —— `static/discovery/aspect-policies.mju` 的 `PublishDiscoveryAspectPoliciesFlow`
-产出 `DiscoveryAspectPolicy`（Host 900s / Process 300s / Package 1800s，含 `[min,max]` 与基线开关）。
+发现方向的**观测周期**是一份独立的策展数据：`jumo/model/content/aspect-policies.toml`
+（与用途规则表同一约定 —— 模型只留类型与字段语义，值留 `content/`），
+由网关装载校验后下发给 agentd（Host 900s / Process 300s / Package 1800s，含 `[min,max]` 与基线开关；
+链路见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) §6）。
+
+别与采集目录/模板 `spec_fragment` 里的 `interval:` 混为一谈：那个是**采集**节拍（工作 spec 层面），
+这里是**发现**方向的观测频率 —— 两者量级与归属都不同。
 
 网关侧待实现的三条校验：模板 `unit_refs` 必须能在其 `catalog_version` 里全部解析；
 `base_template_id` 必须存在且不循环；`capability_scope` 必须等于展开后单元能力的并集；

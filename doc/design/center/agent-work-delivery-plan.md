@@ -13,7 +13,7 @@
 | 帧协议：`RAW:` → `LOGRAW:`，包 `macos_agent` → `agent_uplink`，tag → `agent.log` / `agent.metrics` | `wpl-check sample` 6 字段 / 0 residue；`wpadm check` 4/4；agentd `cargo test` 307+2+45 |
 | 模型三块：`Agent.Work`（工作）/ `Agent.Content`（内容）/ `Agent.Purpose`（用途） | `Content owns 9`、`Purpose owns 5` |
 | 三份策展数据 | `content/catalog.toml`（27 单元 / 18 面）、`content/templates.toml`（4 模板）、`content/purpose-rules.toml`（43 规则） |
-| 发现方向与周期策略 | `Discovery.Probe`（`DiscoveryAspect` 7 方向 + `DiscoveryAspectPolicy`）+ `static/discovery/aspect-policies.mju`（值由 `PublishDiscoveryAspectPoliciesFlow` 发布） |
+| 发现方向与周期策略 | `Discovery.Probe` 类型 + `content/aspect-policies.toml` 策展值；网关装载校验（七方向 / `[min,default,max]` / 基线不可关 / 平台闭集）并下发，agentd 应用后盖过内建默认周期。验证：`jumo verify` 0 error；`impl-check` 14 用例 0 warning；契约 24 / 网关 173 / agentd 338+2+45 全绿 |
 | 用途规则真机验证 | 用本机 906 个真实进程跑出 `MacDev`，置信度 90，依据可列（Xcode/mise/OrbStack） |
 
 ### 1.2 已设计、未实现
@@ -25,7 +25,6 @@
 | 用途识别（建议 → 依据 → 人工判定） | `Agent.Purpose` + 规则表 | 模型与规则就绪；无匹配实现、无管理面 |
 | 事实上报（数据通道 + 双订阅） | `Reporting.Protocol` + `Observed.Snapshot`（已按真实契约填实） | envelope/载荷已定；agentd 无聚合上报、数据面无 receiver |
 | 事实**摘要**上报（控制面） | `Reporting.ReportAgentFactSummary` + `Control.AgentFactSummary` + `IngestAgentFactSummaryFlow`（verify `AgentFactSummaryIngested` passed） | 模型已定（含 `/api/v1/agent/facts` 与 `/api/v1/admin/agents/{id}/purpose` 两条端点）；代码未写 |
-| 发现方向与周期策略 | `Discovery.Probe`（`DiscoveryAspect` / `DiscoveryAspectPolicy`）+ `aspect-policies.mju` | **值已进模型**（策略表是发布动作的产物）；**探针周期仍是硬编码**（host/network 300s、process/container/endpoint/k8s 30s、Package 无） |
 
 ### 1.3 已登记需求
 
