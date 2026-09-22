@@ -5,6 +5,10 @@ message<command> AgentStatusReport {
   memory_bytes: Int?
   cpu_percent: Float?
   admin_latency_ms: Int?
+  // 本机**实际生效**的发现方向策略版本；空 = 还没拿到策略表（在用内建默认周期）。
+  // 为什么由 agent 上报：网关知道自己**发布**了哪一版，但不知道哪台机器**拉到并应用**了哪一版
+  // —— 拉取可能失败、可能还没到轮询节拍。运维要回答的正是「我改了策略，哪些机器还没生效」。
+  discovery_policy_version: Int?
 }
 
 message<response> AgentStatusAccepted {

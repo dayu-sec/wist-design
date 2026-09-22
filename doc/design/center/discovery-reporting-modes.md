@@ -80,8 +80,8 @@ TOP 的排序键当下只能是「采样瞬间的资源占用」，而这个键�
 | 值 | `jumo/model/content/aspect-policies.toml` | 与用途规则表同约定；**改内容必须同时 bump `policy_version`** |
 | 装载与校验 | 网关启动（`[discovery] policies_file`） | 校验：七个方向各一条；`min ≥ 1` 且 `min ≤ default ≤ max`；`baseline` 的方向必须 `enabled_by_default`；`platforms` 只含 macos/linux。**校验不过起不来**（不会带病下发） |
 | 下发 | `POST /api/v1/agent/discovery-policies:poll` | agent 凭据认证；**未配表回 503**，不发空表 —— 空表会让「平台没发布策略」与「这台网关从未配置」无法区分 |
-| 查看 | `GET /api/v1/admin/discovery-policies` | 运维看当前生效的是哪一版；未配置时回 `configured: false`，不编一份默认表冒充 |
-| 应用 | agentd | 按探针名（= 方向名）取周期，**盖过探针内建默认值**；表里没这个方向（或周期非正）就回退内建值。拉不到表（含 503、断网、坏 JSON）→ 不改变现状，继续采集 |
+| 查看 | `GET /api/v1/admin/discovery-policies` | 运维看当前生效的是哪一版；**逐台**列出各 Agent 实际生效的版本（回答「我改了策略，哪些机器还没生效」——从未上报过的机器也在列，不静默消失）；未配置时回 `configured: false`，不编一份默认表冒充 |
+| 应用 | agentd | 按探针名（= 方向名）取周期，**盖过探针内建默认值**；表里没这个方向就回退内建值。周期先按策略**自带的** `[min,max]` 夹取（区间自相矛盾 → 回退内建值）；夹取/弃用的清单进 `DiscoveryPolicyApplied` 日志，不静默。拉不到表（含 503、断网、坏 JSON）→ 不改变现状，继续采集 |
 
 两条硬边界：
 
@@ -93,6 +93,8 @@ TOP 的排序键当下只能是「采样瞬间的资源占用」，而这个键�
 | 项 | 状态 |
 |---|---|
 | 观测频率下发 | **已落地**（见 §6）；agentd 仍把策展值当**内建默认值**保留一份，表里改了值而 agent 拿不到表时会走默认 |
+| 应用时的夹取与留痕 | **已落地**：agentd 用策略自带的 `[min,max]` 夹取（区间自相矛盾则回退内建值），调整清单随 `DiscoveryPolicyApplied` 一起打进日志 —— 静默夹取会把「网关发了一份坏表」伪装成一切正常 |
+| 生效版本可观测 | **已落地**：agentd 在状态上报里带 `discovery_policy_version`；网关落库（`agent_instances`）+ 写指标 `agent.discovery_policy_version`（历史免费）+ 管理面逐台列出 |
 | 策略表接管探针**开关** | **未做**：`baseline`/`enabled_by_default` 目前只被网关装载校验读到，agentd 不消费（需三态配置，见 §6） |
 | `InitialConfig.policy_version` / `PolicyBinding` 绑定通道 | **未用**：注册响应里带了这两个字段，agentd 从不读。将来可以用它把「每 5 分钟轮询」换成「版本指针变了才拉」 |
 | `report_interval_seconds` | **无代码读取**：当下恒等于观测周期（R4） |

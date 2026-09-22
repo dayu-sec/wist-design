@@ -46,6 +46,8 @@ struct DiscoveryAspectPolicy {
   // 注意它与「上报周期」是两件事：采得密是为了少漏检，报得疏是为了不噪声。
   default_interval_seconds: Int
   // 允许区间（秒）：改这个方向时不得越界（采得太密会把被管机器拖住，太疏则失去观测意义）。
+  // 两个执行者：网关**装载**时校验；agentd 应用时也拿它**夹取** —— 边界就在这条策略里，
+  // 用不着额外知识，而下放端不该把「上游永远正确」当前提。
   min_interval_seconds: Int
   max_interval_seconds: Int
   // 基线面：不可关（它回答“我是什么”，是自识别与派活的底座）——

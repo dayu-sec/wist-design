@@ -67,11 +67,12 @@ struct GatewayManagementState {
 //
 // 为什么视图在 Control 域而不是 Discovery：它是**网关管理面的读模型**，
 // 与 GatewayManagementState 同类；但它的内容是 Discovery 域的对象（跨域引用）。
+// 管理面看当前生效的策略表。
 struct DiscoveryPolicyView {
   meta {
     label zh "发现方向策略视图"
     label en "Discovery Policy View"
-    summary zh "管理面看当前生效的发现方向策略表：是否已配置，以及生效的那一版内容。"
+    summary zh "管理面看当前生效的发现方向策略表：是否已配置、生效的那一版内容，以及每台 Agent 实际生效的版本。"
     tags "discovery", "policy", "view", "admin"
   }
 
@@ -79,8 +80,28 @@ struct DiscoveryPolicyView {
   // 运维必须能区分「没配」与「配了一版空表」—— 后者不是合法状态（装载校验会拒）。
   configured: Boolean
   // 未配置时为空。
-  policy: Discovery.Probe.DiscoveryAspectPolicySet?
+  policy: DiscoveryAspectPolicySet?
+  // 每台已注册 Agent 实际生效的版本：回答「我改了策略，哪些机器还没生效」。
+  agents: List<AgentAppliedDiscoveryPolicy>
   generated_at: DateTime
+}
+
+// 一台 Agent 的策略生效情况（管理面视图的一行）。
+struct AgentAppliedDiscoveryPolicy {
+  meta {
+    label zh "Agent 策略生效情况"
+    label en "Agent Applied Discovery Policy"
+    summary zh "一台 Agent 实际生效的发现方向策略版本与最近一次状态上报时间。"
+    tags "discovery", "policy", "view", "admin"
+  }
+
+  agent_id: String
+  // 空 = 这台机器还没拉到策略表（在用内建默认周期）。**0 是一个真实版本，不可混同**。
+  applied_policy_version: Int?
+  instance_id: String
+  // 空 = 从未上报过状态（只有注册记录）。与“上报过”区分开：没上报过的机器
+  // 正是最可能漏掉的那一批，不能从列表里静默消失，也不能拿注册时刻冒充“最后一次上报”。
+  last_seen_at: DateTime?
 }
 
 command ViewGatewayManagementState = OperatorRequest {
