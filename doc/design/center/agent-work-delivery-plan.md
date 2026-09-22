@@ -63,8 +63,8 @@
 | 交付物 | 仓 | 要点 |
 |---|---|---|
 | agentd 聚合 + `OBSFACT:` 帧 | `wist-agentd` | 去重进程名/路径 + 包清单（Linux）+ 监听端口；正文 `{content_digest, mode, snapshot}`；**不进 spool**（可重算，尽力而为） |
-| 发现方向与周期调度 | `wist-agentd` | **已落地一半**：运行时按各探针 `refresh_interval()` 调度（只刷到期的，未到期的**沿用上次输出** —— 快照是从各探针输出重拼的，少交一个就等于把它的资源删掉）。周期值已改为与模型 `DiscoveryAspectPolicy.default_interval_seconds` 一致（Host/Network 900s、Process/Endpoint/Container/K8s 300s） |
-| 周期值由策略表**下发** | `wist-gateway` + `wist-agentd` | 未做：周期目前仍是各探针里的**字面量**，不是从已发布的策略表读的。所以「改模型→生效」还没闭环；且 `Package` 没有探针 |
+| 发现方向与周期调度 | `wist-agentd` | **已落地**：运行时按各探针周期调度（只刷到期的，未到期的**沿用上次输出** —— 快照是从各探针输出重拼的，少交一个就等于把它的资源删掉）。周期优先取**平台下发的策略表**（`content/aspect-policies.toml` → 网关装载校验 → agentd 拉取），拿不到表才回退探针里的**内建默认值**（与策展值同值） |
+| 周期值由策略表**下发** | `wist-gateway` + `wist-agentd` | **已落地**：`POST /api/v1/agent/discovery-policies:poll` + 装载期校验；剩余：策略表还**不接管探针开关**（开不开仍由本地 `[discovery] *_enabled`），且 `Package`/`K8s` 还没有接入运行的探针，它们的周期值暂无人消费 |
 | 数据面 receiver + sink | `wist-gateway-stack` | `obs_fact` rule（`symbol(OBSFACT:)`）+ OML（整块 JSON 透传，不做字段建模）+ sink group（`http_sink` → 网关、`kafka_sink` → 中心） |
 | 网关订阅端点 + 落库 | `wist-gateway` | 数据面 → 网关的**内部信任边界**；`(agent_id, revision)` / `content_digest` 幂等；派生**摘要视图**（不上送） |
 | 中心三层落库 | `wist-center` | ingress receipt / agent 当前快照 / 资源目录归并 |
