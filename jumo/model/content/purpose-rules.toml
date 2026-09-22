@@ -1,0 +1,337 @@
+# 用途推断规则表 —— 策展数据（对应模型 Control.Agent.Purpose.PurposeRuleSet）
+#
+# 按平台分册：macOS 一册、Linux 一册（两个平台的判据完全不同；一台机器只用自己平台那册）。
+# 规则表是“策展知识”，与采集目录同类：改规则 = 改“怎么判用途”，要走审定；不放进 agentd。
+#
+# 匹配语义（网关侧实现）：
+#   kind = process | process_path | listen_port | package | unit
+#   pattern 在该类信号上做**大小写不敏感子串**匹配；命中即给 machine_class 加 weight
+# 计分：
+#   各机器类别累加 weight → 取最高分 s1、次高 s2
+#   confidence = 100 × (s1 − s2) / s1，若 s1 < weak_score 再乘 0.5（信号太弱，不冒充有把握）
+#   **无任何命中**时才用 baseline_class（置信度低）；没有 baseline 的平台不产出建议（宁可不猜）
+#
+# 权重口径：强特征 40（几乎决定性，如 postgres / nvidia-persistenced）
+#           中特征 30、弱特征 10~25
+#           日常类特征（Safari/Mail）在开发机上同样存在，只给弱权重
+
+[[rule_set]]
+rule_set_id = "macos-v1"
+platform = "macos"
+baseline_class = "MacDaily"
+weak_score = 20
+published_at = "2026-09-22T00:00:00Z"
+
+# ── macOS：开发机特征 ──────────────────────────────────────────────
+[[rule_set.rules]]
+rule_id = "mac-dev-xcodebuild"
+kind = "process"
+pattern = "xcodebuild"
+machine_class = "MacDev"
+weight = 40
+
+[[rule_set.rules]]
+rule_id = "mac-dev-xcode-app"
+kind = "process_path"
+pattern = "/Applications/Xcode.app"
+machine_class = "MacDev"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "mac-dev-homebrew-arm"
+kind = "process_path"
+pattern = "/opt/homebrew"
+machine_class = "MacDev"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "mac-dev-homebrew-x86"
+kind = "process_path"
+pattern = "/usr/local/Cellar"
+machine_class = "MacDev"
+weight = 25
+
+[[rule_set.rules]]
+rule_id = "mac-dev-mise"
+kind = "process_path"
+pattern = "/mise/"
+machine_class = "MacDev"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "mac-dev-nvm"
+kind = "process_path"
+pattern = "/.nvm/"
+machine_class = "MacDev"
+weight = 25
+
+[[rule_set.rules]]
+rule_id = "mac-dev-asdf"
+kind = "process_path"
+pattern = "/.asdf/"
+machine_class = "MacDev"
+weight = 25
+
+[[rule_set.rules]]
+rule_id = "mac-dev-pyenv"
+kind = "process_path"
+pattern = "/.pyenv/"
+machine_class = "MacDev"
+weight = 25
+
+[[rule_set.rules]]
+rule_id = "mac-dev-node-modules"
+kind = "process_path"
+pattern = "node_modules"
+# 实测踩过：/Applications/WorkBuddy.app 自带的 node_modules 也会命中（Electron 应用），
+# 那是“装了应用”不是“在开发”。App bundle 里的不算。
+exclude_pattern = "/Applications/"
+machine_class = "MacDev"
+weight = 20
+
+[[rule_set.rules]]
+rule_id = "mac-dev-cargo"
+kind = "process_path"
+pattern = "/.cargo/"
+machine_class = "MacDev"
+weight = 20
+
+[[rule_set.rules]]
+rule_id = "mac-dev-docker-desktop"
+kind = "process_path"
+pattern = "/Docker.app"
+machine_class = "MacDev"
+weight = 25
+
+[[rule_set.rules]]
+rule_id = "mac-dev-orbstack"
+kind = "process_path"
+pattern = "/OrbStack.app"
+machine_class = "MacDev"
+weight = 25
+
+[[rule_set.rules]]
+rule_id = "mac-dev-vscode"
+kind = "process_path"
+pattern = "/Visual Studio Code.app"
+machine_class = "MacDev"
+weight = 25
+
+[[rule_set.rules]]
+rule_id = "mac-dev-jetbrains"
+kind = "process_path"
+pattern = "/JetBrains/"
+machine_class = "MacDev"
+weight = 20
+
+# ── macOS：日常机特征（弱权重；开发机上也有）────────────────────────
+[[rule_set.rules]]
+rule_id = "mac-daily-safari"
+kind = "process_path"
+pattern = "/Safari.app"
+machine_class = "MacDaily"
+weight = 10
+
+[[rule_set.rules]]
+rule_id = "mac-daily-mail"
+kind = "process_path"
+pattern = "/Mail.app"
+machine_class = "MacDaily"
+weight = 10
+
+[[rule_set.rules]]
+rule_id = "mac-daily-notes"
+kind = "process_path"
+pattern = "/Notes.app"
+machine_class = "MacDaily"
+weight = 5
+
+[[rule_set.rules]]
+rule_id = "mac-daily-office"
+kind = "process_path"
+pattern = "/Microsoft Word.app"
+machine_class = "MacDaily"
+weight = 10
+
+[[rule_set]]
+rule_set_id = "linux-v1"
+platform = "linux"
+weak_score = 20
+published_at = "2026-09-22T00:00:00Z"
+
+# ── Linux：计算服务器特征 ──────────────────────────────────────────
+[[rule_set.rules]]
+rule_id = "linux-compute-slurmd"
+kind = "process"
+pattern = "slurmd"
+machine_class = "LinuxCompute"
+weight = 40
+
+[[rule_set.rules]]
+rule_id = "linux-compute-slurmctld"
+kind = "process"
+pattern = "slurmctld"
+machine_class = "LinuxCompute"
+weight = 40
+
+[[rule_set.rules]]
+rule_id = "linux-compute-nvidia-persistenced"
+kind = "process"
+pattern = "nvidia-persistenced"
+machine_class = "LinuxCompute"
+weight = 40
+
+[[rule_set.rules]]
+rule_id = "linux-compute-dcgm"
+kind = "process"
+pattern = "dcgm"
+machine_class = "LinuxCompute"
+weight = 35
+
+[[rule_set.rules]]
+rule_id = "linux-compute-package-nvidia"
+kind = "package"
+pattern = "nvidia-driver"
+machine_class = "LinuxCompute"
+weight = 35
+
+[[rule_set.rules]]
+rule_id = "linux-compute-package-slurm"
+kind = "package"
+pattern = "slurm"
+machine_class = "LinuxCompute"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "linux-compute-condor"
+kind = "process"
+pattern = "condor_"
+machine_class = "LinuxCompute"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "linux-compute-kubelet"
+kind = "process"
+pattern = "kubelet"
+machine_class = "LinuxCompute"
+weight = 25
+
+[[rule_set.rules]]
+rule_id = "linux-compute-raylet"
+kind = "process"
+pattern = "raylet"
+machine_class = "LinuxCompute"
+weight = 20
+
+[[rule_set.rules]]
+rule_id = "linux-compute-kube-proxy"
+kind = "process"
+pattern = "kube-proxy"
+machine_class = "LinuxCompute"
+weight = 15
+
+# ── Linux：数据服务器特征 ──────────────────────────────────────────
+[[rule_set.rules]]
+rule_id = "linux-data-postgres"
+kind = "process"
+pattern = "postgres"
+machine_class = "LinuxData"
+weight = 40
+
+[[rule_set.rules]]
+rule_id = "linux-data-mysqld"
+kind = "process"
+pattern = "mysqld"
+machine_class = "LinuxData"
+weight = 40
+
+[[rule_set.rules]]
+rule_id = "linux-data-mariadbd"
+kind = "process"
+pattern = "mariadbd"
+machine_class = "LinuxData"
+weight = 40
+
+[[rule_set.rules]]
+rule_id = "linux-data-mongod"
+kind = "process"
+pattern = "mongod"
+machine_class = "LinuxData"
+weight = 40
+
+[[rule_set.rules]]
+rule_id = "linux-data-redis"
+kind = "process"
+pattern = "redis-server"
+machine_class = "LinuxData"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "linux-data-clickhouse"
+kind = "process"
+pattern = "clickhouse"
+machine_class = "LinuxData"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "linux-data-elasticsearch"
+kind = "process"
+pattern = "elasticsearch"
+machine_class = "LinuxData"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "linux-data-package-postgresql"
+kind = "package"
+pattern = "postgresql"
+machine_class = "LinuxData"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "linux-data-package-mysql"
+kind = "package"
+pattern = "mysql-server"
+machine_class = "LinuxData"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "linux-data-package-mongodb"
+kind = "package"
+pattern = "mongodb-org"
+machine_class = "LinuxData"
+weight = 30
+
+[[rule_set.rules]]
+rule_id = "linux-data-pgbackrest"
+kind = "process"
+pattern = "pgbackrest"
+machine_class = "LinuxData"
+weight = 20
+
+[[rule_set.rules]]
+rule_id = "linux-data-port-postgres"
+kind = "listen_port"
+pattern = "5432"
+machine_class = "LinuxData"
+weight = 20
+
+[[rule_set.rules]]
+rule_id = "linux-data-port-mysql"
+kind = "listen_port"
+pattern = "3306"
+machine_class = "LinuxData"
+weight = 20
+
+[[rule_set.rules]]
+rule_id = "linux-data-port-mongo"
+kind = "listen_port"
+pattern = "27017"
+machine_class = "LinuxData"
+weight = 20
+
+[[rule_set.rules]]
+rule_id = "linux-data-port-redis"
+kind = "listen_port"
+pattern = "6379"
+machine_class = "LinuxData"
+weight = 15

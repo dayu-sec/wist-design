@@ -646,3 +646,16 @@ DiscoveryIngestAck {
 - 本地 `state/discovery/*.json` 不直接等于线上协议
 - 第一版采用完整快照上送 + ack 幂等替换模型
 - 中心按 ingress receipt、agent 当前快照、资源目录归并三层分离处理
+
+### 补充（2026-09-22：消费方与模型状态）
+
+- **消费方有两个**：中心（资产整理：资源目录归并、软件归一化与漏洞关联）与 **网关**
+  （用途推断与平台校验，取的是**派生摘要**而不是全量明细）。因此本文的“上送中心”
+  应读作“上送数据面后由各方订阅”：**不需要网关替 agent 向中心代报**。
+- 模型侧已把 envelope 与载荷填实：`Reporting.ReportDiscoverySnapshot`、
+  `Reporting.DiscoveryIngestAck`（含 `snapshot_id`/`revision`/`report_attempt`/`report_mode`）
+  与 `Observed.Snapshot` 全模块。
+- 待补：
+  1. discovery receiver 的**身份校验**（事实是资产清单，现状接入层无鉴权）；
+  2. 本文 §13 的示例与 `wist-contracts` 实际契约不一致（`targets[]` 是 `resource_ref` +
+     `execution_hints`，`attributes` 线上是 key/value 列表，不是 map）。

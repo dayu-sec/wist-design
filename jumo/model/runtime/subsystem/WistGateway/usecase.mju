@@ -116,28 +116,60 @@ usecase ShowAgentRuntimeStatus {
   outcome Control.AgentRuntimeStatus
 }
 
-// 暂停 Agent
-usecase PauseAgent {
+// 设置 wist-agentd 安装包来源地址
+usecase SetAgentInstallPackageAddress {
   meta {
-    label zh "暂停 Agent"
-    label en "Pause Agent"
-    tags "agent-pause", "admin"
+    label zh "设置 wist-agentd 安装包来源地址"
+    label en "Set wist-agentd Install Package Source"
+    summary zh "平台维护工程师设置网关的取包来源地址与可选期望摘要；设置时网关先把该来源的制品拉到本地缓存，之后新签发的安装代码与 bootstrap bundle 都分发这份缓存，已签发且未过期的安装代码不受影响。拉取失败或摘要不符则整次操作失败，不改变现有设置。"
+    tags "agent-install", "package", "admin"
   }
 
-  actor Control.AdminOperator
-  trigger Control.PauseAgent
-  outcome Control.DispatchReceipt
+  actor Control.PlatformMaintenanceEngineer
+  trigger Control.SetAgentInstallPackageAddress
+  outcome Control.AgentInstallPackageAddress
 }
 
-// 远程升级 Agent
-usecase UpgradeAgentRemotely {
+// 查看当前生效的 wist-agentd 安装包来源地址
+usecase ViewAgentInstallPackageAddress {
   meta {
-    label zh "远程升级 Agent"
-    label en "Upgrade Agent Remotely"
-    tags "agent-upgrade", "admin"
+    label zh "查看 wist-agentd 安装包来源地址"
+    label en "View wist-agentd Install Package Source"
+    summary zh "安装运维查看网关当前的取包来源地址与制品摘要，用于确认之后下发的安装代码会装哪个包；未设置过时返回空的来源地址，表示网关分发它内置的安装包。"
+    tags "agent-install", "package", "admin"
+  }
+
+  actor Control.OperationsEngineer
+  trigger Control.ViewAgentInstallPackageAddress
+  outcome Control.AgentInstallPackageAddress
+}
+
+// 接收 Agent 上报的事实摘要并推断用途
+usecase IngestAgentFactSummary {
+  meta {
+    label zh "接收事实摘要并推断用途"
+    label en "Ingest Agent Fact Summary and Infer Purpose"
+    summary zh "网关收到 agentd 上报的事实摘要（去重后的进程/包/端口）：按 content_digest 幂等入库（覆盖式，一台一条），再按该机器平台的规则表算出用途建议与逐条依据供人判定。重复摘要不改数据也不重复计分。"
+    tags "agent-fact", "purpose", "discovery", "ingest"
+  }
+
+  actor Control.Agentd
+  trigger Reporting.ReportAgentFactSummary
+  outcome Control.AgentFactSummary
+  outcome Control.PurposeSuggestion
+  flow Reporting.IngestAgentFactSummaryFlow
+}
+
+// 查看 Agent 用途
+usecase ViewAgentPurpose {
+  meta {
+    label zh "查看 Agent 用途"
+    label en "View Agent Purpose"
+    summary zh "管理员查看某台 Agent 的用途：agentd 上报的事实摘要、网关推陈的建议（含逐条依据与置信度）、人工判定三者并列展示；尚未上报事实时事实与建议为空，不伪造结论。"
+    tags "agent-fact", "purpose", "admin", "view"
   }
 
   actor Control.AdminOperator
-  trigger Control.UpgradeAgent
-  outcome Control.DispatchReceipt
+  trigger Control.AdminViewAgentPurpose
+  outcome Control.AgentPurposeView
 }

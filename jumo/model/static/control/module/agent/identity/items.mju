@@ -98,6 +98,21 @@ struct AgentCredentialVerificationResult {
   verified_at: DateTime
 }
 
+// 凭据吊销结果：管理面吊销某个 Agent 的指定凭据后的回执。
+struct AgentCredentialRevocationResult {
+  meta {
+    label zh "Agent 凭据吊销结果"
+    label en "Agent Credential Revocation Result"
+    summary zh "管理面吊销指定 Agent 的指定凭据后的结果回执；吊销当前凭据后该 Agent 立即无法通过鉴权。"
+    tags "agentd", "credential", "revocation"
+  }
+
+  agent_id: String
+  credential_id: String
+  status: String
+  revoked_at: DateTime
+}
+
 variant AgentCredentialVerificationStatus {
   Verified
   UnknownAgent

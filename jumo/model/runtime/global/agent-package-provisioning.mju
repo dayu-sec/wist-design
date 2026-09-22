@@ -1,0 +1,115 @@
+// runtime/global：跨子系统全局编排 flow（domain 声明指定归属域）
+// AgentPackageProvisioningFlow：安装包「设来源 → 拉取缓存 → 签发安装代码 → 主机取包安装 → 常驻托管」的端到端时序。
+//
+// 本 flow 固化三条实现层不变量（对应 wist-gateway 的 install_package 模块）：
+//   - 设置来源时网关**先把制品拉到本地缓存**；来源不可达或期望摘要不符则整次操作失败，
+//     既不落库也不覆盖已有缓存；
+//   - 安装端的取包地址**恒为网关自身端点**，来源地址不出现在安装命令里；
+//   - 安装脚本内嵌的校验摘要取自网关本地那份制品，因此与真正分发出去的内容**天然同源**。
+//
+// 末段（⑧~⑪）是 install.sh 的行为契约：装完二进制与配置后必须把守护进程交常驻托管，
+// 而不是留给运维手工前台跑。
+domain Control
+flow AgentPackageProvisioningFlow {
+  meta {
+    label zh "安装包来源与分发"
+    label en "Agent Package Provisioning Flow"
+    summary zh "平台维护工程师设置安装包来源地址后，网关拉取制品到本地缓存并落库来源与摘要；之后签发的安装代码一律指向网关自身分发端点，摘要与缓存内容同源；目标主机从网关取包、校验摘要、按 tarball / 裸二进制安装，并写入 initial-config 后以常驻服务方式交 launchd / systemd 托管。"
+    tags "agent-install", "package", "bootstrap", "install-code"
+  }
+
+  actor PlatformMaintenanceEngineer
+  actor PublicInstallClient
+
+  lane WistGateway for Control.GatewayApp.Application
+  lane InstallHost for PublicInstallClient
+
+  depends AgentInstallPackageAddress
+
+  creates AgentInstallPackageAddress
+  creates AgentBootstrapBundle
+
+  // ① 平台维护工程师在管理面提交来源地址（可选填期望摘要）。地址只接受 https:// 或主机绝对路径，
+  // 明文 http 被拒——安装包是 Agent 的启动来源。
+  step SubmitPackageSource in WistGateway by AdminSetAgentInstallPackageAddress {
+    next FetchPackageArtifact
+  }
+
+  // ② 按来源形态取制品：https:// 走 HTTP 拉取，绝对路径直接读本机文件。
+  // 是网关先取、而非让目标主机直连来源，内网 / 离线环境因此也能安装。
+  step FetchPackageArtifact in WistGateway {
+    next VerifyPackageDigest
+  }
+
+  // ③ 填了期望摘要就按它校验下载物；不符直接失败（400），不进入落库与缓存。
+  step VerifyPackageDigest in WistGateway {
+    next CachePackageArtifact
+  }
+
+  // ④ 制品原子落盘（先写 .partial 再改名）：拉取中断不会留下半截文件被当成有效缓存。
+  step CachePackageArtifact in WistGateway {
+    next PersistPackageSource
+  }
+
+  // ⑤ 落库来源地址与摘要。摘要是网关按实际内容算出的，不再采信手填值；
+  // 未设置过时来源地址为空串，表示分发的是网关内置安装包。
+  step PersistPackageSource in WistGateway {
+    create AgentInstallPackageAddress {
+      address_id = "default"
+      package_url = "https://mirror.example.com/wist/wist-agentd-v0.1.3-aarch64-apple-darwin.tar.gz"
+      package_sha256 = "sha256:package-digest"
+      updated_by = "platform-maintenance-engineer"
+      updated_at = "now"
+    }
+    next IssueInstallCode
+  }
+
+  // ⑥ 之后签发安装代码：分发地址恒为网关自身端点（来源地址不进安装命令），
+  // 摘要与缓存制品同源。此前「地址认设置、摘要认本地包」正是安装端 sha256 mismatch 的成因。
+  step IssueInstallCode in WistGateway by AdminGetAgentInstallCode {
+    create AgentBootstrapBundle {
+      bundle_id = "agent-bootstrap-install-token-001"
+      install_script_url = "https://warp-gateway/api/v1/agent/install/x86/install.sh"
+      agent_package_url = "https://warp-gateway/api/v1/agent/packages/current"
+      agent_package_sha256 = "sha256:package-digest"
+      control_endpoint = "https://warp-gateway"
+      trust_bundle = "internal-ca"
+      tenant_id = "tenant-default"
+      environment_id = "env-default"
+      expires_at = "2026-07-04T00:15:00Z"
+    }
+    next DownloadPackageFromGateway
+  }
+
+  // ⑦ 目标主机执行安装命令，持一次性 bootstrap token 从网关端点取包，不直连来源。
+  step DownloadPackageFromGateway in InstallHost {
+    receive AgentBootstrapBundle from IssueInstallCode
+    next VerifyPackageDigestAtHost
+  }
+
+  // ⑧ 按下载到的制品本身校验摘要（是 tarball 就校验 tarball，是裸二进制就校验它自己），
+  // 不符即中止，不进 $BIN_DIR。
+  step VerifyPackageDigestAtHost in InstallHost {
+    receive AgentBootstrapBundle from IssueInstallCode
+    next InstallPackageBinaries
+  }
+
+  // ⑨ 按形态装到 $BIN_DIR：tarball 解包取 wist-agentd 与 wist-exec
+  // （执行器必须与守护进程同级，守护进程默认从自身旁边解析它），裸二进制则只有 wist-agentd。
+  // 覆盖已装版本用「先写新文件再改名」，不原地改写正在运行的二进制。
+  step InstallPackageBinaries in InstallHost {
+    next WriteAgentdInitialConfig
+  }
+
+  // ⑩ 写入 initial-config：endpoint、信任锚与一次性 token 落 agentd 配置目录（0600）。
+  step WriteAgentdInitialConfig in InstallHost {
+    next RegisterAgentdService
+  }
+
+  // ⑪ 交常驻托管：service install 先用一次性 token 注册（注册失败就不落服务定义，
+  // 不留下启动即报错的半成品），再落 launchd / systemd 定义并拉起；
+  // root 走系统级（开机自启），普通用户走用户级（登录即起）。
+  step<stop> RegisterAgentdService in InstallHost {
+    receive AgentBootstrapBundle from IssueInstallCode
+  }
+}

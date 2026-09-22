@@ -1,0 +1,19 @@
+// Control.Agent.Content 有界上下文：Agent 的工作内容（采什么）。
+//
+// 三层取值空间：
+//   采集面 CollectionFamily —— 按事件/资源类别切的面（登录、提权、崩溃、数据库、存储…），平台无关；
+//   采集单元 CollectionUnit —— 某个面上的具体条目，绑到数据面 rule/oml（采得到 = 解析得了）；
+//   常驻工作模板 WorkTemplate —— 某类机器（MachineClass）该采哪些单元的开箱组合。
+//
+// spec 只能是这些单元的组合，不可自由生成；单元与模板的内容变更都要走提案 + 审定。
+
+module<entity> Agent.Content {
+  meta {
+    label zh "Agent 工作内容"
+    label en "Agent Work Content"
+    summary zh "工作内容的取值空间：采集面 → 采集单元（对应数据面 rule/oml）→ 常驻工作模板（按机器类别）。"
+    tags "control", "collection", "content"
+  }
+
+  layer Domain
+}

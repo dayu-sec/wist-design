@@ -1,0 +1,28 @@
+// 工作内容的分类面（平台无关）
+
+// 同一个面在 macOS 与 Linux 上是不同的单元：如 CrashPanic 在 macOS 是
+// `/Library/Logs/DiagnosticReports/*.ips|.panic`，在 Linux 是 dmesg / kern.log 的内核崩溃。
+// 面是“覆盖到了哪些类”，模板按面清点内容覆盖；平台差异由单元的 platform 字段表达。
+variant CollectionFamily {
+  meta {
+    label zh "采集面"
+    label en "Collection Family"
+    summary zh "工作内容的分类面：登录、提权、软件变更、服务、崩溃、网络、重启、系统杂项、指标，以及 macOS 侧重与 Linux 侧重的面。"
+    tags "control", "collection", "content"
+  }
+
+  // 跨平台：LoginSession 登录/退出与会话（含认证）、PrivilegeExecution 提权与命令执行、
+  // SoftwareChange 系统与软件变更、ServiceLifecycle 服务生命周期（launchd/systemd）、
+  // CrashPanic 崩溃与内核 panic、NetworkFirewall 网络/防火墙/WiFi、RebootPower 关机重启、
+  // MiscSystem 系统杂项、HostMetrics 主机指标。
+  LoginSession PrivilegeExecution SoftwareChange ServiceLifecycle CrashPanic NetworkFirewall RebootPower MiscSystem HostMetrics
+
+  // macOS 侧重：PrivacyTcc 隐私授权与 Keychain、GatekeeperQuarantine 隔离来源、
+  // DevToolchain 开发工具链（Homebrew/Xcode/容器/包管理器/IDE）。
+  PrivacyTcc GatekeeperQuarantine DevToolchain
+
+  // Linux 侧重：KernelSystem 内核与系统日志（含 OOM killer）、DatabaseService 数据库服务、
+  // StorageHealth 存储与文件系统健康（fsck/RAID/SMART/容量）、ComputeWorkload 作业/调度/加速卡、
+  // BackupJob 备份与批处理、NetworkService 网络服务（NFS/SMB/防火墙规则）。
+  KernelSystem DatabaseService StorageHealth ComputeWorkload BackupJob NetworkService
+}

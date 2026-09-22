@@ -24,6 +24,31 @@ message<response> AgentControlCommandsReturned {
   returned_at: DateTime
 }
 
+// 拉取工作授权快照：声明式、幂等，可重复拉取（与 PollControlCommands 的指令流不同，
+// 不承担“重放指令”的语义）。断网或重启后重新拉一次即可回到期望状态。
+message<command> PollWork {
+  agent_id: String
+  instance_id: String
+  last_seen_sequence: Int
+  wait_ms: Int
+  requested_at: DateTime
+}
+
+// 确认收到某份工作：常驻工作在 plan_version 变化后也必须确认（网关据此判漂移）。
+message<command> AckWork {
+  agent_id: String
+  instance_id: String
+  work_id: String
+  plan_version: Int
+  acknowledged_at: DateTime
+}
+
+message<response> WorkAccepted {
+  work_id: String
+  status: String
+  accepted_at: DateTime
+}
+
 interface WistAgentdOnlineRegistrationInterface {
   meta {
     label zh "WistAgentd 在线注册接口"
@@ -54,6 +79,27 @@ interface WistAgentdOnlineRegistrationInterface {
     output AgentControlCommandsReturned
   }
 
+  entry PollWork {
+    actor Agentd
+    output WorkGrant
+  }
+
+  entry AckWork {
+    actor Agentd
+    output WorkAccepted
+  }
+
+  // 上报事实**摘要**（不是原文快照，原文走数据面）。
+  // 为什么单独一条路由而不搭 SubmitAgentStatus 的车：两者节拍差一个量级
+  // （状态是分钟级，发现是 15 分钟级），而且 AgentStatusReport 是 deny_unknown_fields，
+  // 事实不是“自己的健康”而是“机器上有什么”，混在一起两边都难进退。
+  entry ReportAgentFactSummary {
+    actor Agentd
+    input Reporting.ReportAgentFactSummary
+    output Reporting.FactSummaryAccepted
+    calls Reporting.IngestAgentFactSummaryFlow
+  }
+
   entry ReportActionResult {
     actor Agentd
     input Reporting.ReportActionResult
@@ -74,6 +120,30 @@ flow PollControlCommandsFlow {
   trigger PollControlCommands
 
   
+}
+
+flow PollWorkFlow {
+  meta {
+    label zh "拉取工作授权"
+    label en "Poll Work Flow"
+    summary zh "Agentd 拉取网关授权给自己的工作：常驻工作的当前生效版本加上未了结的一次性工作；幂等，可重复拉取。"
+    tags "agentd", "work", "polling"
+  }
+
+  actor Agentd
+  trigger PollWork
+}
+
+flow AckWorkFlow {
+  meta {
+    label zh "确认收到工作"
+    label en "Ack Work Flow"
+    summary zh "Agentd 确认收到某份工作（常驻工作带生效版本），网关据此维护期望与实际的一致性。"
+    tags "agentd", "work", "ack"
+  }
+
+  actor Agentd
+  trigger AckWork
 }
 
 flow RenewAgentCredentialFlow {

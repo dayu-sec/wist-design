@@ -1,6 +1,67 @@
 struct DiscoveryProbe {
 }
 
+// 发现方向：探测“哪一类事实”的闭集。与 DiscoverySourceKind（数据是**怎么**拿到的：本地运行时/静态/文件/K8s）
+// 是两个正交的轴。探针侧目前只是裸字符串（"host"/"process"…），这里把它定成闭集。
+// 加方向 = 改模型（它决定读本机哪些状态，牵涉权限与负载）。
+variant DiscoveryAspect {
+  meta {
+    label zh "发现方向"
+    label en "Discovery Aspect"
+    summary zh "探测哪一类事实：主机资源、进程、容器、监听端口、网络、K8s 工作负载、已装包。"
+    tags "discovery", "probe", "aspect"
+  }
+
+  Host
+  Process
+  Container
+  Endpoint
+  Network
+  K8s
+  Package
+}
+
+// 每个方向的策略：默认周期与允许区间、是否基线、是否默认开、产出什么事实。
+// 值由 flow PublishDiscoveryAspectPoliciesFlow（static/discovery/aspect-policies.mju）发布，
+// 不再放外部 TOML —— 模型是唯一来源，避免两份漂移。
+struct DiscoveryAspectPolicy {
+  meta {
+    label zh "发现方向策略"
+    label en "Discovery Aspect Policy"
+    summary zh "单个发现方向的周期与开关策略：默认/最小/最大周期、是否基线不可关、产出哪些事实。"
+    tags "discovery", "probe", "policy"
+  }
+
+  unique aspect: DiscoveryAspect
+  // 默认周期（秒）。发现是慢变量，量级应比采集低 1~2 个（采集是 15s 级，发现是分钟级）。
+  default_interval_seconds: Int
+  // 允许区间（秒）：网关校验只允许在这个范围里调。
+  min_interval_seconds: Int
+  max_interval_seconds: Int
+  // 基线面：不可关（它回答“我是什么”，是自识别与派活的底座）。
+  baseline: Boolean
+  // 未显式声明时的默认开关。
+  enabled_by_default: Boolean
+  // 适用平台，`|` 分隔（如 "macos|linux"）。
+  platforms: String
+  // 产出的事实（供人理解“为什么要这个面”），如 host = os/arch/核数/内存/磁盘/GPU。
+  yields: String
+}
+
+// 策略表的**集合级身份**：一次发布产出一版（N 个方向的策略 + 版本号）。
+// 为什么需要它：同一类型的多条记录无法逐条断言（实测），集合级不变式（条数/版本）才能被 verify 守住。
+struct DiscoveryAspectPolicySet {
+  meta {
+    label zh "发现方向策略版本"
+    label en "Discovery Aspect Policy Set"
+    summary zh "一次发布的发现方向策略集合：版本号与方向条数。"
+    tags "discovery", "probe", "policy"
+  }
+
+  unique policy_version: Int
+  aspect_count: Int
+}
+
 struct HostDiscoveryProbe {
   kind
 }

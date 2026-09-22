@@ -1,0 +1,16 @@
+{
+  "pan": {
+    "x": 0.0,
+    "y": 0.0
+  },
+  "nodes": {
+    "actor:Control.Agentd": {
+      "x": 177.83203,
+      "y": 87.61719
+    }
+  },
+  "sizes": {},
+  "scales": {},
+  "fills": {},
+  "options": {}
+}

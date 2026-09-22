@@ -13,9 +13,13 @@ actor<system> Agentd {
   can RenewAgentCredential
   can VerifyAgentCredential
   can PollControlCommands
+  can PollWork
+  can AckWork
   can AgentUpstreamMessage
   can Reporting.AgentStatusReport
   can Reporting.ReportActionResult
+  can Reporting.ReportDiscoverySnapshot
+  can Reporting.ReportAgentFactSummary
 }
 
 actor OperationsEngineer {
@@ -28,24 +32,31 @@ actor OperationsEngineer {
   access protocol<http>
   can GetAgentInstallCode
   can AdminGetAgentInstallCode
+  can ViewAgentInstallPackageAddress
+  can AdminViewAgentInstallPackageAddress
 }
 
 actor AdminOperator {
   access protocol<http>
   can GetAgentOverview
   can ShowAgentRuntimeStatus
-  can PauseAgent
-  can UpgradeAgent
   can AdminGetAgentOverview
   can AdminShowAgentRuntimeStatus
-  can AdminPauseAgent
-  can AdminUpgradeAgent
   can ViewGatewayOverview
   can DispatchAgentFleetCommand
   can AdminViewGatewayManagementState
   can AdminGetGatewayInitialConfig
   can AdminLookupAgentRegistryEntry
   can AdminQueryAgentCapabilityIndex
+  can AdminListAgents
+  can AdminRevokeAgentCredential
+  can AdminGrantWork
+  can AdminRevokeWork
+  can AdminProposeWork
+  can AdminReviewWork
+  can AdminPauseWork
+  can AdminResumeWork
+  can AdminViewAgentPurpose
 }
 
 actor<system> WistGateway {
@@ -134,6 +145,8 @@ actor PlatformMaintenanceEngineer {
   can AdminCreateUpgradePlan
   can AdminListUpgradePlans
   can AdminApproveUpgradePlan
+  can SetAgentInstallPackageAddress
+  can AdminSetAgentInstallPackageAddress
 }
 
 actor PublicInstallClient {

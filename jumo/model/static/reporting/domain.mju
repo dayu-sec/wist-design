@@ -79,3 +79,89 @@ verify AgentStatusReportVerified for flow AgentStatusReportFlow {
     RuntimeHealthSnapshot.state == "agent-001"
   }
 }
+
+// 事情摘要→入库→推断，一条流。
+// 为什么“算建议”是这一步而不是另一个用例：事实变了就要重算，两者永远同序、无独立触发点；
+// 将来规则表可热变、需要“按新规则重算存量”时再拆出独立流程。
+flow IngestAgentFactSummaryFlow {
+  meta {
+    label zh "接收事实摘要并推断用途"
+    label en "Ingest Fact Summary and Infer Agent Purpose"
+    summary zh "网关收到 agentd 的事实摘要：按 content_digest 幂等入库（覆盖式，一台一条），再按该机器平台的规则表算出用途建议与逐条依据。"
+    tags "reporting", "agent-fact", "purpose", "ingest"
+  }
+
+  actor Control.Agentd
+  trigger ReportAgentFactSummary
+
+  // 推断要读该机器平台的规则表（数据在 content/purpose-rules.toml）。
+  depends Control.PurposeRuleSet
+
+  creates Control.AgentFactSummary
+  creates Control.PurposeSignal
+  creates Control.PurposeSuggestion
+
+  step StoreFactSummary {
+    create Control.AgentFactSummary {
+      agent_id = ReportAgentFactSummary.agent_id
+      content_digest = ReportAgentFactSummary.content_digest
+      revision = ReportAgentFactSummary.revision
+      observed_at = ReportAgentFactSummary.observed_at
+      os = ReportAgentFactSummary.os
+      arch = ReportAgentFactSummary.arch
+      process_count = ReportAgentFactSummary.process_count
+      process_executables = ReportAgentFactSummary.process_executables
+      packages = ReportAgentFactSummary.packages
+      listen_ports = ReportAgentFactSummary.listen_ports
+      received_at = ReportAgentFactSummary.reported_at
+    }
+    next InferPurpose
+  }
+
+  step<stop> InferPurpose {
+    create Control.PurposeSignal {
+      rule_id = "mac-dev-xcodebuild"
+      kind = "process"
+      value = "xcodebuild"
+      weight = 40
+    }
+
+    create Control.PurposeSuggestion {
+      suggestion_id = "suggestion-001"
+      agent_id = ReportAgentFactSummary.agent_id
+      suggested_class = MacDev
+      confidence = 90
+      method = "rule"
+      rule_set_id = "macos-v1"
+      signals = PurposeSignal
+      observed_at = ReportAgentFactSummary.observed_at
+    }
+  }
+}
+
+verify AgentFactSummaryIngested for flow IngestAgentFactSummaryFlow {
+  given {
+    ReportAgentFactSummary.agent_id = "agent-001"
+    ReportAgentFactSummary.content_digest = "sha256:fact-digest"
+    ReportAgentFactSummary.revision = 7
+    ReportAgentFactSummary.observed_at = "2026-09-22T00:00:00Z"
+    ReportAgentFactSummary.os = "macos"
+    ReportAgentFactSummary.arch = "arm64"
+    ReportAgentFactSummary.process_count = 906
+    ReportAgentFactSummary.process_executables = "xcodebuild|/opt/homebrew/bin/mise"
+    ReportAgentFactSummary.packages = ""
+    ReportAgentFactSummary.listen_ports = "5432"
+    ReportAgentFactSummary.reported_at = "2026-09-22T00:00:01Z"
+  }
+
+  when ReportAgentFactSummary
+
+  expect {
+    Control.AgentFactSummary.agent_id == "agent-001"
+    Control.AgentFactSummary.content_digest == "sha256:fact-digest"
+    Control.AgentFactSummary.os == "macos"
+    Control.AgentFactSummary.process_count == 906
+    Control.PurposeSuggestion.confidence == 90
+    Control.PurposeSuggestion.rule_set_id == "macos-v1"
+  }
+}

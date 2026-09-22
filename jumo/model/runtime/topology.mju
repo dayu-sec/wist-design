@@ -101,3 +101,18 @@ link<call> AgentHost1 -> WistGatewayHost
 link<call> AgentHost2 -> WistGatewayHost
 // 托管服务节点上的托管服务连接管理节点控制通道。
 link<call> ManagedServiceHost -> WistGatewayHost
+
+// ── 事实（discovery 快照）的分发视图：一次上报，多个消费者 ─────────────
+// agentd 把事实（资源/目标清单、进程与包等）**上报到数据面**（托管服务区的数据平台），
+// 网关与中心各自**订阅**数据面，不互相代报：
+//   - 事实**不走控制面 HTTP 接口**，与 telemetry 上送同一类接入路径，不同之处是走
+//     专用 discovery receiver，不把资源降级成 telemetry record（见
+//     doc/design/center/report-discovery-snapshot-schema.md）；
+//   - 中心订阅是为了**资产整理**（资源目录归并、软件归一化与漏洞关联）；
+//   - 网关订阅是为了**用途推断**与平台校验（拿的是派生摘要，不是全量明细）。
+// 代价：网关的“离线自足”取决于数据面与网关同栈可达。
+//
+// 注：上面的分发关系**用 link<data> + dataflow 表达不了** —— link<data> 要求对应的 dataflow 边，
+// 而 dataflow 的节点必须是 struct/resource（实测报错：
+// “resource node `AgentHost1` is not defined as a struct or resource”），
+// 而本部署视图里的主机是 `node` 构造。待模型支持“以拓扑 node 为端点的数据流”后再补。

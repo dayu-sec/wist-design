@@ -1,60 +1,70 @@
 struct DiscoverySnapshot {
-  schema_version
-  unique snapshot_id
-  revision
-  generated_at
-  origins
-  resources
-  targets
+  schema_version: String
+  unique snapshot_id: String
+  // 同一 agent 本地快照的推进序号（注意：实现里每轮 refresh 都 +1，不看内容是否变化）
+  revision: Int
+  generated_at: DateTime
+  origins: List<DiscoveryOrigin>
+  resources: List<DiscoveredResource>
+  targets: List<DiscoveredTarget>
 }
 
 struct DiscoveryOrigin {
-  unique origin_id
-  probe
-  source
-  observed_at
+  unique origin_id: String
+  // 探针名：host | process | container | network | endpoint | k8s
+  probe: String
+  // 来源：local_runtime | …
+  source: String
+  observed_at: DateTime
 }
 
 struct DiscoveryCacheMeta {
-  schema_version
-  unique snapshot_id
-  revision
-  generated_at
-  origins
-  last_success_at
-  last_error
+  schema_version: String
+  unique snapshot_id: String
+  revision: Int
+  generated_at: DateTime
+  origins: List<DiscoveryOrigin>
+  last_success_at: DateTime?
+  last_error: String?
 }
 
 struct DiscoveredResource {
-  unique resource_id
-  kind
-  origin_idx
-  attributes
-  discovered_at
-  last_seen_at
-  health
-  source
+  unique resource_id: String
+  // host | process | container | endpoint | …
+  kind: String
+  // 指向 origins 的下标
+  origin_idx: Int
+  // 资源属性（线上形态是 key/value 列表，不是 map）
+  attributes: List<StringKeyValue>
+  discovered_at: DateTime
+  last_seen_at: DateTime
+  // healthy | …
+  health: String
+  source: String
 }
 
 struct DiscoveredTarget {
-  unique target_id
-  kind
-  origin_idx
-  resource_ref
-  execution_hints
-  state
+  unique target_id: String
+  // host | process | container | …
+  kind: String
+  origin_idx: Int
+  resource_ref: String
+  execution_hints: List<StringKeyValue>
+  // active | …
+  state: String
 }
 
 struct CollectionCandidate {
-  unique candidate_id
-  target_ref
-  collection_kind
-  resource_ref
-  execution_hints
-  generated_at
+  unique candidate_id: String
+  target_ref: String
+  // host_metrics | process_metrics | container_metrics
+  collection_kind: String
+  resource_ref: String
+  execution_hints: List<StringKeyValue>
+  generated_at: DateTime
 }
 
 struct StringKeyValue {
-  key
-  value
+  key: String
+  value: String
 }

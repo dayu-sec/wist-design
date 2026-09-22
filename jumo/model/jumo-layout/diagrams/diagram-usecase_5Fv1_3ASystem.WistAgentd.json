@@ -1,0 +1,29 @@
+{
+  "pan": {
+    "x": 0.0,
+    "y": 0.0
+  },
+  "nodes": {
+    "actor:Control.Agentd": {
+      "x": 1216.3828,
+      "y": 605.8203
+    },
+    "usecase:System.WistAgentd.CollectMetrics": {
+      "x": 490.79297,
+      "y": 358.19922
+    },
+    "usecase:System.WistAgentd.RegisterWithManagementCenter": {
+      "x": 1229.6836,
+      "y": 280.01953
+    }
+  },
+  "sizes": {
+    "system_boundary:System.WistAgentd": {
+      "x": 1166.5547,
+      "y": 457.47266
+    }
+  },
+  "scales": {},
+  "fills": {},
+  "options": {}
+}

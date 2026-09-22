@@ -56,6 +56,11 @@ struct SocketTableKind {
   variant
 }
 
-struct DiscoverySourceKind {
-  variant
+// 发现**来源**：数据是怎么拿到的，与“发现方向”（探测哪一类，见 Discovery.Probe.DiscoveryAspect）
+// 是两个正交的轴，不要混。
+variant DiscoverySourceKind {
+  LocalRuntime
+  Static
+  File
+  K8s
 }

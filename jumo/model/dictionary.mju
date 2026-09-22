@@ -1,11 +1,75 @@
 // 规范命名词典：canonical term -> aliases（历史/变体拼法）
-// 校验扫描标识符与 meta 文案，命中 alias 时发 warning 建议规范形。
+//
+// 机制（实测订正，2026-09 的 jumo CLI）：
+//   - alias 检查**确实生效**，但告警出现在 `jumo readiness` 里，**不在** `jumo verify` 里
+//     （verify 只回显 flow 用例；只 grep verify 会误判“机制不存在”）。
+//   - 匹配是**子串**匹配，且同时扫**标识符**与 **meta 文案**（label/summary 都算）。
+//   - 因此两条硬性纪律：
+//       1) 别名不得与本概念自己的规范**中文标签**重复 —— 否则自己给自己报警；
+//       2) 别名必须是**够长够独特**的写法 —— 短词（如 `Catalog`、`撤回工作`）会命中
+//          别的标识符或普通句子，变成噪音。
+//
+// 结果：只看 `jumo verify` 不够，改完词典请跑 `jumo readiness`（grep `non-canonical`）。
 //
 // 注意：Gateway 与 WistGateway 是不同概念（如 GatewayInstance 与
 // WistGatewayInstance 并存），不塌缩；只归一大写拼法。
-// WarpGateway / WarpGateWay 是 WistGateway 的历史拼法，保留为 alias 以兼容旧引用。
 
 lexicon {
   term Gateway { aliases "GateWay" }
   term WistGateway { aliases "WarpGateway", "WarpGateWay" }
+
+  // ── Agent 工作（Control.Agent.Work）────────────────────────────────
+  // 分界：常驻工作（声明式，无自然结束，可自愈）vs 一次性工作（命令式，有期限与终态）。
+  // 这里保留用户词汇作为别名；规范中文标签是“常驻工作 / 一次性工作”，别名不要写进标签。
+  term StandingWork { aliases "Mission", "ContinuousWork", "Duty", "使命型工作", "持续工作" }
+  term OneShotWork { aliases "Task", "Job", "任务型工作", "临时任务" }
+  term WorkKind { aliases "WorkType", "WorkCategory" }
+
+  // 授权快照：网关授权给某 Agent 的工作集合（幂等，可重复拉取）。
+  term WorkGrant { aliases "AgentWorkGrant", "WorkSnapshot", "WorkAssignment" }
+
+  // 一次授权/撤回的结果回执。
+  term WorkReceipt { aliases "WorkGrantReceipt", "WorkDispatchReceipt" }
+
+  // Agent 侧：拉取授权快照、确认收到。
+  term PollWork { aliases "PollAgentWork", "PollWorkGrant" }
+  term AckWork { aliases "AckAgentWork", "ConfirmWork" }
+  term WorkAccepted { aliases "AgentWorkGrantReturned", "WorkAckAccepted" }
+
+  // 管理面：授权 / 撤回。动词统一到 grant / revoke（不混用 Dispatch / Assign / Submit / Cancel）。
+  term AdminGrantWork { aliases "AdminDispatchStandingWork", "AdminAssignWork", "AdminSubmitWork", "AdminSubmitOneShotWork", "AdminSetWork" }
+  term AdminRevokeWork { aliases "AdminRevokeStandingWork", "AdminCancelWork", "AdminUnassignWork", "AdminDeleteWork" }
+
+  // 工作事件。
+  term WorkGranted { aliases "WorkAssigned", "WorkDispatched" }
+  term WorkRevoked { aliases "WorkCanceled", "WorkCancelled" }
+
+  // 暂停与继续（授权层状态，区别于 agentd 本地的 spool 超限自动暂停）。
+  term AdminPauseWork { aliases "AdminSuspendWork", "AdminHoldWork" }
+  term AdminResumeWork { aliases "AdminContinueWork", "AdminUnpauseWork" }
+  term WorkPaused { aliases "WorkSuspended", "WorkHeld" }
+  term WorkResumed { aliases "WorkContinued", "WorkUnpaused" }
+
+  // ── 采集内容（工作内容的取值空间，域 Agent.Content）───────────────
+  // 内容不能自由生成：spec 必须能落到数据面的 rule/oml 上（采得到 ≠ 解析得了）。
+  term CollectionFamily { aliases "ContentFamily", "CollectionCategory" }
+  term CollectionCatalog { aliases "AgentCollectionCatalog", "CollectionMenu", "采集能力目录" }
+  term CollectionUnit { aliases "CatalogUnit", "CollectionItem", "CollectionCapability", "采集项" }
+  term CatalogOrigin { aliases "CatalogSource", "CatalogFrom" }
+  term SelectionBasis { aliases "SelectionReason", "SelectionRecord" }
+
+  // 开箱模板：把“这类机器该采什么”固化成可审定的单元组合（目录定“能采什么”）。
+  term WorkTemplate { aliases "StandingWorkTemplate", "CollectionTemplate", "AgentWorkTemplate" }
+  term MachineClass { aliases "MachineType", "HostMachineClass" }
+
+  // ── 用途识别（域 Agent.Purpose）──────────────────────────────────
+  // 用途是“非确定”的：由事实在网关侧推断出建议，再由人工判定归档。
+  term PurposeRuleSet { aliases "PurposeRuleTable", "PurposeRules" }
+  term PurposeSuggestion { aliases "AgentPurposeSuggestion", "PurposeObservation" }
+  term AgentClassification { aliases "AgentPurposeLabel", "MachineClassDecision" }
+
+  // 提案与审定：采集范围即合规边界，一律得人工审定。
+  term WorkProposal { aliases "CollectionProposal", "SpecProposal", "WorkDraft" }
+  term AdminProposeWork { aliases "AdminSubmitProposal", "AdminDraftWork" }
+  term AdminReviewWork { aliases "AdminApproveWork", "AdminJudgeWork", "AdminAcceptProposal" }
 }

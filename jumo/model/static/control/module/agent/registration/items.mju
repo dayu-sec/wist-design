@@ -6,6 +6,18 @@
 command GetAgentInstallCode {
 }
 
+// 设置 wist-agentd 安装包来源地址（管理面维护操作）。
+// 来源实体由 AgentEnrollment 承载，接口入口见
+// WistGatewayManagementInterface.AdminSetAgentInstallPackageAddress。
+command SetAgentInstallPackageAddress = OperatorRequest {
+  package_url: String
+  package_sha256: String?
+}
+
+// 查看当前生效的 wist-agentd 安装包来源地址（管理面/安装运维读取）。
+command ViewAgentInstallPackageAddress = OperatorRequest {
+}
+
 flow AgentdRegistrationFlow {
   meta {
     label zh "Agentd 注册管理中心"

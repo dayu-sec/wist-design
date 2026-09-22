@@ -10,15 +10,6 @@ message<command> AdminShowAgentRuntimeStatus = OperatorRequest {
 message<command> AdminGetAgentOverview = OperatorRequest {
 }
 
-message<command> AdminPauseAgent = OperatorRequest {
-  agent_id: String
-}
-
-message<command> AdminUpgradeAgent = OperatorRequest {
-  agent_id: String
-  target_version: String
-}
-
 message<command> AdminViewGatewayManagementState = OperatorRequest {
 }
 
@@ -28,6 +19,101 @@ message<command> AdminLookupAgentRegistryEntry = OperatorRequest {
 
 message<command> AdminQueryAgentCapabilityIndex = OperatorRequest {
   agent_id: String
+}
+
+// 管理面 Agent 列表：过滤 + 分页下推到存储层（对应 store 的 AgentQuery）。
+// 出参是运行态的读投影，管理面额外的租户/环境/节点/凭据字段由实现层派生。
+message<command> AdminListAgents = OperatorRequest {
+  tenant_id: String?
+  environment_id: String?
+  status: String?
+  limit: Int?
+  offset: Int?
+}
+
+// 凋销指定 Agent 的指定凭据（凋销当前凭据后该 Agent 立即无法鉴权）。
+message<command> AdminRevokeAgentCredential = OperatorRequest {
+  agent_id: String
+  credential_id: String
+}
+
+// 设置网关分发 wist-agentd 安装包所用的来源地址与校验摘要（管理面）。
+message<command> AdminSetAgentInstallPackageAddress = OperatorRequest {
+  package_url: String
+  package_sha256: String?
+}
+
+// 查看当前生效的 wist-agentd 安装包地址（管理面）。
+message<command> AdminViewAgentInstallPackageAddress = OperatorRequest {
+}
+
+// 查看某台 Agent 的用途：事实摘要、网关推断建议（含逐条依据）、人工判定三者并列。
+// 推断可过期，判定留痕 —— 所以两者都回，不是只回一个“结论”。
+message<command> AdminViewAgentPurpose = OperatorRequest {
+  agent_id: String
+}
+
+// 授权或更新某 Agent 的工作：
+//   work_kind = Standing → 写期望版本（plan_version、spec），无自然结束；
+//   work_kind = OneShot  → 提交一件有期限的活（scheduled_at / deadline_at / timeout_seconds）。
+// kind 决定哪些可选字段必填，校验在实现层。
+message<command> AdminGrantWork = OperatorRequest {
+  agent_id: String
+  work_kind: WorkKind
+  capability: String?
+  action: String?
+  spec: String
+  plan_version: Int?
+  scheduled_at: DateTime?
+  deadline_at: DateTime?
+  timeout_seconds: Int?
+}
+
+// 撤回某 Agent 的一份工作：常驻工作撤销授权，一次性工作取消未了结的活。
+message<command> AdminRevokeWork = OperatorRequest {
+  agent_id: String
+  work_id: String
+  reason_code: String
+}
+
+// 提出采集内容变更提案。
+//
+// 现状：提出方也是人（亦可直接在 AdminGrantWork 里直填 spec）。
+// 将来：由反馈统计（miss/residue/error）产出“建议”，但路径不变 —— 仍必须经 AdminReviewWork 审定。
+message<command> AdminProposeWork = OperatorRequest {
+  agent_id: String
+  work_id: String?
+  capability: String
+  mode: String
+  catalog_version: Int
+  facts_used: List<SelectionFact>
+  selected_units: List<String>
+  proposed_spec: String
+}
+
+// 审定提案：approved 后才能凭 proposal_id 授权生效（rejected 则留下驳回留痕）。
+message<command> AdminReviewWork = OperatorRequest {
+  proposal_id: String
+  decision: String
+  review_note: String?
+}
+
+// 暂停工作：work_id 为空 = 暂停该 Agent 的全部工作（维护/应急的一键停）。
+// 常驻：保留授权与版本，恢复后继续用同一版本；Agent 重启后仍然是暂停。
+// 一次性：只有 interruptible 的动作允许 running 期间暂停，否则应拒绝；
+// 暂停期间不消耗执行预算（timeout_seconds），但照走绝对截止（deadline_at）。
+message<command> AdminPauseWork = OperatorRequest {
+  agent_id: String
+  work_id: String?
+  reason_code: String
+}
+
+// 继续工作：把 paused 改回进行态（常驻 active / 一次性 running）；
+// 对已撤回/已替换/已终结的工作无效（恢复不绕过审定，也不复活已结束的活）。
+message<command> AdminResumeWork = OperatorRequest {
+  agent_id: String
+  work_id: String?
+  reason_code: String
 }
 
 interface WistGatewayPublicInstallInterface {
@@ -77,16 +163,6 @@ interface WistGatewayManagementInterface {
     output AgentOverview
   }
 
-  entry AdminPauseAgent {
-    actor AdminOperator
-    output DispatchReceipt
-  }
-
-  entry AdminUpgradeAgent {
-    actor AdminOperator
-    output DispatchReceipt
-  }
-
   entry AdminViewGatewayManagementState {
     actor AdminOperator
     output GatewayManagementState
@@ -106,6 +182,61 @@ interface WistGatewayManagementInterface {
     actor AdminOperator
     output AgentFleetDispatchReceipt
   }
+
+  entry AdminListAgents {
+    actor AdminOperator
+    output Projection<List<AgentRuntimeStatus>>
+  }
+
+  entry AdminRevokeAgentCredential {
+    actor AdminOperator
+    output AgentCredentialRevocationResult
+  }
+
+  entry AdminSetAgentInstallPackageAddress {
+    actor PlatformMaintenanceEngineer
+    output AgentInstallPackageAddress
+  }
+
+  entry AdminViewAgentInstallPackageAddress {
+    actor OperationsEngineer
+    output AgentInstallPackageAddress
+  }
+
+  entry AdminGrantWork {
+    actor AdminOperator
+    output WorkReceipt
+  }
+
+  entry AdminRevokeWork {
+    actor AdminOperator
+    output WorkReceipt
+  }
+
+  entry AdminProposeWork {
+    actor AdminOperator
+    output WorkProposal
+  }
+
+  entry AdminReviewWork {
+    actor AdminOperator
+    output WorkProposal
+  }
+
+  entry AdminPauseWork {
+    actor AdminOperator
+    output WorkReceipt
+  }
+
+  entry AdminResumeWork {
+    actor AdminOperator
+    output WorkReceipt
+  }
+
+  entry AdminViewAgentPurpose {
+    actor AdminOperator
+    output AgentPurposeView
+  }
 }
 
 flow AdminGetAgentInstallCodeFlow {
@@ -118,6 +249,10 @@ flow AdminGetAgentInstallCodeFlow {
 
   actor OperationsEngineer
   trigger AdminGetAgentInstallCode
+
+  // 取包来源来自管理面设置；分发地址恒为网关自身端点，制品由网关先拉到本地缓存
+  // （未设置来源时用网关内置包）。
+  depends AgentInstallPackageAddress
 
   creates AgentBootstrapBundle
   creates AgentEnrollmentToken
@@ -143,6 +278,9 @@ flow AdminGetAgentInstallCodeFlow {
     create AgentBootstrapBundle {
       bundle_id = "agent-bootstrap-install-token-001"
       install_script_url = "https://warp-gateway/api/v1/agent/install/x86/install.sh?token=install-token-001"
+      // 分发地址恒为网关自身端点：目标主机不直连来源，只从网关取包；
+      // 摘要与网关本地那份制品同源（来源由 AgentInstallPackageAddress 给出，
+      // 未设置时是配置内置包）。具体取值由实现层派生。
       agent_package_url = "https://warp-gateway/api/v1/agent/packages/current"
       agent_package_sha256 = "sha256:package-digest"
       control_endpoint = "https://warp-gateway"
@@ -223,75 +361,76 @@ flow AdminGetAgentOverviewFlow {
   }
 }
 
-flow AdminPauseAgentFlow {
+flow AdminGrantWorkFlow {
   meta {
-    label zh "提交暂停 Agent 指令"
-    label en "Submit Pause Agent Command Flow"
-    summary zh "管理员提交暂停 Agent 请求，控制指令编排生成暂停派发回执。"
-    tags "admin", "agent-command", "pause"
+    label zh "授权 Agent 工作"
+    label en "Grant Agent Work Flow"
+    summary zh "管理员授权或更新某 Agent 的工作（常驻写期望版本，一次性提交有期限的活），生成工作回执。"
+    tags "admin", "agent-work", "grant"
   }
 
   actor AdminOperator
-  trigger AdminPauseAgent
-
-  depends AgentInstance
-
-  creates AgentControlCommand
-  creates DispatchReceipt
-
-  step<stop> AcceptPauseRequest {
-    create AgentControlCommand {
-      command_id = "admin-pause-command"
-      agent_id = AdminPauseAgent.agent_id
-      command_kind = "pause"
-      requested_by = AdminPauseAgent.requested_by
-      issued_at = "now"
-    }
-
-    create DispatchReceipt {
-      agent_id = AdminPauseAgent.agent_id
-      command_id = "admin-pause-command"
-      dispatch_id = "admin-pause-dispatch"
-      status = "accepted"
-      created_at = "now"
-    }
-  }
+  trigger AdminGrantWork
 }
 
-flow AdminUpgradeAgentFlow {
+flow AdminRevokeWorkFlow {
   meta {
-    label zh "提交升级 Agent 指令"
-    label en "Submit Upgrade Agent Command Flow"
-    summary zh "管理员提交远程升级 Agent 请求，控制指令编排生成升级派发回执。"
-    tags "admin", "agent-command", "upgrade"
+    label zh "撤回 Agent 工作"
+    label en "Revoke Agent Work Flow"
+    summary zh "管理员撤回某 Agent 的一份工作（常驻撤销授权，一次性取消未了结的活），生成工作回执。"
+    tags "admin", "agent-work", "revoke"
   }
 
   actor AdminOperator
-  trigger AdminUpgradeAgent
+  trigger AdminRevokeWork
+}
 
-  depends AgentInstance
-
-  creates AgentControlCommand
-  creates DispatchReceipt
-
-  step<stop> AcceptUpgradeRequest {
-    create AgentControlCommand {
-      command_id = "admin-upgrade-command"
-      agent_id = AdminUpgradeAgent.agent_id
-      target_version = AdminUpgradeAgent.target_version
-      command_kind = "upgrade"
-      requested_by = AdminUpgradeAgent.requested_by
-      issued_at = "now"
-    }
-
-    create DispatchReceipt {
-      agent_id = AdminUpgradeAgent.agent_id
-      command_id = "admin-upgrade-command"
-      dispatch_id = "admin-upgrade-dispatch"
-      status = "accepted"
-      created_at = "now"
-    }
+flow AdminProposeWorkFlow {
+  meta {
+    label zh "提出工作提案"
+    label en "Propose Agent Work Flow"
+    summary zh "提出采集内容变更提案（含选中依据），等待人工审定。"
+    tags "admin", "agent-work", "proposal"
   }
+
+  actor AdminOperator
+  trigger AdminProposeWork
+}
+
+flow AdminReviewWorkFlow {
+  meta {
+    label zh "审定工作提案"
+    label en "Review Agent Work Flow"
+    summary zh "人工审定采集内容变更提案：采集范围即合规边界，批准后凭 proposal_id 授权才生效。"
+    tags "admin", "agent-work", "review"
+  }
+
+  actor AdminOperator
+  trigger AdminReviewWork
+}
+
+flow AdminPauseWorkFlow {
+  meta {
+    label zh "暂停 Agent 工作"
+    label en "Pause Agent Work Flow"
+    summary zh "管理员暂停某 Agent 的一份或全部常驻工作（维护/应急）；保留授权与版本，可继续恢复。"
+    tags "admin", "agent-work", "pause"
+  }
+
+  actor AdminOperator
+  trigger AdminPauseWork
+}
+
+flow AdminResumeWorkFlow {
+  meta {
+    label zh "继续 Agent 工作"
+    label en "Resume Agent Work Flow"
+    summary zh "管理员继续某 Agent 被暂停的工作：仍用暂停前的同一版本。"
+    tags "admin", "agent-work", "resume"
+  }
+
+  actor AdminOperator
+  trigger AdminResumeWork
 }
 
 flow AdminViewGatewayManagementStateFlow {
@@ -399,34 +538,5 @@ verify AdminGetAgentOverviewVerified for flow AdminGetAgentOverviewFlow {
     RecentOnlineRegisteredAgent.online_duration_seconds == 5400
     AgentOverview.recent_online_agents == RecentOnlineRegisteredAgent
     AgentOverview.abnormal_agents == AgentRuntimeStatus
-  }
-}
-
-verify AdminPauseAgentDispatched for flow AdminPauseAgentFlow {
-  given {
-    AdminPauseAgent.agent_id = "agent-issued"
-    AdminPauseAgent.requested_by = "admin-operator"
-  }
-
-  when AdminPauseAgent
-
-  expect {
-    AgentControlCommand.command_kind == "pause"
-    DispatchReceipt.status == "accepted"
-  }
-}
-
-verify AdminUpgradeAgentDispatched for flow AdminUpgradeAgentFlow {
-  given {
-    AdminUpgradeAgent.agent_id = "agent-issued"
-    AdminUpgradeAgent.target_version = "v1.2.0"
-    AdminUpgradeAgent.requested_by = "admin-operator"
-  }
-
-  when AdminUpgradeAgent
-
-  expect {
-    AgentControlCommand.command_kind == "upgrade"
-    DispatchReceipt.status == "accepted"
   }
 }

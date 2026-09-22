@@ -1,0 +1,36 @@
+{
+  "pan": {
+    "x": 0.0,
+    "y": -0.0
+  },
+  "nodes": {
+    "struct:Control.WorkGrant": {
+      "x": 214.42578,
+      "y": 344.47656
+    },
+    "struct:Control.OneShotWork": {
+      "x": 735.85547,
+      "y": 587.03125
+    },
+    "struct:Control.WorkReceipt": {
+      "x": 200.0,
+      "y": 964.0
+    },
+    "struct:Control.WorkTemplate": {
+      "x": 1000.16406,
+      "y": 841.3789
+    },
+    "struct:Control.WorkProposal": {
+      "x": 214.42578,
+      "y": 663.6797
+    },
+    "struct:Control.StandingWork": {
+      "x": 735.85547,
+      "y": 160.30469
+    }
+  },
+  "sizes": {},
+  "scales": {},
+  "fills": {},
+  "options": {}
+}

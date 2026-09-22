@@ -4,39 +4,39 @@
     "y": 0.0
   },
   "nodes": {
+    "network:ManagedServiceZone": {
+      "x": 1068.9824,
+      "y": 361.30664
+    },
     "node:ManagedServiceHost": {
       "x": 1093.25,
-      "y": 351.78516
-    },
-    "node:AgentHost1": {
-      "x": 273.91016,
-      "y": 221.9961
-    },
-    "node:WistGatewayHost": {
-      "x": 562.3242,
       "y": 351.78516
     },
     "network:OnlineBusinessZone": {
       "x": 448.11914,
       "y": 360.8203
     },
-    "network:ManagedServiceZone": {
-      "x": 1068.9824,
-      "y": 361.30664
+    "node:WistGatewayHost": {
+      "x": 562.3242,
+      "y": 351.78516
     },
     "node:AgentHost2": {
       "x": 273.91016,
       "y": 511.41016
+    },
+    "node:AgentHost1": {
+      "x": 273.91016,
+      "y": 221.9961
     }
   },
   "sizes": {
-    "network:ManagedServiceZone": {
-      "x": 340.83984,
-      "y": 445.70703
-    },
     "network:OnlineBusinessZone": {
       "x": 749.6992,
       "y": 651.96875
+    },
+    "network:ManagedServiceZone": {
+      "x": 340.83984,
+      "y": 445.70703
     }
   },
   "scales": {},

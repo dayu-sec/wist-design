@@ -1,0 +1,175 @@
+// Module: AgentContent — 工作内容的取值空间（采集面 → 单元 → 模板）
+
+// ── 采集单元与目录 ─────────────────────────────────────────────────
+// “知道 capability 之后，具体采什么”不能自由生成：spec 必须能落到数据面的
+// rule/oml 上（采得到 ≠ 解析得了）。因此内容的合法取值空间 = 采集目录，
+// 条目与数据面规则库一一对应（rule_ref）。
+
+// 目录的来源：已对接中心时以中心版为准（只读副本），否则用网关本地策展的版本。
+variant CatalogOrigin {
+  meta {
+    label zh "目录来源"
+    summary zh "采集目录由中心下发（网关已对接中心，只读）还是网关本地策展。"
+    tags "control", "collection", "catalog"
+  }
+
+  Center
+  Gateway
+}
+
+struct CollectionUnit {
+  meta {
+    label zh "采集单元"
+    label en "Collection Unit"
+    summary zh "采集目录的一个条目：某个采集面上的具体内容（日志路径族或指标族），与数据面规则一一对应。"
+    tags "control", "collection", "catalog"
+  }
+
+  unique unit_id: String
+  // 所属采集面：模板按面清点覆盖，面的全集见 families.mju。
+  family: CollectionFamily
+  // collect_logs | collect_metrics
+  capability: String
+  // macos | linux | windows
+  platform: String
+  // 触发条件：**按 agentd 上报的事实求值**（不是自由文本），空 = 平台基线必采。
+  // 语法：条件之间用 `;`，同一条件的多个取值用 `|`（任一命中即算命中）：
+  //   kind:value(|value)* （; kind:value…）*
+  // kind ∈ installed（已装包）| device（设备，如 gpu）| service（systemd/launchd 单元）
+  //   | port（监听端口）| resource（资源量，值可带比较符，如 mem_gib>=64）。
+  // 例：installed:homebrew|xcode;device:gpu
+  // 求值不满足的单元**不进 spec**，但要在 SelectionBasis.excluded_units 里留下原因。
+  match: String
+  // 采集参数片段（路径/过滤/间隔），写进 spec 时直接拼装。
+  spec_fragment: String
+  // 数据面 rule/oml 标识（如 agent_uplink/metrics_frame）：保证“采得到 = 解析得了”。
+  rule_ref: String
+  // none | root | fda
+  requires_privilege: String
+  // active | draft | deprecated（draft = 面已定、规则未就绪）
+  status: String
+}
+
+struct CollectionCatalog {
+  meta {
+    label zh "采集目录"
+    label en "Collection Catalog"
+    summary zh "某版本的可采内容全集，与数据面规则库同源；网关据此选内容，不可自由生成。"
+    tags "control", "collection", "catalog"
+  }
+
+  unique catalog_version: Int
+  origin: CatalogOrigin
+  // origin = Center 时，本版目录由哪次全局策略派发带来；origin = Gateway 时为空。
+  policy_version: String?
+  units: List<CollectionUnit>
+  // 从中心同步的时间；本地策展版本为空。
+  synced_at: DateTime?
+  published_at: DateTime
+}
+
+// ── 常驻工作模板：常见机器类别的开箱内容组合 ────────────────────────
+// 目录回答“能采什么”，模板回答“这类机器该采什么”。模板是人工策展 + 审定的结果，
+// 只**引用**某一版目录里的单元（unit_refs），不内联 spec —— 内容随目录走，避免两处漂移。
+// 一份工作 = 一个能力面（collect_logs / collect_metrics）；一个模板跨能力面，
+// 授权时按 capability_scope 展开成多份常驻工作。
+
+// 机器类别：开箱模板覆盖的 4 类机器。加类别 = 改模型（采集范围属于合规面，要走审定）。
+variant MachineClass {
+  meta {
+    label zh "机器类别"
+    label en "Machine Class"
+    summary zh "常驻工作模板面向的机器类别：macOS 日常机 / 开发机，Linux 计算服务器 / 数据服务器。"
+    tags "control", "collection", "template"
+  }
+
+  MacDaily
+  MacDev
+  LinuxCompute
+  LinuxData
+}
+
+struct WorkTemplate {
+  meta {
+    label zh "常驻工作模板"
+    label en "Work Template"
+    summary zh "某类机器开箱即用的采集内容组合：引用某一版采集目录的单元，授权时展开成常驻工作的 spec。"
+    tags "control", "collection", "template"
+  }
+
+  // macos-daily | macos-dev | linux-compute | linux-data
+  unique template_id: String
+  machine_class: MachineClass
+  // 覆盖的能力面：collect_logs / collect_metrics（= unit_refs 里单元能力的并集）。
+  capability_scope: List<String>
+  // 引用采集目录的 unit_id（可跨能力面）；模板不内联 spec，避免与目录漂移。
+  unit_refs: List<String>
+  // 模板针对哪一版目录策展：目录换版后引用必须能重新解析。
+  catalog_version: Int
+  // 模板自身版本：单元组合变化时 +1；已授权的工作不追改（要改走新提案 + 审定）。
+  template_version: Int
+  // 基线模板：本模板 = 基线模板的全部单元 + 自己的 unit_refs（如 macos-dev 以 macos-daily 为基线）；独立模板为空。
+  base_template_id: String?
+  // 跑通这套内容所需的最小权限集合：单元 requires_privilege 去掉 none 后的并集（none / root / fda）
+  required_privileges: List<String>
+  // draft | active | deprecated
+  status: String
+  curated_by: String
+  curated_at: DateTime
+}
+
+// 一条事实依据：回答“凭什么选/不选”。
+// source: process | process_path | package | listen_port | device | resource | declaration
+//   （declaration = 人工声明，如管理员直接说“这台是数据服务器”）
+struct SelectionFact {
+  meta {
+    label zh "选中依据事实"
+    label en "Selection Fact"
+    summary zh "一条具体的事事实依据：来自哪台机器的哪种信号、值是什么。"
+    tags "control", "collection", "audit"
+  }
+
+  source: String
+  key: String
+  value: String
+}
+
+// 没采的原因：运维最常问的“为什么这台机器没采 X”。
+struct SelectionExclusion {
+  meta {
+    label zh "排除项"
+    label en "Selection Exclusion"
+    summary zh "某个单元没进 spec 的原因（条件不满足/平台不符/权限不足/人工剔除）。"
+    tags "control", "collection", "audit"
+  }
+
+  unit_id: String
+  // match_unsatisfied | platform_mismatch | privilege_missing | excluded_by_human
+  reason_code: String
+  // match_unsatisfied 时指出是哪条条件（如 installed:redis-server）
+  condition: String?
+}
+
+// 选中依据（审计）：回答“为什么这台机器采了这些”。
+struct SelectionBasis {
+  meta {
+    label zh "选中依据"
+    label en "Selection Basis"
+    summary zh "这份采集内容的选中依据：按哪版目录、哪个模板（若有）、依据哪些事实、选中/排除了哪些单元、谁定的。"
+    tags "control", "collection", "audit"
+  }
+
+  // template | derived | manual | recommended
+  mode: String
+  catalog_version: Int
+  catalog_origin: CatalogOrigin
+  // 由模板授权时指向模板与版本（mode = template）；人工直填时为空。
+  template_id: String?
+  template_version: Int?
+  // 结构化的事实依据（不是自由文本：审计与“为什么没采”都要能机检）。
+  facts_used: List<SelectionFact>
+  selected_units: List<String>
+  excluded_units: List<SelectionExclusion>
+  decided_by: String
+  decided_at: DateTime
+}

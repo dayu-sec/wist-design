@@ -378,7 +378,7 @@ discovery snapshot → planner_bridge（discovery → 采集候选）→ provide
 
 ### 11.2 已定决策
 
-- **帧标记区分（A）**：信封 `{schema, agent, ts, seq}` 保持信号无关、不动；信号类型靠帧标记表达——` RAW:`（日志）/ ` METRICS:`（指标），见 `telemetry-uplink-protocol.md` §4/§5。
+- **帧标记区分（A）**：信封 `{schema, agent, ts, seq}` 保持信号无关、不动；信号类型靠帧标记表达——` LOGRAW:`（日志）/ ` METRICS:`（指标），见 `telemetry-uplink-protocol.md` §4/§5。
 - **共享 uplink（B）**：指标与日志共用同一 TCP 连接，靠帧标记区分；指标优先 + 背压隔离（日志洪峰不挤掉指标，反之亦然）。
 - **编译期注册 provider（C1）**：`MetricProvider` trait + 静态注册表，新增 provider = 写 `impl` + 注册一行 + 重编；脚本型指标（`wist-exec` opcode）后续再议。
 

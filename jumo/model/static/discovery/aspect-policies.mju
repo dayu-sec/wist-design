@@ -1,0 +1,132 @@
+// 发现方向策略表 —— 把**值**写进模型（策展发布）
+//
+// 为什么用 flow + create：jumo 的类型定义装不下常量。实测结论：
+//   - 字段默认值 `Int = 900` **解析通过但不落实例**（create 时省略该字段 → 运行时取不到它）；
+//   - 同一类型多条记录时，`verify` 的类型级断言无法分辨是哪一条（实测失败）；
+//   - 因此唯一能承载字面量值的形式是 flow 里的 `create`，策略表以“**发布动作的产物**”落进模型。
+//
+// 收益：生成代码时直接产出这组常量，不再依赖外部 TOML（避免模型与数据两份漂移）。
+//
+// 可验证到什么程度：同一类型的 7 条记录无法逐条断言，所以只对**集合级**不变式做 verify
+// （版本号、方向条数）；每条周期的 `[min, max]` 与“基线面不可关”由网关装载时校验。
+
+command PublishDiscoveryAspectPolicies {
+  policy_version: Int
+}
+
+flow PublishDiscoveryAspectPoliciesFlow {
+  meta {
+    label zh "发布发现方向策略"
+    label en "Publish Discovery Aspect Policies"
+    summary zh "发布一版发现方向策略表：每个方向的默认/最小/最大周期、是否基线、是否默认开、产出事实。"
+    tags "discovery", "probe", "policy", "publish"
+  }
+
+  actor Control.PlatformMaintenanceEngineer
+  trigger PublishDiscoveryAspectPolicies
+
+  creates DiscoveryAspectPolicy
+  creates DiscoveryAspectPolicySet
+
+  step<stop> Publish {
+    // ── 慢变量：资源画像与网络拓扑（15 分钟级）────────────────────
+    create DiscoveryAspectPolicy {
+      aspect = Host
+      default_interval_seconds = 900
+      min_interval_seconds = 300
+      max_interval_seconds = 3600
+      baseline = true
+      enabled_by_default = true
+      platforms = "macos|linux"
+      yields = "os/arch/核数/内存/磁盘/GPU"
+    }
+
+    create DiscoveryAspectPolicy {
+      aspect = Network
+      default_interval_seconds = 900
+      min_interval_seconds = 300
+      max_interval_seconds = 3600
+      baseline = false
+      enabled_by_default = true
+      platforms = "macos|linux"
+      yields = "网卡/地址/路由"
+    }
+
+    // ── 半快变量：用途推断的主信号与辅证（5 分钟级）──────────────
+    create DiscoveryAspectPolicy {
+      aspect = Process
+      default_interval_seconds = 300
+      min_interval_seconds = 60
+      max_interval_seconds = 1800
+      baseline = false
+      enabled_by_default = true
+      platforms = "macos|linux"
+      yields = "进程名/可执行路径（用途推断主信号）"
+    }
+
+    create DiscoveryAspectPolicy {
+      aspect = Endpoint
+      default_interval_seconds = 300
+      min_interval_seconds = 60
+      max_interval_seconds = 1800
+      baseline = false
+      enabled_by_default = true
+      // 仅 linux：macOS 侧 `discover_service_endpoints()` 直接返回空集（cfg(not(target_os = "linux"))），
+      // 声明成 macos|linux 会让网关把一份永远产出为空的工作授权下去。补齐 mac 实现后再加回。
+      platforms = "linux"
+      yields = "监听端口（用途推断辅证，如 5432→数据库）"
+    }
+
+    create DiscoveryAspectPolicy {
+      aspect = Container
+      default_interval_seconds = 300
+      min_interval_seconds = 60
+      max_interval_seconds = 1800
+      baseline = false
+      enabled_by_default = false
+      platforms = "macos|linux"
+      yields = "容器清单（运行时/镜像/命名空间）"
+    }
+
+    create DiscoveryAspectPolicy {
+      aspect = K8s
+      default_interval_seconds = 300
+      min_interval_seconds = 60
+      max_interval_seconds = 1800
+      baseline = false
+      enabled_by_default = false
+      platforms = "macos|linux"
+      yields = "K8s 节点/工作负载标识"
+    }
+
+    // ── 低频且昂贵：包清单（30 分钟级）──────────────────────────
+    create DiscoveryAspectPolicy {
+      aspect = Package
+      default_interval_seconds = 1800
+      min_interval_seconds = 900
+      max_interval_seconds = 21600
+      baseline = false
+      enabled_by_default = true
+      platforms = "linux"
+      yields = "已装包清单（用途推断最稳信号 + 中心资产整理/软件归一化输入）"
+    }
+
+    create DiscoveryAspectPolicySet {
+      policy_version = PublishDiscoveryAspectPolicies.policy_version
+      aspect_count = 7
+    }
+  }
+}
+
+verify DiscoveryAspectPoliciesPublished for flow PublishDiscoveryAspectPoliciesFlow {
+  given {
+    PublishDiscoveryAspectPolicies.policy_version = 1
+  }
+
+  when PublishDiscoveryAspectPolicies
+
+  expect {
+    DiscoveryAspectPolicySet.policy_version == 1
+    DiscoveryAspectPolicySet.aspect_count == 7
+  }
+}

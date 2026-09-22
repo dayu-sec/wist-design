@@ -1,0 +1,318 @@
+# 采集目录 v1 —— 内容数据（对应模型 Control.Agent.Content.CollectionCatalog）
+#
+# 字段值写法约定（loader 尚未实现，此处先固定写法，便于评审）：
+#   spec_fragment：
+#     glob:...          文件路径 / 通配，可直接 tail
+#     exporter:...      需周期导出器（二进制、DB、统一日志、审计链，不能直接 tail）
+#     predicate:...     统一日志 predicate
+#     interval:...      指标采集间隔
+#   match：装了什么/跑了什么才采；空 = 平台基线必采
+#   rule_ref：数据面 rule/oml 标识；空 = 规则未就绪（status 必然是 draft）
+#   requires_privilege：none | root | fda
+#   status：active（规则已就绪）| draft（面已定、规则未就绪）| deprecated
+
+catalog_version = 1
+origin = "Gateway"
+published_at = "2026-09-22T00:00:00Z"
+
+# ── macOS ─────────────────────────────────────────────────────────
+
+[[units]]
+unit_id = "mac-login-session"
+family = "LoginSession"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "exporter:last,lastb"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "mac-privilege-exec"
+family = "PrivilegeExecution"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "exporter:praudit(/var/audit)"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "mac-software-change"
+family = "SoftwareChange"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "glob:/var/log/install.log"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "mac-launchd-service"
+family = "ServiceLifecycle"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "glob:/var/log/com.apple.xpc.launchd/launchd.log*"
+rule_ref = "mac-drafts/launchd-service"
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "mac-crash-panic"
+family = "CrashPanic"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "glob:/Library/Logs/DiagnosticReports/*.ips|*.panic"
+rule_ref = "mac-drafts/crash-panic"
+requires_privilege = "fda"
+status = "draft"
+
+[[units]]
+unit_id = "mac-network-wifi"
+family = "NetworkFirewall"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "glob:/var/log/wifi.log*|predicate:com.apple.alf"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "mac-privacy-tcc"
+family = "PrivacyTcc"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "exporter:sqlite-snapshot(TCC.db)"
+rule_ref = ""
+requires_privilege = "fda"
+status = "draft"
+
+[[units]]
+unit_id = "mac-gatekeeper"
+family = "GatekeeperQuarantine"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "predicate:syspolicyd"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "mac-reboot-power"
+family = "RebootPower"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "glob:/var/log/shutdown_monitor.log"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "mac-misc-system"
+family = "MiscSystem"
+capability = "collect_logs"
+platform = "macos"
+match = ""
+spec_fragment = "glob:/var/log/fsck_apfs*|/var/log/cups/*|/var/log/apache2/*"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "mac-dev-toolchain"
+family = "DevToolchain"
+capability = "collect_logs"
+platform = "macos"
+match = "installed:homebrew|xcode|orbstack"
+spec_fragment = "glob:~/Library/Logs/Homebrew/*|~/Library/Developer/Xcode/DerivedData/*/Logs/*"
+rule_ref = ""
+requires_privilege = "none"
+status = "draft"
+
+[[units]]
+unit_id = "mac-host-metrics"
+family = "HostMetrics"
+capability = "collect_metrics"
+platform = "macos"
+match = ""
+spec_fragment = "interval:15s"
+rule_ref = "agent_uplink"
+requires_privilege = "none"
+status = "active"
+
+# ── Linux ─────────────────────────────────────────────────────────
+
+[[units]]
+unit_id = "linux-auth-session"
+family = "LoginSession"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "glob:/var/log/auth.log|/var/log/secure|/var/log/wtmp"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-privilege-exec"
+family = "PrivilegeExecution"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+# sudo 触发行同时落在 secure/auth.log（由 linux-auth-session 采），这里只收命令级审计
+spec_fragment = "glob:/var/log/sudo.log|exporter:auditd-execve"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-software-change"
+family = "SoftwareChange"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "glob:/var/log/dpkg.log|/var/log/apt/history.log|/var/log/dnf.log|/var/log/yum.log"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-service-lifecycle"
+family = "ServiceLifecycle"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "exporter:journalctl-unit"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-crash-panic"
+family = "CrashPanic"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "glob:/var/lib/systemd/coredump/*|/var/crash/*|dmesg:panic"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-network-firewall"
+family = "NetworkFirewall"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "exporter:nft-ruleset|iptables-save"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-reboot-power"
+family = "RebootPower"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "exporter:journalctl-shutdown|last-reboot"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-misc-system"
+family = "MiscSystem"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "glob:/var/log/cron|/var/log/alternatives.log"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-kernel-system"
+family = "KernelSystem"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "glob:/var/log/kern.log|/var/log/messages"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-db-service"
+family = "DatabaseService"
+capability = "collect_logs"
+platform = "linux"
+match = "installed:postgresql|mysql|redis|mongodb"
+spec_fragment = "glob:/var/log/postgresql/*|/var/log/mysql/*|/var/log/redis/*|/var/log/mongodb/*"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-storage-health"
+family = "StorageHealth"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "exporter:smartctl|glob:/var/log/fsck*"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-compute-workload"
+family = "ComputeWorkload"
+capability = "collect_logs"
+platform = "linux"
+match = "installed:slurm|kubelet"
+spec_fragment = "glob:/var/log/slurm/*|/var/log/pods/*|dmesg:nvidia-xid"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-backup-job"
+family = "BackupJob"
+capability = "collect_logs"
+platform = "linux"
+match = "installed:borg|restic|rsync"
+spec_fragment = "glob:/var/log/borg/*|/var/log/restic/*"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-network-service"
+family = "NetworkService"
+capability = "collect_logs"
+platform = "linux"
+match = ""
+spec_fragment = "glob:/var/log/nginx/*|/var/log/samba/*"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"
+
+[[units]]
+unit_id = "linux-host-metrics"
+family = "HostMetrics"
+capability = "collect_metrics"
+platform = "linux"
+match = ""
+spec_fragment = "interval:15s"
+rule_ref = ""
+requires_privilege = "root"
+status = "draft"

@@ -45,20 +45,6 @@ bind WistGatewayManagementInterface {
     status AgentOverview 200
   }
 
-  entry AdminPauseAgent {
-    route POST "/api/v1/admin/agents/{agent_id}/pause"
-    auth bearer
-    actor_identity AdminOperator.id from jwt.sub
-    status DispatchReceipt 202
-  }
-
-  entry AdminUpgradeAgent {
-    route POST "/api/v1/admin/agents/{agent_id}/upgrade"
-    auth bearer
-    actor_identity AdminOperator.id from jwt.sub
-    status DispatchReceipt 202
-  }
-
   entry AdminViewGatewayManagementState {
     route GET "/api/v1/admin/gateway/management-state"
     auth bearer
@@ -85,6 +71,41 @@ bind WistGatewayManagementInterface {
     auth bearer
     actor_identity AdminOperator.id from jwt.sub
     status AgentFleetDispatchReceipt 202
+  }
+
+  entry AdminListAgents {
+    route GET "/api/v1/admin/agents"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status Projection<List<AgentRuntimeStatus>> 200
+  }
+
+  entry AdminRevokeAgentCredential {
+    route POST "/api/v1/admin/agents/{agent_id}/credentials:revoke"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status AgentCredentialRevocationResult 200
+  }
+
+  entry AdminSetAgentInstallPackageAddress {
+    route POST "/api/v1/admin/agent/install-package"
+    auth bearer
+    actor_identity PlatformMaintenanceEngineer.id from jwt.sub
+    status AgentInstallPackageAddress 200
+  }
+
+  entry AdminViewAgentInstallPackageAddress {
+    route GET "/api/v1/admin/agent/install-package"
+    auth bearer
+    actor_identity OperationsEngineer.id from jwt.sub
+    status AgentInstallPackageAddress 200
+  }
+
+  entry AdminViewAgentPurpose {
+    route GET "/api/v1/admin/agents/{agent_id}/purpose"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status AgentPurposeView 200
   }
 }
 
@@ -124,6 +145,15 @@ bind WistAgentdOnlineRegistrationInterface {
     actor_identity Agentd.id from credential.agent_id
     status Reporting.ActionResultAccepted 202
     outcome Reporting.ActionResultAccepted on Reporting.ActionResultReceipt
+  }
+
+  // 事实上报（摘要）：agentd → 网关。不走数据面 —— 摘要小（去重后 10~30 KB）、
+  // 只服务用途推断，而且数据面接入目前无身份校验，事实里是进程路径与包名。
+  entry ReportAgentFactSummary {
+    route POST "/api/v1/agent/facts"
+    auth bearer
+    actor_identity Agentd.id from credential.agent_id
+    status Reporting.FactSummaryAccepted 202
   }
 }
 

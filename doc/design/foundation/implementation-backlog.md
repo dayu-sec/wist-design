@@ -640,6 +640,56 @@ warp-insight/
 
 ---
 
+### 5.18 B118 主机「确定事实」补全（资源画像）
+
+对应里程碑：
+
+- `M7`
+
+背景：
+
+- 「确定的」事实（操作系统/架构/计算资源）现在没采全：`HostDiscoveryProbe` 只发 `host.id`/`host.name`，
+  **核数/内存/磁盘/GPU 都不在**；GPU 全仓无采集；macOS 的 `machine_id` 实际是 `"unknown"`
+  （只读 `/etc/machine-id` 与 `/var/lib/dbus/machine-id`，macOS 两个都没有）；`HostProfile.ip_addresses` 恒为空。
+- 用途推断与模板选择要靠它（见 `doc/design/center/agent-purpose-inference.md`）。
+
+建议模块：
+
+- `crates/*/src/discovery/host.rs`（扩展 host 资源属性）
+- `crates/*/src/control/enrollment.rs`（macOS `machine_id` 改取 IOPlatformUUID；`ip_addresses` 填实际地址）
+
+完成定义：
+
+- host 资源带核数 / 内存 / 磁盘（设备 + 容量）/ GPU（型号 + 显存，无 GPU 则空）
+- macOS `machine_id` 稳定且非 `unknown`，重启与重装应用后不变
+- `ip_addresses` 至少含主用地址
+
+### 5.19 B119 Linux 用途推断所需信号补全
+
+对应里程碑：
+
+- `M7`
+
+背景：
+
+- Linux 上 `/proc/<pid>/comm` 是 15 字符短名、无路径无参数，`python3`/`java`/`node` 一律分不出来，
+  用途推断的长尾判不出来（macOS 侧给的是完整可执行路径，不受影响）。
+
+建议模块：
+
+- `crates/*/src/discovery/process.rs`：补 `cmdline`（`/proc/<pid>/cmdline`）
+- 新增 package 清单采集（`dpkg-query` / `rpm -qa`）
+
+完成定义：
+
+- 进程信号除 `comm` 外还含 `cmdline`，能区分 `python3 xxx.py` / `java -jar xxx.jar`
+- 能产出**已装包集合**：服务未运行时也能判用途（`comm` 做不到）
+- 两者上送走**聚合**（去重集合），不上送全量 PID 明细
+
+> B118 / B119 的排期、验收与依赖见 [`../center/agent-work-delivery-plan.md`](../center/agent-work-delivery-plan.md)（批次 4）。
+
+---
+
 ## 6. 首批交付包建议
 
 如果按最少风险切成三个交付包，建议：

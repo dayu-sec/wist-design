@@ -194,3 +194,22 @@ struct AgentInstallCode {
   arm_linux_install_code: String
   bootstrap_bundle: AgentBootstrapBundle
 }
+
+// wist-agentd 安装包来源地址：网关取包用的来源地址与制品摘要。
+// 管理面维护（见 WistGateway 用例 SetAgentInstallPackageAddress）；设置时网关先拉取到本地缓存，
+// 之后新签发的安装代码都分发这份缓存，已签发且未过期的安装代码不受影响。
+struct AgentInstallPackageAddress {
+  meta {
+    label zh "wist-agentd 安装包来源地址"
+    label en "wist-agentd Install Package Source"
+    summary zh "网关的取包来源地址与制品摘要；支持本地文件路径或外部制品地址。设置时网关先把制品拉到本地缓存，安装端随后从网关取这份缓存（而不是直连来源），因此摘要与分发内容天然同源。"
+    tags "agent-install", "package", "install-code"
+  }
+
+  unique address_id: String
+  package_url: String
+  package_sha256: String?
+  updated_by: String
+  // 未设置过（当前使用网关内置默认分发地址）时为 null。
+  updated_at: DateTime?
+}

@@ -4,12 +4,12 @@
     "y": 0.0
   },
   "nodes": {
-    "struct:Telemetry.MetricPoint": {
-      "x": 382.84375,
-      "y": 128.28125
-    },
     "struct:Telemetry.LogRecord": {
       "x": 172.10938,
+      "y": 128.28125
+    },
+    "struct:Telemetry.MetricPoint": {
+      "x": 382.84375,
       "y": 128.28125
     }
   },

@@ -88,32 +88,93 @@ struct ResultAttestation {
   attested_at: DateTime
 }
 
-command ReportDiscoverySnapshot {
-  api_version
-  kind
-  unique report_id
-  agent_id
-  instance_id
-  mode
-  snapshot
-  reported_at
+// 事实**原文快照**在数据面上的包体：agentd → 数据面（warp-parse）。
+// 网关与中心**各自订阅**同一份帧，互不代报（原先“网关再代报中心”的说法已废弃）。
+// 网关只接摘要（见下方 ReportAgentFactSummary），原文快照不进网关库。
+message<command> ReportDiscoverySnapshot {
+  api_version: String
+  kind: String
+  unique report_id: String
+  agent_id: String
+  instance_id: String
+  snapshot_id: String
+  revision: Int
+  generated_at: DateTime
+  report_attempt: Int
+  mode: DiscoveryReportMode
+  snapshot: DiscoverySnapshot
+  reported_at: DateTime
 }
 
-struct DiscoveryReportMode {
-  variant
+// 第一版只实现 FullSnapshot（完整快照幂等替换），不做 patch / delta。
+variant DiscoveryReportMode {
+  FullSnapshot
+  SnapshotReplace
 }
 
-event DiscoveryIngestAck {
-  report_id
-  status
-  ingested_resources
-  ingested_targets
-  received_at
-  ack_at
+message<response> DiscoveryIngestAck {
+  report_id: String
+  agent_id: String
+  instance_id: String
+  snapshot_id: String
+  revision: Int
+  ack_status: DiscoveryIngestAckStatus
+  ingested_resources: Int
+  ingested_targets: Int
+  received_at: DateTime
+  ack_at: DateTime
+  reason_code: String?
+  reason_message: String?
 }
 
-struct DiscoveryIngestAckStatus {
-  variant
+// accepted（已落地）| duplicate（同快照已处理）| stale（revision 落后）| rejected（envelope/身份非法）
+variant DiscoveryIngestAckStatus {
+  Accepted
+  Duplicate
+  Stale
+  Rejected
+}
+
+// 事实**摘要**的控制面上报：agentd → 网关（复用 agent 凭据，已认证）。
+//
+// 与原文快照**分工不同，不是同一条路**：
+//   摘要 —— 去重后 10~30 KB，只服务用途推断 → 走控制面（本消息）；
+//   原文 —— 一台几百 KB，服务中心资产整理 → 走数据面（数据面接入目前无身份校验，
+//           事实里是进程路径与包名，走已认证的控制面反而更合理）。
+message<command> ReportAgentFactSummary {
+  api_version: String
+  kind: String
+  unique report_id: String
+  agent_id: String
+  instance_id: String
+  // 内容摘要：**幂等键**。事实上报按内容变化触发，不按 revision 前进。
+  content_digest: String
+  revision: Int
+  observed_at: DateTime
+  os: String
+  arch: String
+  process_count: Int
+  process_executables: List<String>
+  packages: List<String>
+  listen_ports: List<String>
+  reported_at: DateTime
+}
+
+// accepted（已入库）| duplicate（同 content_digest 已处理，不重复算）| rejected（envelope/身份非法）
+variant FactSummaryAckStatus {
+  Accepted
+  Duplicate
+  Rejected
+}
+
+message<response> FactSummaryAccepted {
+  report_id: String
+  agent_id: String
+  content_digest: String
+  ack_status: FactSummaryAckStatus
+  // 幂等命中（duplicate）时仍回带已存建议，Agent 侧不必再问一次。
+  suggestion_id: String?
+  received_at: DateTime
 }
 
 event IngestHeadError {

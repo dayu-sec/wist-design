@@ -1,0 +1,99 @@
+# 常驻工作模板 —— 内容数据（对应模型 Control.Agent.Content.WorkTemplate）
+#
+# base_template_id 空 = 独立模板；非空 = 本模板 = 基线模板的全部单元 + 自己的 unit_refs。
+# capability_scope / required_privileges 只写本模板自己的单元（基线部分由 base 带）；
+# 展开后的有效能力面与权限 = 基线 ∪ 自身。
+#
+# 状态：4 个模板现在都是 draft —— 引用的单元里除 mac-host-metrics 外全为 draft，
+# 按不变量“引用到 draft 单元的模板不能 active”，所以目前没有一个模板可授权投产。
+
+[[template]]
+template_id = "macos-daily"
+machine_class = "MacDaily"
+capability_scope = ["collect_logs", "collect_metrics"]
+unit_refs = [
+  "mac-login-session",
+  "mac-software-change",
+  "mac-crash-panic",
+  "mac-network-wifi",
+  "mac-privacy-tcc",
+  "mac-gatekeeper",
+  "mac-launchd-service",
+  "mac-reboot-power",
+  "mac-misc-system",
+  "mac-host-metrics",
+]
+catalog_version = 1
+template_version = 1
+required_privileges = ["root", "fda"]
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"
+
+[[template]]
+template_id = "macos-dev"
+machine_class = "MacDev"
+base_template_id = "macos-daily"
+capability_scope = ["collect_logs"]
+unit_refs = [
+  "mac-privilege-exec",
+  "mac-dev-toolchain",
+]
+catalog_version = 1
+template_version = 1
+required_privileges = ["root"]
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"
+
+[[template]]
+template_id = "linux-compute"
+machine_class = "LinuxCompute"
+capability_scope = ["collect_logs", "collect_metrics"]
+unit_refs = [
+  "linux-auth-session",
+  "linux-privilege-exec",
+  "linux-software-change",
+  "linux-service-lifecycle",
+  "linux-crash-panic",
+  "linux-network-firewall",
+  "linux-reboot-power",
+  "linux-kernel-system",
+  "linux-compute-workload",
+  "linux-storage-health",
+  "linux-host-metrics",
+]
+catalog_version = 1
+template_version = 1
+required_privileges = ["root"]
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"
+
+[[template]]
+template_id = "linux-data"
+machine_class = "LinuxData"
+capability_scope = ["collect_logs", "collect_metrics"]
+unit_refs = [
+  "linux-auth-session",
+  "linux-privilege-exec",
+  "linux-software-change",
+  "linux-service-lifecycle",
+  "linux-crash-panic",
+  "linux-network-firewall",
+  "linux-reboot-power",
+  "linux-misc-system",
+  "linux-kernel-system",
+  "linux-db-service",
+  "linux-storage-health",
+  "linux-compute-workload",
+  "linux-network-service",
+  "linux-backup-job",
+  "linux-host-metrics",
+]
+catalog_version = 1
+template_version = 1
+required_privileges = ["root"]
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"

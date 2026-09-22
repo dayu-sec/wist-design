@@ -1,0 +1,16 @@
+{
+  "pan": {
+    "x": 0.0,
+    "y": 0.0
+  },
+  "nodes": {
+    "module:Control.AgentApp.FacingInterface": {
+      "x": 425.89453,
+      "y": 252.01562
+    }
+  },
+  "sizes": {},
+  "scales": {},
+  "fills": {},
+  "options": {}
+}

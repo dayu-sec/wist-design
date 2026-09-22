@@ -8,7 +8,7 @@
 
 | 载体 | 通道 | 承载什么 |
 | --- | --- | --- |
-| **数据帧**（data frame） | 数据平面（TCP） | 真实数据（带 `seq`），按帧标记分 ` RAW:`（日志）/ ` METRICS:`（指标）；被动丢失靠接收端 `seq` 跳号检测，帧本身不表达丢失 |
+| **数据帧**（data frame） | 数据平面（TCP） | 真实数据（带 `seq`），按帧标记分 ` LOGRAW:`（日志）/ ` METRICS:`（指标）；被动丢失靠接收端 `seq` 跳号检测，帧本身不表达丢失 |
 | **数据报告**（data report） | 独立报告通道（控制/状态） | 主动过滤的丢弃区间 + `reason` |
 
 只定义格式，不绑定具体 IO / 存储 / 协议实现。与「防丢失」的语义关系见 [`data-loss-prevention.md`](data-loss-prevention.md)。
@@ -52,7 +52,7 @@
 
 | 帧标记 | 正文 | 信号 |
 | --- | --- | --- |
-| ` RAW: ` | 原始日志行，不进入 JSON、不转义，便于审计核对与回放 | log |
+| ` LOGRAW: ` | 原始日志行，不进入 JSON、不转义，便于审计核对与回放 | log |
 | ` METRICS: ` | 结构化指标 JSON | metrics |
 
 > 主动过滤不混进数据平面，走独立报告通道的数据报告（§6）；被动丢失由接收端从 `seq` 跳号检测（见 `data-loss-prevention.md` §8）。信号类型由帧标记表达，信封保持信号无关。
@@ -63,10 +63,10 @@
 
 数据帧承载真实数据，信封 `{schema, agent, ts, seq}` 共用、信号无关，按帧标记分两类正文：
 
-### 5.1 日志帧（` RAW:`）
+### 5.1 日志帧（` LOGRAW:`）
 
 ```
-{envelope} RAW: <正文>
+{envelope} LOGRAW: <正文>
 ```
 
 信封字段（信号无关，通用）：
@@ -85,7 +85,7 @@
 **示例**：
 
 ```
-{"schema":"v1","agent":"agent-001","ts":"2026-04-14T00:00:00Z","seq":0} RAW: 2026-04-14 INFO request completed
+{"schema":"v1","agent":"agent-001","ts":"2026-04-14T00:00:00Z","seq":0} LOGRAW: 2026-04-14 INFO request completed
 ```
 
 ### 5.2 指标帧（` METRICS:`）

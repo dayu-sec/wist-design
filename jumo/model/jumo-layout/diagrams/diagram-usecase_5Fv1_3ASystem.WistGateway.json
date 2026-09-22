@@ -4,37 +4,17 @@
     "y": 0.0
   },
   "nodes": {
-    "actor:Control.WistGateway": {
-      "x": 1281.6367,
-      "y": 295.94922
-    },
     "usecase:System.WistGateway.GetAgentInstallCode": {
       "x": 530.0586,
       "y": 96.71094
-    },
-    "usecase:System.WistGateway.ReportGatewayStatus": {
-      "x": 857.8203,
-      "y": 476.48828
-    },
-    "usecase:System.WistGateway.ShowAgentRuntimeStatus": {
-      "x": 337.4375,
-      "y": 643.3125
     },
     "usecase:System.WistGateway.InitGatewayViaInitialConfig": {
       "x": 833.3672,
       "y": 96.25781
     },
-    "usecase:System.WistGateway.RegisterToInsightCenter": {
-      "x": 899.27344,
-      "y": 244.0
-    },
-    "usecase:System.WistGateway.PauseAgent": {
-      "x": 464.75,
-      "y": 453.6875
-    },
-    "usecase:System.WistGateway.GetAgentOverview": {
-      "x": 359.6172,
-      "y": 323.73047
+    "usecase:System.WistGateway.ReportGatewayStatus": {
+      "x": 857.8203,
+      "y": 476.48828
     },
     "usecase:System.WistGateway.UpgradeAgentRemotely": {
       "x": 636.9219,
@@ -44,9 +24,29 @@
       "x": 509.97656,
       "y": 216.64062
     },
+    "actor:Control.WistGateway": {
+      "x": 1281.6367,
+      "y": 295.94922
+    },
     "usecase:System.WistGateway.RenewGatewayCredential": {
       "x": 711.9531,
       "y": 366.0
+    },
+    "usecase:System.WistGateway.PauseAgent": {
+      "x": 464.75,
+      "y": 453.6875
+    },
+    "usecase:System.WistGateway.RegisterToInsightCenter": {
+      "x": 899.27344,
+      "y": 244.0
+    },
+    "usecase:System.WistGateway.GetAgentOverview": {
+      "x": 359.6172,
+      "y": 323.73047
+    },
+    "usecase:System.WistGateway.ShowAgentRuntimeStatus": {
+      "x": 337.4375,
+      "y": 643.3125
     }
   },
   "sizes": {

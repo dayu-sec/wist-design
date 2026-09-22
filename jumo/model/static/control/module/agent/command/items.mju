@@ -1,28 +1,5 @@
 // Module: AgentCommand — Agent 控制指令编排
 
-command PauseAgent = OperatorRequest {
-  meta {
-    label zh "暂停 Agent"
-    label en "Pause Agent"
-    tags "agentd", "control-command", "pause"
-  }
-
-  agent_id: String
-  requested_at: DateTime
-}
-
-command UpgradeAgent = OperatorRequest {
-  meta {
-    label zh "远程升级 Agent"
-    label en "Upgrade Agent"
-    tags "agentd", "control-command", "upgrade"
-  }
-
-  agent_id: String
-  target_version: String
-  requested_at: DateTime
-}
-
 command RefreshPolicyHint {
   meta {
     label zh "刷新策略提示"
@@ -62,20 +39,6 @@ struct AgentControlCommand {
   issued_at: DateTime
   expires_at: DateTime
   sequence: Int
-}
-
-struct DispatchReceipt {
-  meta {
-    label zh "控制指令派发回执"
-    label en "Dispatch Receipt"
-    tags "agentd", "dispatch", "control-command"
-  }
-
-  agent_id: String
-  command_id: String
-  dispatch_id: String
-  status: String
-  created_at: DateTime
 }
 
 struct AgentFleetDispatchReceipt {

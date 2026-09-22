@@ -4,10 +4,6 @@
     "y": -375.73666
   },
   "nodes": {
-    "struct:Observed.BusinessSubsystem": {
-      "x": 544.9336,
-      "y": 153.0
-    },
     "struct:Observed.ServiceDependency": {
       "x": 559.1094,
       "y": 399.82422
@@ -15,6 +11,10 @@
     "struct:Observed.ServiceEndpoint": {
       "x": 213.77344,
       "y": 704.3633
+    },
+    "struct:Observed.BusinessSubsystem": {
+      "x": 544.9336,
+      "y": 153.0
     },
     "struct:Observed.ServiceEntity": {
       "x": 528.95703,

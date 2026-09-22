@@ -1,0 +1,29 @@
+{
+  "pan": {
+    "x": 0.0,
+    "y": 0.0
+  },
+  "nodes": {
+    "lane:participant:Control.Agentd": {
+      "x": 251.8125,
+      "y": 0.0
+    },
+    "actor:Control.Agentd": {
+      "x": 249.96094,
+      "y": 97.81641
+    },
+    "trigger": {
+      "x": 250.19922,
+      "y": 196.28516
+    }
+  },
+  "sizes": {
+    "lane:participant:Control.Agentd": {
+      "x": 503.625,
+      "y": 0.0
+    }
+  },
+  "scales": {},
+  "fills": {},
+  "options": {}
+}

@@ -7,7 +7,7 @@ region AdminTopNavigation {
   meta {
     label zh "顶部导航"
     label en "Top Navigation"
-    summary zh "WistGateway 的顶部导航区，作为四个独立页面共享的页面级导航，提供首页、初始化、安装和控制中心入口，并展示在线业务区和操作者上下文。"
+    summary zh "WistGateway 的顶部导航区，作为各独立页面共享的页面级导航，提供首页、初始化、安装、安装包地址和控制中心入口，并展示在线业务区和操作者上下文。"
     tags "admin", "navigation", "top-navigation", "layout-index"
   }
 
@@ -48,7 +48,7 @@ region<page> AgentControlCenterPage {
   meta {
     label zh "控制中心"
     label en "Control Center"
-    summary zh "WistGateway 的独立控制中心页，面向已接入 Agent，突出两个常见控制任务：暂停 Agent 和升级 Agent。"
+    summary zh "WistGateway 的独立控制中心页，面向已接入 Agent，集中承载对该 Agent 的控制任务。"
     tags "admin", "agent-control", "page"
   }
 
@@ -70,5 +70,19 @@ region<page> GatewayInitializePage {
   orientation vertical
   contains AdminTopNavigation
   contains GatewayInitializeUsecaseCard { slot_usecase: InitializeGatewayViaUrl }
+  layout fill_remaining
+}
+
+region<page> AgentInstallPackagePage {
+  meta {
+    label zh "安装包来源"
+    label en "Install Package Source"
+    summary zh "WistGateway 的独立设置页：查看并修改网关的 wist-agentd 取包来源地址（https 链接或主机绝对路径）与可选 sha256 期望摘要。安装端始终从网关取包；保存时网关先把该来源的制品拉到本地缓存，因此改动只影响之后新签发的安装代码与 install.sh，已分发的安装命令不变。"
+    tags "admin", "agent-install", "package", "settings", "page"
+  }
+
+  orientation vertical
+  contains AdminTopNavigation
+  contains AgentInstallPackageUsecaseCard { slot_usecase: SetAgentInstallPackageAddress }
   layout fill_remaining
 }

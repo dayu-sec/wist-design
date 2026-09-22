@@ -151,7 +151,7 @@ TCP 接收 → [wist-delivery：去重 + 缺口检测 + 过滤] → [warp-parse 
 - 分配：agentd 记录生成时取号；`next_seq` 与 checkpoint **同文件、同一次原子写**。
 - 重启：从 state 续号，只要求**不回退**（不要求连续）。
 - **跨 hop 保留原 `seq`**：gateway 转发不重新取号，center 落库沿用 agentd 的 `seq`。
-- 上送帧信封中携带 `seq`（与 `agent` 等通用字段并列，原文仍在 `RAW:` 之后）。
+- 上送帧信封中携带 `seq`（与 `agent` 等通用字段并列，原文仍在 `LOGRAW:` 之后）。
 
 > **取号时机在「读入」、不在「发送」**：记录被读入时即取号 `seq=N`，并以 `(seq, 内容)` 绑定写入 spool；发送时只是把 spool 里存的 `seq` 原样发出，**不重新取号**。因此发送时刻的 `seq` 一定等于读入时分配的号——不会因「发送」这个动作本身产生重号、错位或串内容。发送**之后**可能出现的重复（at-least-once 重发同 `seq`）与乱序（多连接/重试）由下游 `(agent, seq)` 去重和 watermark 有界窗口兜底，不是 spool/发送时刻要解决的。
 
@@ -160,7 +160,7 @@ TCP 接收 → [wist-delivery：去重 + 缺口检测 + 过滤] → [warp-parse 
 帧格式详见 [`telemetry-uplink-protocol.md`](telemetry-uplink-protocol.md)。要点：
 
 ```
-{envelope 含 schema / agent / ts / seq} RAW: <原文>
+{envelope 含 schema / agent / ts / seq} LOGRAW: <原文>
 ```
 
 原文不塞进 JSON，便于数据面审计核对与回放。帧信号无关，只靠 `seq`（per-agent 全局）去重/查缺（复合键 `(agent, seq)`），不携带 `input`/文件路径/偏移等来源细节；源归因靠 spool `seq→内容` 映射在恢复时确定（§5.2.1）。

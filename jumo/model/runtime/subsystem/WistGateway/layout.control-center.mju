@@ -21,8 +21,6 @@ region AgentControlUsecaseBoard {
   }
 
   orientation grid
-  contains PauseAgentUsecaseCard { slot_usecase: PauseAgent }
-  contains UpgradeAgentRemotelyUsecaseCard { slot_usecase: UpgradeAgentRemotely }
   layout fill_remaining
 }
 

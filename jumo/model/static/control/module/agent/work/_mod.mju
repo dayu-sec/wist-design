@@ -1,0 +1,29 @@
+// Control.Agent.Work 有界上下文：网关派给 Agent 的工作。
+//
+// 两类工作的分界不是“有没有结束”，而是**声明式 vs 命令式**：
+//   - 常驻工作 StandingWork：网关声明“你现在应当在做这些”。无自然结束，只被新版本
+//     替换或被撤回；断网或重启后重新拉取一次授权快照即可回到期望状态（可自愈）。
+//   - 一次性工作 OneShotWork：网关说“去做这件事”。有计划开始时间、期限与终态。
+//
+// 与 Control.Agent.Command 的分工：Command 是短指令流（upgrade / rotate），
+// 取值即弃、不参与收敛；Work 是被持续跟踪的授权，常驻工作还带版本，
+// 用来比对“网关期望的版本”与“Agent 实际在跑的版本”（差异即漂移）。
+//
+// 内容从哪来：采什么不在这里定义 —— 采集面 / 采集单元 / 常驻工作模板属于
+// Control.Agent.Content（spec 只能是那里的单元组合，采得到 ≠ 解析得了）；
+// 本模块只负责“工作”本身（授权、版本、暂停/撤回）与内容变更提案。
+//
+// 与发现（Discovery）的分工：发现是 agentd 的**内建常驻职责**（配置开关 + 探针周期驱动，
+// 见 Discovery 域），回答“这台机器上有什么”，**不进 WorkGrant、不参与授权与版本**；
+// 它只是派活的输入，不要拿它往 WorkKind 里塞。
+
+module<entity> Agent.Work {
+  meta {
+    label zh "Agent 工作"
+    label en "Agent Work"
+    summary zh "网关派给 Agent 的工作（常驻 / 一次性）与内容变更提案；内容的取值空间见 Control.Agent.Content。"
+    tags "control", "agentd", "work"
+  }
+
+  layer Domain
+}

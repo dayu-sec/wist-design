@@ -1,0 +1,162 @@
+// Module: AgentPurpose — 用途识别（事实 → 建议 → 人工判定）
+
+// ── 事实（agentd 报，网关存）──────────────────────────────────────
+// 摘要不是原文：agentd 在**采集完后机械压缩**（去重 + 只留推断要用的字段）——
+// 去重是机械操作，不需要知道规则表，所以策展知识不下放到 agentd。
+// 原文快照走数据面（OBSFACT）给中心做资产整理，网关只留这一份小摘要。
+//
+// 为什么去重：规则是“命中即加一次分”，与出现次数无关，去重反而让计分更正确；
+// 但去重会毁掉基数，所以另存 process_count（去重前的条数）。
+struct AgentFactSummary {
+  meta {
+    label zh "Agent 事实摘要"
+    label en "Agent Fact Summary"
+    summary zh "一台 Agent 的采集事实摘要（去重后）：进程、已装包、监听端口；覆盖式，一台一条。"
+    tags "control", "agentd", "purpose", "fact"
+  }
+
+  unique agent_id: String
+  // 内容摘要：**幂等键**。事实上报按内容变化触发，不按 revision 前进。
+  content_digest: String
+  // 仅留痕，不参与判重。
+  revision: Int
+  observed_at: DateTime
+  os: String
+  arch: String
+  // 去重前的进程条数（去重会毁掉基数，留一个原始计数备查）。
+  process_count: Int
+  // 去重后的进程可执行标识。注意两边不同源：
+  //   macOS —— `ps -axo comm=` 实际给的是完整路径；
+  //   Linux —— `/proc/{pid}/comm` 只是 basename（无路径）。
+  // 所以 `process_path` 类规则目前只在 macOS 成立。显式化 `process.executable.path` 后再说（见 B119）。
+  process_executables: List<String>
+  // 已装包名（仅 linux；macOS 侧待定）。
+  packages: List<String>
+  // 监听端口。
+  listen_ports: List<String>
+  // 资源画像（核数/内存/磁盘/GPU）暂不在内：B118 还没采（agentd 目前只读到 os/arch），
+  // 采到后在此追加，不提前占位成空列。
+  received_at: DateTime
+}
+
+// ── 规则表（策展数据）──────────────────────────────────────────────
+// 一条规则 = 在某种信号上做一次匹配 + 权重。规则表是可审定的策展数据，
+// 与采集目录同类：改规则 = 改“怎么判用途”，要走审定；不放进 agentd。
+
+struct PurposeRule {
+  meta {
+    label zh "用途规则"
+    label en "Purpose Rule"
+    summary zh "用途推断的一条规则：在某种信号上按子串匹配，命中即给某机器类别加分。"
+    tags "control", "purpose", "rule"
+  }
+
+  unique rule_id: String
+  // process | process_path | listen_port | package | unit
+  kind: String
+  // 大小写不敏感的子串
+  pattern: String
+  // 命中 pattern 但同时也命中这里的，不算命中（例：Electron 应用自带的 node_modules 不算开发特征）。
+  exclude_pattern: String?
+  // 命中后给哪个类别加分；空 = 只留依据不加分
+  machine_class: MachineClass?
+  // 权重：强特征 ~40，中 ~30，弱 ~10~20（可为负，表示反向证据）
+  weight: Int
+}
+
+struct PurposeRuleSet {
+  meta {
+    label zh "用途规则表"
+    label en "Purpose Rule Set"
+    summary zh "某一平台的用途推断规则全集：规则按平台分册（两个平台的判据完全不同），网关按机器平台取对应那册。"
+    tags "control", "purpose", "rule"
+  }
+
+  // macos-v1 | linux-v1
+  unique rule_set_id: String
+  platform: String
+  rules: List<PurposeRule>
+  // **无任何规则命中**时的基线类别（如 macos → MacDaily）；没有基线的平台留空 = 不产出建议（宁可不猜）。
+  baseline_class: MachineClass?
+  // 低于此总分视为“信号太弱”，置信度打折（不冒充有把握）。
+  weak_score: Int
+  published_at: DateTime
+}
+
+// ── 推断结果（非确定）────────────────────────────────────────────────
+
+// 一条命中依据：回答“凭什么这么判”。没有依据的建议不给人工看。
+struct PurposeSignal {
+  meta {
+    label zh "命中依据"
+    label en "Purpose Signal"
+    summary zh "建议的一条依据：哪条规则、在哪个信号上命中了什么值、加了多少分。"
+    tags "control", "purpose", "audit"
+  }
+
+  rule_id: String
+  kind: String
+  value: String
+  weight: Int
+}
+
+struct PurposeSuggestion {
+  meta {
+    label zh "用途建议"
+    label en "Purpose Suggestion"
+    summary zh "网关按规则表算出的机器类别建议（含依据与置信度）：可变化、可过期，不直接决定采集内容。"
+    tags "control", "purpose", "suggestion"
+  }
+
+  unique suggestion_id: String
+  agent_id: String
+  suggested_class: MachineClass
+  // 0..100：最高分相对次高分的优势；总分低于 weak_score 时打折。
+  confidence: Int
+  // rule | model（用模型时记 model_version，便于回溯）
+  method: String
+  model_version: String?
+  rule_set_id: String?
+  signals: List<PurposeSignal>
+  observed_at: DateTime
+}
+
+// ── 人工判定（确定）──────────────────────────────────────────────────
+
+// Agent 的归类：一台机器一条，改判即更新并留痕（历史 = 什么时候被谁改过）。
+// 授权模板时按它选内容；平台必须与该机器的平台一致（网关校验）。
+struct AgentClassification {
+  meta {
+    label zh "Agent 归类"
+    label en "Agent Classification"
+    summary zh "人工判定的机器类别：采纳或推翻网关建议，记录判定人与时间。"
+    tags "control", "purpose", "classification"
+  }
+
+  unique agent_id: String
+  machine_class: MachineClass
+  // 采纳了哪次建议；人工直接判定/推翻建议时为空。
+  suggestion_id: String?
+  decided_by: String
+  decided_at: DateTime
+  note: String?
+}
+
+// ── 页面视图 ───────────────────────────────────────────────────────
+// 三分并列展示：事实（agentd 报）/ 推断（网关算，可变可过期）/ 判定（人定，留痕）。
+// 冲突时以判定为准，但推断仍然并列展示 —— 不是谁盖掉谁。
+struct AgentPurposeView {
+  meta {
+    label zh "Agent 用途视图"
+    label en "Agent Purpose View"
+    summary zh "管理面看某台 Agent 的用途：事实摘要、网关推断建议（含逐条依据）、人工判定三者并列。"
+    tags "control", "purpose", "view", "admin"
+  }
+
+  unique agent_id: String
+  // 还没上报过事实时为空（新注册的 Agent）。
+  fact_summary: AgentFactSummary?
+  suggestion: PurposeSuggestion?
+  classification: AgentClassification?
+  generated_at: DateTime
+}

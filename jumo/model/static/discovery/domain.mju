@@ -1,4 +1,10 @@
 // 发现采集域 (Discovery & Collection Domain) — HOW we observe
+//
+// 边界：发现与采集管线是 agentd 的**内建常驻职责**（`[discovery]` 开关 + 探针周期驱动，
+// 见 Probe / Config 模块），**不是网关授权的工作** —— 不进 `Control.Agent.Work` 的 WorkGrant，
+// 没有 plan_version，也不需要审定。
+//   发现回答“这台机器上有什么”，是**派活的输入**；“采什么”由采集目录与常驻工作模板决定
+//   （见 `Control.Agent.Content`）。
 
 // ══════════════════════════════════════════════════════════
 // Module: Config — Agent 配置

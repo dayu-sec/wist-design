@@ -1,0 +1,227 @@
+// Module: Agent.Work — 网关派给 Agent 的工作
+//
+// 分界是声明式 / 命令式，不是“有没有结束”：
+//   常驻工作 = 期望状态（无自然结束，只被新版本替换或被撤回，可自愈）；
+//   一次性工作 = 命令式派发（有计划开始时间、期限与终态）。
+//
+// 暂停与继续：
+//   常驻工作：
+//   - 暂停 ≠ 撤回：暂停保留授权与 plan_version，恢复后继续用同一版本，不重新审定；
+//     真正的“停止”是撤回，从撤回恢复要走新的提案 + 审定。
+//   - 暂停是**期望状态的一部分**：Agent 处于暂停时“没在做”不算漂移（期望就是不做）。
+//   - 暂停是持久的：Agent 重启或断网后重新拉快照仍是 paused，不会自己恢复采集。
+//   - 与 Agent 本地的“暂停”分开：agentd 已有 `spool over limit; source read paused`
+//     这类**本地保护**（自动、临时）；网关下发的暂停是**授权层的状态**，
+//     两者在观测里必须能分辨（实现层靠 reason 区分），不要混成一个 paused。
+//
+//   一次性工作（长跑时同样要能暂停）：
+//   - 可中断性：只有 `interruptible` 的动作才允许 running 期间暂停；不可中断的应**拒绝**，
+//     而不是“尽力暂停”（挂起半个升级进程比不暂停更危险）。
+//   - 时间语义：暂停期间**不消耗执行预算**（timeout_seconds），但**照走绝对截止**
+//     （deadline_at）—— 两者任一先到即终结：预算尽 = timed_out，截止到 = expired。
+//   - 恢复**从步级断点继续**（completed_steps 保留、current_step 重做），不整件重来；
+//     执行载体 Reporting.ActionPlan 本来就是多步，StepActionRecord 已记每步结果，
+//     不必另造进度概念。
+//   - 恢复同样不改变工作内容与版本（与常驻工作同一条不变式）。
+//
+// 命名一致：网关**授权**（grant）工作、Agent 拉取**授权快照**（ WorkGrant ）、
+// 管理面授权或撤回 —— 三个动作共用同一个词根，避免 Grant / Dispatch / Assign 混用。
+//
+// 状态字段用 String（与 AgentCommand 的 status 口径一致），取值见各字段注释。
+
+variant WorkKind {
+  meta {
+    label zh "工作类型"
+    label en "Work Kind"
+    summary zh "常驻工作（持续到被替换或撤回）与一次性工作（有期限与终态）。"
+    tags "agentd", "work"
+  }
+
+  Standing
+  OneShot
+}
+
+struct StandingWork {
+  meta {
+    label zh "常驻工作"
+    label en "Standing Work"
+    summary zh "网关声明该 Agent 应当持续执行的工作：无自然结束，只被新版本替换或被撤回；断网或重启后以期望状态重新拉取即可恢复。"
+    tags "agentd", "work", "standing"
+  }
+
+  unique work_id: String
+  agent_id: String
+  // 工作的能力面：collect_logs / collect_metrics / ...（决定 Agent 侧由哪个采集器承接，
+  // 也决定从采集目录的哪个子集里选内容）
+  capability: String
+  // 工作参数（清单/参数）。随 plan_version 整体替换，不做字段级增量合并。
+  // 内容由采集目录的条目组合而成，不是自由文本。
+  spec: String
+  // 生效依据：指向已批准的提案（人工直填 spec 时为空）。采集范围变更必须留审。
+  proposal_id: String?
+  // 期望版本：网关每次改动 +1；Agent 上报实际版本，与它比对即得漂移。
+  plan_version: Int
+  effective_from: DateTime
+  // active | paused | superseded | revoked
+  status: String
+  updated_by: String
+  updated_at: DateTime
+}
+
+struct OneShotWork {
+  meta {
+    label zh "一次性工作"
+    label en "One Shot Work"
+    summary zh "网关派给该 Agent 的一次性工作：有计划开始时间与期限，有明确终态。"
+    tags "agentd", "work", "one-shot"
+  }
+
+  unique work_id: String
+  agent_id: String
+  // 动作面：upgrade / snapshot / exec / ...（执行载体是 Reporting 域的 ActionPlan）
+  action: String
+  spec: String
+  // 计划开始时间：到点前不应执行（与“立即派发”区分开）。
+  scheduled_at: DateTime
+  // 绝对截止：业务要求的时间点，**暂停也照走**（不由暂停顺延）。
+  deadline_at: DateTime
+  // 执行预算（秒）：**只在实际执行时消耗**，暂停期间不计。
+  // 与 deadline_at 任一先到即终结：预算尽 = timed_out，截止到 = expired。
+  timeout_seconds: Int
+  // 可中断性：只有可中断的动作才允许 running 期间暂停。由动作目录/派发方声明。
+  interruptible: Boolean
+  // dispatched | accepted | running | paused | succeeded | failed | timed_out | canceled | expired
+  status: String
+  // 当前暂停的起点（运行中暂停才有；恢复后清空）。
+  paused_at: DateTime?
+  // 累计暂停时长（秒）：用于审计与“预算未被暂停消耗”的核对。
+  paused_total_seconds: Int
+  // 步级断点：已完成的步骤保留、current_step 在恢复时重做（执行载体是 ActionPlan）。
+  current_step: String?
+  completed_steps: List<String>
+  // 已尝试次数（含恢复后的重做）。
+  attempt: Int
+  issued_by: String
+  issued_at: DateTime
+}
+
+struct WorkGrant {
+  meta {
+    label zh "工作授权快照"
+    label en "Work Grant"
+    summary zh "网关授权给某 Agent 的工作集合：常驻工作的当前生效版本，加上未了结的一次性工作。幂等，可重复拉取。"
+    tags "agentd", "work", "grant"
+  }
+
+  unique agent_id: String
+  standing: List<StandingWork>
+  one_shot: List<OneShotWork>
+  // 授权序号：Agent 据此判断快照是否有变化（不承担“指令重放”的语义）。
+  sequence: Int
+  granted_at: DateTime
+}
+
+struct WorkReceipt {
+  meta {
+    label zh "工作回执"
+    label en "Work Receipt"
+    summary zh "管理面授权或撤回工作的回执：一份工作一次，含生效版本与结果状态。"
+    tags "control", "work", "receipt"
+  }
+
+  unique work_id: String
+  agent_id: String
+  work_kind: WorkKind
+  // accepted | paused | resumed | revoked | rejected
+  status: String
+  plan_version: Int
+  created_at: DateTime
+}
+
+event WorkGranted {
+  meta {
+    label zh "工作已授权"
+    label en "Work Granted"
+    summary zh "网关授权或更新了某 Agent 的一份工作。"
+    tags "control", "work", "grant"
+  }
+
+  work_id: String
+  agent_id: String
+  work_kind: WorkKind
+  plan_version: Int
+  granted_at: DateTime
+}
+
+event WorkRevoked {
+  meta {
+    label zh "工作已撤回"
+    label en "Work Revoked"
+    summary zh "网关撤回了某 Agent 的一份工作（常驻：撤销授权；一次性：取消未了结的活）。"
+    tags "control", "work", "revoke"
+  }
+
+  work_id: String
+  agent_id: String
+  reason_code: String
+  revoked_at: DateTime
+}
+
+event WorkPaused {
+  meta {
+    label zh "工作已暂停"
+    label en "Work Paused"
+    summary zh "网关暂停了某 Agent 的一份或全部常驻工作：保留授权与版本，Agent 回到“暂不做但仍持有”。"
+    tags "control", "work", "pause"
+  }
+
+  work_id: String
+  agent_id: String
+  reason_code: String
+  paused_at: DateTime
+}
+
+event WorkResumed {
+  meta {
+    label zh "工作已继续"
+    label en "Work Resumed"
+    summary zh "网关继续了某 Agent 被暂停的工作：仍用暂停前的同一版本，不经过重新审定。"
+    tags "control", "work", "resume"
+  }
+
+  work_id: String
+  agent_id: String
+  reason_code: String
+  resumed_at: DateTime
+}
+
+// 工作内容的取值空间（采集面 / 采集单元 / 常驻工作模板 / 选中依据）见 Control.Agent.Content；
+// 本文件只保留“工作”本身与内容变更提案。
+
+// 采集内容变更提案：审定后才生效。
+//
+// 现在提出方也是人（人工直填 spec）；将来由反馈统计产出“建议”，
+// 但**路径不变**：一律得人工审定后才成为 spec（采集范围就是合规边界）。
+struct WorkProposal {
+  meta {
+    label zh "工作提案"
+    label en "Work Proposal"
+    summary zh "采集内容的变更提案：经人工审定（approved）后才能凭 proposal_id 授权生效。"
+    tags "control", "work", "proposal"
+  }
+
+  unique proposal_id: String
+  agent_id: String
+  // 变更既有常驻工作时指向它；新建时为空。
+  work_id: String?
+  capability: String
+  basis: SelectionBasis
+  proposed_spec: String
+  // proposed | approved | rejected | withdrawn
+  status: String
+  proposed_by: String
+  reviewed_by: String?
+  reviewed_at: DateTime?
+  review_note: String?
+  created_at: DateTime
+}

@@ -1,0 +1,82 @@
+// WistGateway install-package page layout regions
+
+region AgentInstallPackageUsecaseCard {
+  meta {
+    label zh "安装包来源设置卡片"
+    label en "Install Package Source Card"
+    summary zh "承载 ViewAgentInstallPackageAddress 与 SetAgentInstallPackageAddress：展示当前取包来源地址，并提供修改表单（保存时网关先把制品拉到本地）。"
+    tags "admin", "agent-install", "package", "usecase-card"
+  }
+
+  orientation vertical
+  contains AgentInstallPackageCurrentValue { slot_usecase: ViewAgentInstallPackageAddress }
+  contains AgentInstallPackageForm
+  contains AgentInstallPackageResult
+}
+
+region AgentInstallPackageCurrentValue {
+  meta {
+    label zh "当前取包来源"
+    label en "Current Package Source"
+    summary zh "当前生效的取包来源地址、制品摘要与最后修改信息；未设置过时来源地址为空，表示网关分发它内置的安装包。"
+    tags "admin", "package", "current-value"
+  }
+
+  orientation grid
+}
+
+region AgentInstallPackageForm {
+  meta {
+    label zh "安装包来源表单"
+    label en "Install Package Source Form"
+    summary zh "输入安装包来源地址（https 链接或主机绝对路径）与可选 sha256 期望摘要并提交；地址为明文 http 时网关拒绝；保存时网关会先把该来源的制品拉到本地缓存。"
+    tags "admin", "package", "form"
+  }
+
+  orientation vertical
+  contains AgentInstallPackageUrlInput { slot_field: package_url }
+  contains AgentInstallPackageSha256Input { slot_field: package_sha256 }
+  contains SubmitAgentInstallPackageAction { slot_command: SetAgentInstallPackageAddress }
+}
+
+region AgentInstallPackageUrlInput {
+  meta {
+    label zh "安装包来源地址输入"
+    label en "Install Package Source URL Input"
+    tags "admin", "package", "input"
+  }
+
+  orientation vertical
+}
+
+region AgentInstallPackageSha256Input {
+  meta {
+    label zh "来源摘要输入"
+    label en "Package Sha256 Input"
+    summary zh "可选期望摘要，必须是 64 位十六进制（可带 sha256: 前缀）；填写时网关用它校验拉取到的制品，留空则由网关按实际内容计算。"
+    tags "admin", "package", "input"
+  }
+
+  orientation vertical
+}
+
+region SubmitAgentInstallPackageAction {
+  meta {
+    label zh "保存安装包来源"
+    label en "Submit Install Package Source"
+    tags "admin", "package", "action"
+  }
+
+  orientation horizontal
+}
+
+region AgentInstallPackageResult {
+  meta {
+    label zh "保存结果"
+    label en "Save Result"
+    summary zh "保存成功后的回执：网关已从该来源拉取到本地缓存，之后新签发的安装代码与 install.sh 使用这份缓存；已分发的安装命令不变。"
+    tags "admin", "package", "result"
+  }
+
+  orientation vertical
+}
