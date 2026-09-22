@@ -162,8 +162,14 @@ message<command> ReportAgentFactSummary {
   arch: String
   process_count: Int
   process_executables: List<String>
+  // 已装包名。探针尚未实现（agentd 侧无 package 探针），故此列恒空 ——
+  // 空表示「没采」，不是「没装」。
   packages: List<String>
   listen_ports: List<String>
+  // 留痕/展示（不进内容摘要、不参与判重）：机器名与 IP 会变，但不改变用途判据。
+  host_id: String
+  host_name: String
+  network_addresses: List<String>
   reported_at: DateTime
 }
 
