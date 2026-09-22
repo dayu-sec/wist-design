@@ -194,9 +194,9 @@
       "flow": "Reporting.IngestAgentFactSummaryFlow",
       "entries": [
         {
-          "name": "ReportAgentFactSummary",
-          "route": "POST /api/v1/agent/facts",
-          "handler": "wist-gateway:agent_ops.rs:submit_agent_facts",
+          "name": "IngestAgentFactsFromDataPlane",
+          "route": "POST /api/v1/ingest/agent-facts（内部明文端点，仅绑环回；由数据面 sink 投递）",
+          "handler": "wist-gateway:ingest.rs:ingest_agent_facts",
           "covers": ["StoreFactSummary", "InferPurpose"]
         }
       ]

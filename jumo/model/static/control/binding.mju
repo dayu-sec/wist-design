@@ -155,14 +155,11 @@ bind WistAgentdOnlineRegistrationInterface {
     outcome Reporting.ActionResultAccepted on Reporting.ActionResultReceipt
   }
 
-  // 事实上报（摘要）：agentd → 网关。不走数据面 —— 摘要小（去重后 10~30 KB）、
-  // 只服务用途推断，而且数据面接入目前无身份校验，事实里是进程路径与包名。
-  entry ReportAgentFactSummary {
-    route POST "/api/v1/agent/facts"
-    auth bearer
-    actor_identity Agentd.id from credential.agent_id
-    status Reporting.FactSummaryAccepted 202
-  }
+  // （事实摘要**不再**走本接口：agentd 把它作为 `OBSFACT:` 帧上送数据面，网关订阅。）
+  // 这里刻意不建对应 entry：接收端是网关的**内部**监听（明文、仅绑环回），它不属于
+  // 「agent 在线注册」这个面向 agent 的接口；而它的身份校验尚未落地（见计划 §8 #17），
+  // 现在写一条 `auth none` 的 entry 会把「目标形态」记成「无鉴权」，反而是假的。
+  // 详见 doc/design/center/agent-work-delivery-plan.md §4.1。
 
   // 拉取发现方向策略表：网关未配表时回 503（“未发布”与“没配”必须能区分），
   // agentd 遇到 503 就继续用自己的内建周期，不是错误。
