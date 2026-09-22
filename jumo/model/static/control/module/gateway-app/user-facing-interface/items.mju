@@ -47,6 +47,11 @@ message<command> AdminSetAgentInstallPackageAddress = OperatorRequest {
 message<command> AdminViewAgentInstallPackageAddress = OperatorRequest {
 }
 
+// 查看当前生效的发现方向策略表（管理面）。
+// 表是平台策展数据：运维要能看到“现在生效的是哪一版、各方向周期是多少”。
+message<command> AdminViewDiscoveryPolicies = OperatorRequest {
+}
+
 // 查看某台 Agent 的用途：事实摘要、网关推断建议（含逐条依据）、人工判定三者并列。
 // 推断可过期，判定留痕 —— 所以两者都回，不是只回一个“结论”。
 message<command> AdminViewAgentPurpose = OperatorRequest {
@@ -236,6 +241,11 @@ interface WistGatewayManagementInterface {
   entry AdminViewAgentPurpose {
     actor AdminOperator
     output AgentPurposeView
+  }
+
+  entry AdminViewDiscoveryPolicies {
+    actor AdminOperator
+    output DiscoveryPolicyView
   }
 }
 

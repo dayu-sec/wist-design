@@ -21,54 +21,61 @@ variant DiscoveryAspect {
   Package
 }
 
-// 每个方向的策略：默认周期与允许区间、是否基线、是否默认开、产出什么事实。
-// 值由 flow PublishDiscoveryAspectPoliciesFlow（static/discovery/aspect-policies.mju）发布，
-// 不再放外部 TOML —— 模型是唯一来源，避免两份漂移。
+// 每个方向的策略：**观测**周期与允许区间、是否基线、是否默认开、适用平台、产出什么事实。
 //
-// 注意：这里**刻意不建模「上报范围 × 上报触发」**（全量/TOP × 变化/周期）。
-// 那是一张「策略 × 规则 × 逐方向取值」的表，塞进类型只会把理由压成注释；
-// 规则与逐方向取值放文档：doc/design/center/discovery-reporting-modes.md。
+// 值**不在模型里**：jumo 装不下常量（字段默认值解析通过但不落实例；同一类型的多条记录
+// 无法逐条 verify），硬塞进 flow + create 只会把「为什么这么定」压成注释、改策略还要动模型。
+// 值放 `content/aspect-policies.toml` —— 与用途规则表（`Control.Agent.Purpose.PurposeRuleSet`）
+// **同一约定**：模型留结构与字段语义，值留 content/；由网关装载校验（区间、基线不可关、平台）
+// 后下发给 agentd。
+//
+// 载本表**刻意不建模**「上报范围 × 上报触发」（全量/TOP × 变化/周期）：那是一张
+// 「策略 × 规则 × 逐方向取值」的表，塞进类型只会把理由压成注释；规则与逐方向取值放文档
+// doc/design/center/discovery-reporting-modes.md。
 
 struct DiscoveryAspectPolicy {
   meta {
     label zh "发现方向策略"
     label en "Discovery Aspect Policy"
-    summary zh "单个发现方向的周期与开关策略：默认/最小/最大周期、是否基线不可关、产出哪些事实。"
+    summary zh "单个发现方向的观测周期与开关策略：默认/最小/最大周期、是否基线不可关、适用平台、产出哪些事实。"
     tags "discovery", "probe", "policy"
   }
 
   unique aspect: DiscoveryAspect
-  // 默认周期（秒）。发现是慢变量，量级应比采集低 1~2 个（采集是 15s 级，发现是分钟级）。
+  // **观测**周期（秒）：多久采一次。发现是慢变量，量级应比采集低 1~2 个（采集是 15s 级）。
+  // 注意它与「上报周期」是两件事：采得密是为了少漏检，报得疏是为了不噪声。
   default_interval_seconds: Int
-  // 允许区间（秒）：网关校验只允许在这个范围里调。
+  // 允许区间（秒）：改这个方向时不得越界（采得太密会把被管机器拖住，太疏则失去观测意义）。
   min_interval_seconds: Int
   max_interval_seconds: Int
-  // 基线面：不可关（它回答“我是什么”，是自识别与派活的底座）。
+  // 基线面：不可关（它回答“我是什么”，是自识别与派活的底座）——
+  // 所以装载校验要求 `baseline` 的方向必须 `enabled_by_default`。
   baseline: Boolean
-  // 未显式声明时的默认开关。
+  // 未显式声明时的默认开关（`[discovery] *_enabled` 未配置时生效）。
   enabled_by_default: Boolean
-  // 适用平台，`|` 分隔（如 "macos|linux"）。
-  platforms: String
+  // 适用平台。声明了却永远产出为空的方向不该报（如 Endpoint 的 macOS 侧是空实现）。
+  platforms: List<String>
   // 产出的事实（供人理解“为什么要这个面”），如 host = os/arch/核数/内存/磁盘/GPU。
   yields: String
 }
 
-// 上报模式（范围 × 触发）与逐方向取值、判定规则一起放在
-// doc/design/center/discovery-reporting-modes.md，不进模型。
-
-// 策略表的**集合级身份**：一次发布产出一版（N 个方向的策略 + 版本号）。
-// 为什么需要它：同一类型的多条记录无法逐条断言（实测），集合级不变式（条数/版本）才能被 verify 守住。
+// 一版策略表：版本 + 发布时间 + 各方向策略。
+// 形状与 `Control.Agent.Purpose.PurposeRuleSet` 对齐 —— 它是**同一种东西**：
+// 平台策展、按版本发布、**改内容必须 bump 版本**（两侧靠版本号判断谁过期了）。
 struct DiscoveryAspectPolicySet {
   meta {
-    label zh "发现方向策略版本"
+    label zh "发现方向策略表"
     label en "Discovery Aspect Policy Set"
-    summary zh "一次发布的发现方向策略集合：版本号与方向条数。"
+    summary zh "一版发现方向策略：版本号、发布时间与各方向的策略。"
     tags "discovery", "probe", "policy"
   }
 
   unique policy_version: Int
-  aspect_count: Int
+  published_at: DateTime
+  policies: List<DiscoveryAspectPolicy>
 }
+
+// 管理面看当前生效的策略表（视图类型在 Control 域：它是网关管理面的读模型）。
 
 struct HostDiscoveryProbe {
   kind

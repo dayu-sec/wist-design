@@ -180,6 +180,29 @@ message<response> FactSummaryAccepted {
   received_at: DateTime
 }
 
+// 拉取**发现方向策略表**：agentd → 网关（复用 agent 凭据，已认证）。
+//
+// 为什么是「拉」而不是网关推：agentd 没有入站监听（那要开端口、要证书、要处理公网可达），
+// 而策略是**幂等内容**（声明式、可重复拉取，与 PollWork 同类）—— 拉一次就够，不必重放。
+// 为什么不需要 wait_ms（PollControlCommands 有）：那是长轮询指令流；策略表按版本变化，
+// 拉取周期由 agentd 自己控（它知道自己能承受多密）。
+message<command> PollDiscoveryPolicies {
+  api_version: String
+  kind: String
+  agent_id: String
+  instance_id: String
+  requested_at: DateTime
+}
+
+// 网关返回的策略表。带 policy_version：agentd 靠它判断「与我手上的是不是同一版」，
+// 从而在版本未变时跳过重新应用（而不是每轮都重算一遍）。
+message<response> DiscoveryPoliciesReturned {
+  policy_version: Int
+  published_at: DateTime
+  policies: List<Discovery.Probe.DiscoveryAspectPolicy>
+  returned_at: DateTime
+}
+
 event IngestHeadError {
   reason
   detail

@@ -135,13 +135,14 @@ mac 机器选 `LinuxCompute` 被拒。**依赖批次 2。**
 | 1 | 事实帧的上送触发器 | **已被 #6 取代**：不再靠 `content_digest` 驱动“变了才报”（那要求 agent 侧判重），改为 agentd 无条件周期全量上送，判重归网关（模式与逐方向取值见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md)） |
 | 2 | `cmdline` 是否上送 | **默认不上送**；开启后只送"程序名 + 参数名 + 位置参数"，不送值（事实会流到中心，参数最易夹带口令/路径） |
 | 3 | 起点 | 先做批次 0（需一次重启）还是直接批次 1（不动运行态） |
-| 4 | 发现方向周期取值 | 观测频率已写入模型（Host/Network 900s、Process/Endpoint/Container/K8s 300s、Package 1800s）；**待确认**：`Container`/`K8s` 默认关、`Host` 15min 是否太滞后（自识别底座可以更快）。**上报模式（范围 × 触发、上报周期、TOP N）已从模型移出** —— 它是策略表格不是类型，见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) |
+| 4 | 发现方向周期取值 | 观测频率值已落在 `jumo/model/content/aspect-policies.toml`（模型只留类型与字段语义）；**待确认**：`Container`/`K8s` 默认关、`Host` 15min 是否太滞后（自识别底座可以更快） **上报模式（范围 × 触发、上报周期、TOP N）已从模型移出** —— 它是策略表格不是类型，见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) |
 | 5 | 探针的平台覆盖与策略声明不一致 | `Endpoint` 在 macOS 是空实现 → 策略已改为 `platforms = linux`；`Network` 在 macOS 只拿到地址、无路由（`/proc/net/route` 仅 linux）→ 待定：补 mac 实现，还是接受“部分产出” |
 | 6 | 事实上报的触发与判重归属 | **已落地**（方案 2 + A）：agentd **无条件周期全量上送**（只按 5min 下限节流），判重挪到**网关**，且**网关自己从收到的内容算 digest**（agent 的声明只当版本金丝雀，不一致记 `FactDigestMismatch` 告警、不拒收）。为何必须自算：若仍用 agent 的 digest 判重，agent 侧算法一退化就会让网关把所有上报当 `duplicate` —— 静默漏报，和原来的故障一模一样只换个地方。实现：`wist-contracts::fact_summary`（共享规范化+sha256，两侧同一实现），`wist-contracts` 暂用本地 path 依赖待发布 |
 | 7 | 「内容没变」与「最近听到」要分开 | **已落地**：`duplicate` 分支只刷**留痕**（`revision`/`observed_at`/`process_count`/`received_at`），不动内容与幂等键（`SqliteStore::touch_agent_fact_summary_marks`）。否则页面的「去重前 906」会停在几天前而看起来像实时值 |
 | 8 | 快速信号的噪声归哪 | **规则层**（`min_support`）。不放 agent（要轻，且阈值是推断质量的调优）；不放网关（1000 台 ≈ 50 万行窗口计数、每次上报几百次写，会把控制面拖慢）。**已建模 + 已实现**（不足则 confidence 打折） |
 | 9 | TOP 的排序键 | 理想是“窗口内出现频次”，但那要 agent 侧窗口 → 与「agent 要轻」相冲，已否决。当下只能按**采样时的资源占用**排序，而它会把“在跑重活”当特征 → 所以定下一条硬规则：**有推断判据依赖的方向一律不得用 Top**。目前用 Top 的只有 `Container`/`K8s`（无判据）。规则与取值已从模型移到 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) §3 R3 / §4 |
 | 10 | `revision` 每轮 +1 | 即使**没有任何探针到期**，也会重拼快照并推进 revision（连带重写缓存/派生视图）。待收敛为“真有观测才前进”（这也正是「不能拿 revision 当幂等键」的根源） |
+| 11 | 发现方向的**观测频率**怎么到 agentd | **已落地**：策展值放 `jumo/model/content/aspect-policies.toml`（与用途规则表同约定，模型只留结构），网关启动装载并校验（七方向各一条 / `[min,default,max]` 自洽 / 基线面不可关 / 平台闭集），`POST /api/v1/agent/discovery-policies:poll` 下发，agentd 拉到就盖过内建默认值、拉不到（含 503）就用默认值继续采集。本期只下发**周期**，不接管探针开关。细节见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) §6 |
 
 ## 9. 风险与约束
 

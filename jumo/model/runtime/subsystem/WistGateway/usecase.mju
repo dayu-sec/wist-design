@@ -160,6 +160,34 @@ usecase IngestAgentFactSummary {
   flow Reporting.IngestAgentFactSummaryFlow
 }
 
+// 向 Agent 下发发现方向策略表（各方向的观测周期）
+usecase ServeDiscoveryPolicies {
+  meta {
+    label zh "下发发现方向策略表"
+    label en "Serve Discovery Aspect Policies"
+    summary zh "网关向 agentd 交付平台策展的发现方向策略表（各方向的观测周期与允许区间）。网关未配表时不提供该端点：agentd 继续用自己的内建默认值，行为与策略表引入前一致。"
+    tags "discovery", "policy", "agentd", "serve"
+  }
+
+  actor Control.Agentd
+  trigger Reporting.PollDiscoveryPolicies
+  outcome Discovery.DiscoveryAspectPolicySet
+}
+
+// 查看当前生效的发现方向策略表
+usecase ViewDiscoveryPolicies {
+  meta {
+    label zh "查看发现方向策略表"
+    label en "View Discovery Aspect Policies"
+    summary zh "运维查看网关当前生效的发现方向策略表：未配置时如实回报未配置，不编造一份默认表 —— 默认值是 agentd 的内建行为，不是平台发布的策略。"
+    tags "discovery", "policy", "admin", "view"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminViewDiscoveryPolicies
+  outcome Control.DiscoveryPolicyView
+}
+
 // 查看 Agent 用途
 usecase ViewAgentPurpose {
   meta {

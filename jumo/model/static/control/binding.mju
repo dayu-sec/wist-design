@@ -107,6 +107,14 @@ bind WistGatewayManagementInterface {
     actor_identity AdminOperator.id from jwt.sub
     status AgentPurposeView 200
   }
+
+  // 看当前生效的发现方向策略表：表是平台策展数据，运维需要能看到“现在生效的是哪一版”。
+  entry AdminViewDiscoveryPolicies {
+    route GET "/api/v1/admin/discovery-policies"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status DiscoveryPolicyView 200
+  }
 }
 
 bind WistAgentdOnlineRegistrationInterface {
@@ -154,6 +162,15 @@ bind WistAgentdOnlineRegistrationInterface {
     auth bearer
     actor_identity Agentd.id from credential.agent_id
     status Reporting.FactSummaryAccepted 202
+  }
+
+  // 拉取发现方向策略表：网关未配表时回 503（“未发布”与“没配”必须能区分），
+  // agentd 遇到 503 就继续用自己的内建周期，不是错误。
+  entry PollDiscoveryPolicies {
+    route POST "/api/v1/agent/discovery-policies:poll"
+    auth bearer
+    actor_identity Agentd.id from credential.agent_id
+    status Reporting.DiscoveryPoliciesReturned 200
   }
 }
 

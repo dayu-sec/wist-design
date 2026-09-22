@@ -1,8 +1,11 @@
 // 发现采集域 (Discovery & Collection Domain) — HOW we observe
 //
-// 边界：发现与采集管线是 agentd 的**内建常驻职责**（`[discovery]` 开关 + 探针周期驱动，
+// 边界：发现与采集管线是 agentd 的**内建常驻职责**（`[discovery]` 开关驱动，
 // 见 Probe / Config 模块），**不是网关授权的工作** —— 不进 `Control.Agent.Work` 的 WorkGrant，
 // 没有 plan_version，也不需要审定。
+//   各方向的**观测周期**来自平台策展的策略表（`Discovery.Probe.DiscoveryAspectPolicySet`，
+//   值在 content/aspect-policies.toml），由网关装载校验后下发（见 WistGateway.ServeDiscoveryPolicies）；
+//   agentd 拿不到表就用内建默认值，不会因为“拿不到策略”而不采集。
 //   发现回答“这台机器上有什么”，是**派活的输入**；“采什么”由采集目录与常驻工作模板决定
 //   （见 `Control.Agent.Content`）。
 

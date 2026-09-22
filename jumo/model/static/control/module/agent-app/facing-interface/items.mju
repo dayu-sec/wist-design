@@ -100,6 +100,14 @@ interface WistAgentdOnlineRegistrationInterface {
     calls Reporting.IngestAgentFactSummaryFlow
   }
 
+  // 拉取平台发布的**发现方向策略表**（各方向的观测周期）。
+  // 与 PollWork 同类：幂等内容、可重复拉取；agentd 拉不到就用内建默认值。
+  entry PollDiscoveryPolicies {
+    actor Agentd
+    input Reporting.PollDiscoveryPolicies
+    output Reporting.DiscoveryPoliciesReturned
+  }
+
   entry ReportActionResult {
     actor Agentd
     input Reporting.ReportActionResult

@@ -69,11 +69,31 @@ TOP 的排序键当下只能是「采样瞬间的资源占用」，而这个键�
 - 触发 `Periodic` —— 快信号且要证明活着（R2）；
 - 判重在**网关**：网关从收到的内容自算摘要，agentd 侧不做判重（本地算法或状态一退化就会静默停报，且没有任何一层能发现）。决策与理由见 [`agent-work-delivery-plan.md`](./agent-work-delivery-plan.md) §8 #6。
 
-## 6. 未落地清单
+## 6. 观测频率策略表的下发链路
+
+**观测频率**（§4 表里那一列）是平台级取舍，不写在二进制里。它有一份独立的策展数据与下发链路：
+
+| 环节 | 位置 | 说明 |
+|---|---|---|
+| 类型 | 模型 `Discovery.Probe.DiscoveryAspectPolicy` / `DiscoveryAspectPolicySet` | 只留结构与字段语义（jumo 装不下常量，见 §1） |
+| 值 | `jumo/model/content/aspect-policies.toml` | 与用途规则表同约定；**改内容必须同时 bump `policy_version`** |
+| 装载与校验 | 网关启动（`[discovery] policies_file`） | 校验：七个方向各一条；`min ≥ 1` 且 `min ≤ default ≤ max`；`baseline` 的方向必须 `enabled_by_default`；`platforms` 只含 macos/linux。**校验不过起不来**（不会带病下发） |
+| 下发 | `POST /api/v1/agent/discovery-policies:poll` | agent 凭据认证；**未配表回 503**，不发空表 —— 空表会让「平台没发布策略」与「这台网关从未配置」无法区分 |
+| 查看 | `GET /api/v1/admin/discovery-policies` | 运维看当前生效的是哪一版；未配置时回 `configured: false`，不编一份默认表冒充 |
+| 应用 | agentd | 按探针名（= 方向名）取周期，**盖过探针内建默认值**；表里没这个方向（或周期非正）就回退内建值。拉不到表（含 503、断网、坏 JSON）→ 不改变现状，继续采集 |
+
+两条硬边界：
+
+- **拉取失败不是错误**。agentd 的内建默认值与策展值同值，所以断网/未配表时行为与引入这条链路之前一致；把拉取失败当成 fatal 会让「网关没配表」直接等于「agent 不干活」。
+- **本期只管周期，不管开关**。探针开不开仍由本地 `[discovery] *_enabled` 决定；让策略表的 `baseline`/`enabled_by_default` 接管需要一份三态配置（未声明 / 显式开 / 显式关），是另一步。
+
+## 7. 未落地清单
 
 | 项 | 状态 |
 |---|---|
-| 策略表下发（`PublishDiscoveryAspectPoliciesFlow` → agentd） | **未实现**：agentd 的探针周期仍是字面量，网关也未装载校验 |
+| 观测频率下发 | **已落地**（见 §6）；agentd 仍把策展值当**内建默认值**保留一份，表里改了值而 agent 拿不到表时会走默认 |
+| 策略表接管探针**开关** | **未做**：`baseline`/`enabled_by_default` 目前只被网关装载校验读到，agentd 不消费（需三态配置，见 §6） |
+| `InitialConfig.policy_version` / `PolicyBinding` 绑定通道 | **未用**：注册响应里带了这两个字段，agentd 从不读。将来可以用它把「每 5 分钟轮询」换成「版本指针变了才拉」 |
 | `report_interval_seconds` | **无代码读取**：当下恒等于观测周期（R4） |
 | TOP 排序键（窗口归一化） | **未决**（R3） |
 | `Container` / `K8s` 默认开关 | 默认关；打开前要先能产出（K8s 侧仍是 `NotImplemented`） |

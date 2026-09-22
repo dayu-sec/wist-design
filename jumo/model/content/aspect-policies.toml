@@ -1,0 +1,117 @@
+# 发现方向策略表 —— 策展数据（对应模型 Discovery.Probe.DiscoveryAspectPolicySet）
+#
+# 谁读它：
+#   网关 —— 启动时装载并**校验**（见下），通过 `POST /api/v1/agent/discovery-policies:poll`
+#           下发给 agentd；管理面 `GET /api/v1/admin/discovery-policies` 可看当前生效版本。
+#   agentd —— 拉取后应用到探针调度。**拉不到就用自己的内建默认值**（与本节同值），
+#           所以断网/网关未配表时行为与从前一致，不会因为「拿不到策略」而不采集。
+#
+# 为什么值在这里而不是写进模型：jumo 的类型定义装不下常量（字段默认值解析通过但不落实例），
+# 用 flow+create 硬塞会把「为什么这么定」压成注释、改策略要动模型跑 verify；而这份东西
+# 与用途规则表同类 —— 策展、评审、按版本发布。模型留**结构**（类型与字段语义），
+# 值留在 content/ 下（与 `purpose-rules.toml` 同一约定）。
+#
+# 改内容必须**同时 bump policy_version**：agentd 靠版本号判断是否需要重新应用，
+# 只改值不改版本，已拉过表的 agent 不会重读。
+#
+# 网关装载时校验（改坏会在启动时被拒，不会带病下发）：
+#   - policy_version ≥ 1；published_at 非空；7 个方向**各一条**（不许缺、不许重、不许未知）
+#   - min ≥ 1 且 min ≤ default ≤ max
+#   - baseline = true 的方向必须 enabled_by_default = true（基线面回答「我是什么」，不可关）
+#   - platforms 非空且只含 macos / linux
+#
+# 字段口径：
+#   default_interval_seconds —— **观测**周期（多久采一次）。发现是慢变量，量级比采集（15s 级）低 1~2 个。
+#   min/max_interval_seconds —— 允许区间，网关侧调整时不得越界（采得太密会拖住被管机器，太疏则失去观测意义）。
+#   baseline                 —— 基线面：自识别与派活的底座。
+#   enabled_by_default       —— 未显式声明时的默认开关（*_enabled 未配置时生效）。
+#   platforms                —— 适用平台。声明了却永远产出为空的方向不该报（如 Endpoint 的 macOS 侧是空实现）。
+#   yields                   —— 产出什么事实，供人理解「为什么要这个面」。
+#
+# 观测频率与「上报模式（范围 × 触发）」是**两个正交维度**：后者不进本表，见
+#   doc/design/center/discovery-reporting-modes.md
+
+policy_version = 1
+published_at = "2026-09-22T00:00:00Z"
+
+# ── 慢变量：资源画像与网络拓扑（15 分钟级）────────────────────────────
+# 极慢信号：换内存、换网卡这些事一辈子遇不到几次。
+
+[[policies]]
+aspect = "host"
+default_interval_seconds = 900
+min_interval_seconds = 300
+max_interval_seconds = 3600
+baseline = true
+enabled_by_default = true
+platforms = ["macos", "linux"]
+yields = "os/arch/核数/内存/磁盘/GPU"
+
+[[policies]]
+aspect = "network"
+default_interval_seconds = 900
+min_interval_seconds = 300
+max_interval_seconds = 3600
+baseline = false
+enabled_by_default = true
+platforms = ["macos", "linux"]
+yields = "网卡/地址/路由"
+
+# ── 半快变量：用途推断的主信号与辅证（5 分钟级）──────────────────────
+
+# 进程是唯一一个「采样瞬间值」与「稳态集合」差别极大的信号，且 `process` / `process_path`
+# 规则**全部**依赖它 —— 主信号，采得比别的方向勤。
+[[policies]]
+aspect = "process"
+default_interval_seconds = 300
+min_interval_seconds = 60
+max_interval_seconds = 1800
+baseline = false
+enabled_by_default = true
+platforms = ["macos", "linux"]
+yields = "进程名/可执行路径（用途推断主信号）"
+
+# 仅 linux：macOS 侧 discover_service_endpoints() 直接返回空集，声明成两端
+# 只会让网关把一份永远产出为空的工作授权下去。补齐 mac 实现后再加回。
+[[policies]]
+aspect = "endpoint"
+default_interval_seconds = 300
+min_interval_seconds = 60
+max_interval_seconds = 1800
+baseline = false
+enabled_by_default = true
+platforms = ["linux"]
+yields = "监听端口（用途推断辅证，如 5432→数据库）"
+
+# 默认关：没有容器运行时的机器上打开它只是白跑一趟。
+[[policies]]
+aspect = "container"
+default_interval_seconds = 300
+min_interval_seconds = 60
+max_interval_seconds = 1800
+baseline = false
+enabled_by_default = false
+platforms = ["macos", "linux"]
+yields = "容器清单（运行时/镜像/命名空间）"
+
+# 默认关，且 agentd 侧目前是 NotImplemented（探针未接入运行时）。
+[[policies]]
+aspect = "k8s"
+default_interval_seconds = 300
+min_interval_seconds = 60
+max_interval_seconds = 1800
+baseline = false
+enabled_by_default = false
+platforms = ["macos", "linux"]
+yields = "K8s 节点/工作负载标识"
+
+# ── 低频且昂贵：包清单（30 分钟级）──────────────────────────────────
+[[policies]]
+aspect = "package"
+default_interval_seconds = 1800
+min_interval_seconds = 900
+max_interval_seconds = 21600
+baseline = false
+enabled_by_default = true
+platforms = ["linux"]
+yields = "已装包清单（用途推断最稳信号 + 中心资产整理/软件归一化输入）"

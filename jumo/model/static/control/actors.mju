@@ -20,6 +20,7 @@ actor<system> Agentd {
   can Reporting.ReportActionResult
   can Reporting.ReportDiscoverySnapshot
   can Reporting.ReportAgentFactSummary
+  can Reporting.PollDiscoveryPolicies
 }
 
 actor OperationsEngineer {
@@ -57,6 +58,7 @@ actor AdminOperator {
   can AdminPauseWork
   can AdminResumeWork
   can AdminViewAgentPurpose
+  can AdminViewDiscoveryPolicies
 }
 
 actor<system> WistGateway {

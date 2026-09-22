@@ -216,6 +216,30 @@
         "只有读：人工判定（AgentClassification）的写入端点未实现，出参 classification 恒为 null",
         "建议过期靠读取路径重算（幂等）；没有独立的管理面『重新推断』入口"
       ]
+    },
+    {
+      "name": "System.WistGateway.ServeDiscoveryPolicies",
+      "status": "Complete",
+      "progress": 100,
+      "entries": [
+        {
+          "name": "PollDiscoveryPolicies",
+          "route": "POST /api/v1/agent/discovery-policies:poll",
+          "handler": "wist-gateway:agent_ops.rs:poll_discovery_policies"
+        }
+      ]
+    },
+    {
+      "name": "System.WistGateway.ViewDiscoveryPolicies",
+      "status": "Complete",
+      "progress": 100,
+      "entries": [
+        {
+          "name": "AdminViewDiscoveryPolicies",
+          "route": "GET /api/v1/admin/discovery-policies",
+          "handler": "wist-gateway:admin_ops.rs:view_discovery_policies"
+        }
+      ]
     }
   ]
 }

@@ -63,6 +63,26 @@ struct GatewayManagementState {
 }
 
 
+// 管理面看当前生效的发现方向策略表。
+//
+// 为什么视图在 Control 域而不是 Discovery：它是**网关管理面的读模型**，
+// 与 GatewayManagementState 同类；但它的内容是 Discovery 域的对象（跨域引用）。
+struct DiscoveryPolicyView {
+  meta {
+    label zh "发现方向策略视图"
+    label en "Discovery Policy View"
+    summary zh "管理面看当前生效的发现方向策略表：是否已配置，以及生效的那一版内容。"
+    tags "discovery", "policy", "view", "admin"
+  }
+
+  // 为什么带 `configured`：网关**没配**表时就不提供下发端点（agent 回退内建默认值），
+  // 运维必须能区分「没配」与「配了一版空表」—— 后者不是合法状态（装载校验会拒）。
+  configured: Boolean
+  // 未配置时为空。
+  policy: Discovery.Probe.DiscoveryAspectPolicySet?
+  generated_at: DateTime
+}
+
 command ViewGatewayManagementState = OperatorRequest {
   meta {
     label zh "查看网关管理状态"
