@@ -186,6 +186,36 @@
           "covers": ["ApproveUpgradePlan"]
         }
       ]
+    },
+    {
+      "name": "System.WistGateway.IngestAgentFactSummary",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Reporting.IngestAgentFactSummaryFlow",
+      "entries": [
+        {
+          "name": "ReportAgentFactSummary",
+          "route": "POST /api/v1/agent/facts",
+          "handler": "wist-gateway:agent_ops.rs:submit_agent_facts",
+          "covers": ["StoreFactSummary", "InferPurpose"]
+        }
+      ]
+    },
+    {
+      "name": "System.WistGateway.ViewAgentPurpose",
+      "status": "Partial",
+      "progress": 80,
+      "entries": [
+        {
+          "name": "AdminViewAgentPurpose",
+          "route": "GET /api/v1/admin/agents/:agent_id/purpose",
+          "handler": "wist-gateway:admin_ops.rs:view_agent_purpose"
+        }
+      ],
+      "gaps": [
+        "只有读：人工判定（AgentClassification）的写入端点未实现，出参 classification 恒为 null",
+        "建议过期靠读取路径重算（幂等）；没有独立的管理面『重新推断』入口"
+      ]
     }
   ]
 }

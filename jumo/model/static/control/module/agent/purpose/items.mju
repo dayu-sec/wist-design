@@ -118,7 +118,11 @@ struct PurposeSuggestion {
   model_version: String?
   rule_set_id: String?
   signals: List<PurposeSignal>
+  // 依据哪一版**事实**算的（事实的时间）。
   observed_at: DateTime
+  // **哪一刻算的** —— 与 observed_at 区分开：“依据哪版事实”和“哪刻算的”是两件事。
+  // 规则册换版本或事实变化都会重算，所以它比 observed_at 新是正常状态。
+  computed_at: DateTime
 }
 
 // ── 人工判定（确定）──────────────────────────────────────────────────

@@ -25,27 +25,39 @@
 **冲突时以判定为准，但并列展示推断**（`推断：LinuxData（命中 postgres、5432 在听）｜已确认：LinuxCompute（张三 09-20）`）。
 不是谁盖掉谁 —— 差异本身就是有用信息（可能机器改用途了，也可能规则该调了）。
 
-## 3. 事实从哪来：走**数据通道**，网关与中心各自订阅（已定）
+## 3. 事实从哪来：**摘要走控制面、原文走数据面**（已实现）
 
-事实**不走控制面 HTTP 接口**，而是经**数据面**分发（`warp-parse` 作为发布/订阅中枢）：
+事实拆成两条路，**不是同一条**：
 
 ```
-agentd ──上报──▶ 数据面（专用 discovery receiver，不降级成 telemetry record）
-                    ├─ 订阅：网关  → 派生摘要 → 规则推断、平台校验
-                    └─ 订阅：中心  → 明细入库 → 资产整理（目录归并/软件归一化/漏洞关联）
+agentd ──摘要──▶ 网关控制面（POST /api/v1/agent/facts，agent 凭据认证）
+                  └─ 入库（覆盖式）→ 规则推断 → 页面
+agentd ──原文快照──▶ 数据面（warp-parse 作发布/订阅中枢）
+                  ├─ 订阅：网关  → （网关不需要原文）
+                  └─ 订阅：中心  → 明细入库 → 资产整理（目录归并/软件归一化/漏洞关联）
 ```
 
-- envelope：`Reporting.ReportDiscoverySnapshot` + `DiscoveryIngestAck`（含
-  `snapshot_id` / `revision` / `report_attempt` / `report_mode`，模型已填实类型）；
+| | 摘要 | 原文快照 |
+|---|---|---|
+| 内容 | 去重后的进程可执行/包名/监听端口（10~30 KB） | 完整 resources + targets（一台几百 KB） |
+| 通道 | **控制面**（已认证 agent 凭据） | 数据面（`OBSFACT:` 帧） |
+| 幂等键 | `content_digest` | `(agent_id, revision)` |
+| 存储 | 网关 SQLite，覆盖式一台一条 | 中心库，需历史 |
+
+- envelope（原文走数据面）：`Reporting.ReportDiscoverySnapshot` + `DiscoveryIngestAck`
+  （含 `snapshot_id` / `revision` / `report_attempt` / `report_mode`，模型已填实类型）；
   载荷：`Observed.Snapshot` 全模块（已按 `wist-contracts` 的真实契约填实）。
-- **不互相代报**：中心不靠网关转发，网关也不替 agent 上报——**一次上报、两个消费者**。
+- **不互相代报**：中心不靠网关转发，网关也不替 agent 上报 —— 一次上报、两个消费者。
 - 进程资源带 `process.executable.name`（macOS 上是**完整可执行路径**，信号很好；
   Linux 的 `/proc/<pid>/comm` 只有 15 字符短名，见 §6）。
-- **代价与前提**：网关的“离线自足”取决于数据面与网关同栈可达；数据面这条接入路径
-  目前**没有鉴权**（裸 TCP / http receiver），而事实是**资产清单**，必须补身份校验。
+- **为什么摘要走控制面**：数据面这条接入路径目前**没有鉴权**（裸 TCP），而摘要里是
+  进程路径与包名（接近资产清单）；走已认证的控制面反而更合理。**网关只接摘要，
+  原文快照不进网关库** —— 这是架构级约束，不是约定。
 
-> ⚠️ 现状：探针、envelope、载荷都在，但 agentd 侧没有上报实现，数据面也没有
-> discovery receiver。前置条件是**先打通事实上报**（含把信号聚合后上送，见 §4）。
+> 现状（已落地，2026-09）：agentd 侧聚合与上报已实现（`reporting/fact_summary.rs` +
+> `report_fact_summary_if_changed`）；网关侧入库与推断已实现（`app/purpose.rs` +
+> `POST /api/v1/agent/facts` + `GET /api/v1/admin/agents/{id}/purpose`）。
+> 仍欠的是**原文快照那条路**：数据面的 discovery receiver 尚未实现。
 
 ## 4. 上送什么（聚合，不是明细）
 
@@ -99,20 +111,24 @@ agentd ──上报──▶ 数据面（专用 discovery receiver，不降级�
 - 不放 agentd：edge 要轻；进程路径/参数含敏感信息；模型版本要可追溯。
 - 模型只产建议，**永不自动生效**。
 
-## 8. 校验（待实现）
+## 8. 校验（部分已实现）
 
 - 归类必须与该机器平台一致：`MacDaily`/`MacDev` → macos，`Linux*` → linux；不一致拒绝授权；
 - 授权时把这台机器的 `AgentClassification` 记进 `SelectionBasis`（`decided_by`/`decided_at`），
   与“按哪个模板的哪一版”一起构成审计链；
-- 规则表换版**不追溯改历史判定**（只影响之后的建议）。
+- 规则表换版**不追溯改历史判定**（只影响之后的建议）——
+  实现上：网关在**读取**路径发现建议的 `rule_set_id` 与当前规则册不一致就重算（幂等、
+  一台机器一次），所以**改规则内容必须同时 bump `rule_set_id`**，否则看不出过期；
+- 规则表在**启动时**做结构化校教（`kind` / `platform` / `machine_class` 必须在模型的闭合取值内、
+  `pattern` 不得为空），不合法直接拒绝启动 —— 手写策展数据的笔误不能变成“静默不推断”。
 
 ## 9. 缺口与需求登记
 
 | # | 缺什么 | 状态 |
 |---|---|---|
-| 1 | 事实上报链路：agentd 侧聚合 + 数据面 discovery receiver + 网关/中心两侧订阅 | 待做（前置） |
-| 2 | Linux 补采集：`cmdline` + 已装包清单 | **已记需求 `B119`** |
-| 3 | 确定的资源画像（核数/内存/磁盘/GPU）+ macOS `machine_id`/`ip_addresses` | **已记需求 `B118`** |
-| 4 | 网关侧规则匹配实现与单测 | 等 #1 |
-| 5 | 中心侧模型推断（`method = model`） | 待做 |
-| 6 | 管理面入口（看建议+依据、确认/改判） | 待做 |
+| 1 | **摘要**上报链路：agentd 聚合 + 控制面端点 + 网关入库/推断/页面 | **已实现**（2026-09） |
+| 2 | **原文快照**链路：数据面 discovery receiver + 中心订阅 | 待做 |
+| 3 | Linux 补采集：`cmdline` + 已装包清单 | **已记需求 `B119`** |
+| 4 | 确定的资源画像（核数/内存/磁盘/GPU）+ macOS `machine_id`/`ip_addresses` | **已记需求 `B118`** |
+| 5 | 中心侧模型推断（`method = model`，需建议表支持多条 + `model_version`） | 待做 |
+| 6 | 人工判定的**写入**端点（目前只读，`classification` 恒 `null`） | 待做 |
