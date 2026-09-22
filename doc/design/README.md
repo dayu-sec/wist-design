@@ -10,7 +10,7 @@
   `wist-exec` / 本地状态 / 故障处理 / 资源发现（agentd 专属设计文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
 - `center/`
-  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板、Agent 工作体系交付计划
+  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、发现上报的模式与规则、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板、Agent 工作体系交付计划
 - `telemetry/`
   metrics 集成、discovery、resource mapping、uplink 设计、数据防丢失与 Batch A 规格（logs file input / macOS 采集文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
@@ -35,17 +35,18 @@
 12. [center/management-platform-bootstrap.md](./center/management-platform-bootstrap.md)
 13. [center/report-discovery-snapshot-schema.md](./center/report-discovery-snapshot-schema.md)
 14. [center/discovery-sync-protocol.md](./center/discovery-sync-protocol.md)
-15. [center/models/software-normalization-and-vuln-enrichment.md](./center/models/software-normalization-and-vuln-enrichment.md)
-16. [center/models/public-vulnerability-source-ingestion.md](./center/models/public-vulnerability-source-ingestion.md)
-17. [center/models/host-inventory-and-runtime-state.md](./center/models/host-inventory-and-runtime-state.md)
-18. [center/models/host-inventory-and-runtime-state-schema.md](./center/models/host-inventory-and-runtime-state-schema.md)
-19. [center/models/host-inventory-and-runtime-state-storage.md](./center/models/host-inventory-and-runtime-state-storage.md)
-20. [center/models/host-responsibility-and-maintainer-model.md](./center/models/host-responsibility-and-maintainer-model.md)
-21. [center/models/host-responsibility-sync-from-external-systems.md](./center/models/host-responsibility-sync-from-external-systems.md)
-22. [center/models/host-pod-network-topology-model.md](./center/models/host-pod-network-topology-model.md)
-23. [center/models/host-process-software-vulnerability-graph.md](./center/models/host-process-software-vulnerability-graph.md)
-24. [center/models/business-system-service-topology-model.md](./center/models/business-system-service-topology-model.md)
-25. [telemetry/metrics-integration-roadmap.md](./telemetry/metrics-integration-roadmap.md)
-26. [telemetry/telemetry-uplink-and-warp-parse.md](./telemetry/telemetry-uplink-and-warp-parse.md)
-27. [telemetry/data-loss-prevention.md](./telemetry/data-loss-prevention.md)
-28. [foundation/implementation-backlog.md](./foundation/implementation-backlog.md)
+15. [center/discovery-reporting-modes.md](./center/discovery-reporting-modes.md)
+16. [center/models/software-normalization-and-vuln-enrichment.md](./center/models/software-normalization-and-vuln-enrichment.md)
+17. [center/models/public-vulnerability-source-ingestion.md](./center/models/public-vulnerability-source-ingestion.md)
+18. [center/models/host-inventory-and-runtime-state.md](./center/models/host-inventory-and-runtime-state.md)
+19. [center/models/host-inventory-and-runtime-state-schema.md](./center/models/host-inventory-and-runtime-state-schema.md)
+20. [center/models/host-inventory-and-runtime-state-storage.md](./center/models/host-inventory-and-runtime-state-storage.md)
+21. [center/models/host-responsibility-and-maintainer-model.md](./center/models/host-responsibility-and-maintainer-model.md)
+22. [center/models/host-responsibility-sync-from-external-systems.md](./center/models/host-responsibility-sync-from-external-systems.md)
+23. [center/models/host-pod-network-topology-model.md](./center/models/host-pod-network-topology-model.md)
+24. [center/models/host-process-software-vulnerability-graph.md](./center/models/host-process-software-vulnerability-graph.md)
+25. [center/models/business-system-service-topology-model.md](./center/models/business-system-service-topology-model.md)
+26. [telemetry/metrics-integration-roadmap.md](./telemetry/metrics-integration-roadmap.md)
+27. [telemetry/telemetry-uplink-and-warp-parse.md](./telemetry/telemetry-uplink-and-warp-parse.md)
+28. [telemetry/data-loss-prevention.md](./telemetry/data-loss-prevention.md)
+29. [foundation/implementation-backlog.md](./foundation/implementation-backlog.md)

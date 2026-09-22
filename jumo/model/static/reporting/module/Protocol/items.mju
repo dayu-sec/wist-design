@@ -149,14 +149,11 @@ message<command> ReportAgentFactSummary {
   instance_id: String
   // agent 声明的**内容摘要**。不是判重键：网关从下列内容字段自算，
   // 声明与自算不一致时只记告警（可能是版本偏差，不据此拒收）。
-  // agentd 无条件周期全量上报（见 Discovery.ReportRange / ReportTrigger）。
+  // agentd 无条件周期全量上报（模式与规则见 doc/design/center/discovery-reporting-modes.md）。
   content_digest: String
   // 仅留痕：快照 revision 每轮无条件 +1。
   revision: Int
   observed_at: DateTime
-  // 这条上报是怎么产生的（区别“没变所以没报”与“周期到了”）。
-  report_range: Discovery.ReportRange
-  report_trigger: Discovery.ReportTrigger
   os: String
   arch: String
   process_count: Int

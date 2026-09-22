@@ -24,38 +24,10 @@ variant DiscoveryAspect {
 // 每个方向的策略：默认周期与允许区间、是否基线、是否默认开、产出什么事实。
 // 值由 flow PublishDiscoveryAspectPoliciesFlow（static/discovery/aspect-policies.mju）发布，
 // 不再放外部 TOML —— 模型是唯一来源，避免两份漂移。
-
-// 上报**范围**：消费方决定。
 //
-// 有推断判据依赖它 → 全量（判据是“存在性”问题，被截断就会丢判据）；
-// 只给人与仪表盘看 → TOP（是“降范围”，而且天然**有界**）。
-variant ReportRange {
-  meta {
-    label zh "上报范围"
-    label en "Report Range"
-    summary zh "一条上报里带全量还是前 N 条：推断判据依赖的必须全量，只给人看的可以 TOP。"
-    tags "discovery", "report", "range"
-  }
-
-  Full
-  Top
-}
-
-// 上报**触发**：信号的时间尺度决定。
-//
-// 慢信号 → 变化触发（内容变了才报）；快信号、或需要“区分没变与失联” → 周期触发。
-// 周期它是唯一能证明“我还活着”的形式 —— 变化触发下，“没上报”同时意味着“没变”与“可能死了”。
-variant ReportTrigger {
-  meta {
-    label zh "上报触发"
-    label en "Report Trigger"
-    summary zh "怎么把观测变成一条上报：内容变化触发，还是无条件周期触发。"
-    tags "discovery", "report", "trigger"
-  }
-
-  OnChange
-  Periodic
-}
+// 注意：这里**刻意不建模「上报范围 × 上报触发」**（全量/TOP × 变化/周期）。
+// 那是一张「策略 × 规则 × 逐方向取值」的表，塞进类型只会把理由压成注释；
+// 规则与逐方向取值放文档：doc/design/center/discovery-reporting-modes.md。
 
 struct DiscoveryAspectPolicy {
   meta {
@@ -79,28 +51,10 @@ struct DiscoveryAspectPolicy {
   platforms: String
   // 产出的事实（供人理解“为什么要这个面”），如 host = os/arch/核数/内存/磁盘/GPU。
   yields: String
-
-  // ── 上报模式（与观测频率正交的第二个维度）────────────────
-  //
-  // 为什么分「范围」与「触发」两个字段而不是一个四值枚举：
-  // 两个决定的**依据不同** —— 范围由消费方定（有推断判据依赖它就必须全量），
-  // 触发由信号的时间尺度定（慢 → 变化；快或需要证明活着 → 周期）。
-  // 四个常见组合就是「全量变化 / TOP变化 / 全量周期 / TOP周期」。
-  report_range: ReportRange
-  report_trigger: ReportTrigger
-  // 仅 Periodic 用：**上报**周期（秒）。
-  // 与 `default_interval_seconds`（**观测**频率）是两件事：
-  // 观测更密是为了少漏检（喂明细链路），上报更疏是为了不噪声（喂推断与页面）。
-  report_interval_seconds: Int?
-  // 仅 Top 用：取前 N 条。是**上限**而不是固定条数：安静的机器不该凑满 N 条噪声。
-  //
-  // 排序键是**未决项**：理想键是“窗口内出现频次”（对推断友好），但那要求 agent 侧保留
-  // 窗口状态与阈值参数 —— 与“agent 要轻”相冲，已决定不做。所以当下只能按**采样时的资源占用**
-  // 排序，而这个键会把“正在跑重活”当成特征（对推断是噪声）。
-  // 因此：**有推断判据依赖的方向一律不得用 Top**（当前用到 Top 的只有 Container / K8s，
-  // 它们没有任何规则表判据）。将来若要给更多方向用 Top，先把窗口归一化与它的归属定下来。
-  top_n: Int?
 }
+
+// 上报模式（范围 × 触发）与逐方向取值、判定规则一起放在
+// doc/design/center/discovery-reporting-modes.md，不进模型。
 
 // 策略表的**集合级身份**：一次发布产出一版（N 个方向的策略 + 版本号）。
 // 为什么需要它：同一类型的多条记录无法逐条断言（实测），集合级不变式（条数/版本）才能被 verify 守住。

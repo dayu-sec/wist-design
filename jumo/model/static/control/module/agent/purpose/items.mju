@@ -22,11 +22,8 @@ struct AgentFactSummary {
   // 仅留痕，不参与判重。
   revision: Int
   observed_at: DateTime
-  // 这份事实是怎么得出来的（与“建议是哪版规则算的”同一纪律）。
-  // 注：一个摘要目前是一次快照，所以记在整体上；将来若各方向的模式分化到“同一份摘要里
-  // 有的全量有的 TOP”，这里要下沉成按信号组记。
-  report_range: ReportRange
-  report_trigger: ReportTrigger
+  // 这份事实是怎么得出来的（模式 = 全量·周期）。模式的取值与规则不进模型，
+  // 见 doc/design/center/discovery-reporting-modes.md §5。
   os: String
   arch: String
   // 去重前的进程条数（去重会毁掉基数，留一个原始计数备查）。
