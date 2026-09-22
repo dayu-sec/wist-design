@@ -24,7 +24,7 @@
 | 采集内容（面 → 单元 → 模板） | `Agent.Content` + 三份 TOML | 模型与数据就绪；无 loader、无校验 |
 | 用途识别（建议 → 依据 → 人工判定） | `Agent.Purpose` + 规则表 | 模型与规则就绪；无匹配实现、无管理面 |
 | 事实上报（数据通道 + 双订阅） | `Reporting.Protocol` + `Observed.Snapshot`（已按真实契约填实） | envelope/载荷已定；agentd 无聚合上报、数据面无 receiver |
-| 事实**摘要**上报（控制面） | `Reporting.ReportAgentFactSummary` + `Control.AgentFactSummary` + `IngestAgentFactSummaryFlow`（verify `AgentFactSummaryIngested` passed） | 模型已定（含 `/api/v1/agent/facts` 与 `/api/v1/admin/agents/{id}/purpose` 两条端点）；代码未写 |
+| 事实**摘要**落库 + 用途推断 | `Reporting.ReportAgentFactSummary` + `Control.AgentFactSummary` + `IngestAgentFactSummaryFlow`（verify `AgentFactSummaryIngested` passed） | 网关侧已实现（`agent_fact_summary` 表 / 幂等 / 用途推断 / 管理面 `/api/v1/admin/agents/{id}/purpose`）；**通道待改**：现为控制面 HTTPS 直报，按 §4.1 统一到数据面 |
 
 ### 1.3 已登记需求
 
@@ -72,22 +72,26 @@
 **验收**：`wpl-check sample` 对 `OBSFACT:` 帧 0 residue；重放同一 `revision` 判 `duplicate`；
 网关能看到某主机的进程/包摘要；中心资产目录出现该主机。**依赖批次 0。**
 
-### 4.1 摘要与原文分流（已定的取舍）
+### 4.1 事实上报统一走数据面（已定，取代原先的“分流”）
 
-事实拆成两条路，**不是同一条**：
+事实上报只有**一条上行通道**：`agentd → 数据面（OBSFACT: 帧）` → 网关与中心各自订阅。
+摘要**不再**走控制面直报；原先的 `POST /api/v1/agent/facts` 作废。
 
 | | 摘要 | 原文快照 |
 |---|---|---|
 | 内容 | 去重后的进程可执行/包名/监听端口（10~30 KB） | 完整 resources + targets（一台几百 KB） |
-| 通道 | **控制面**（已认证 agent 凭据，`POST /api/v1/agent/facts`） | 数据面（`OBSFACT:` 帧） |
-| 收方 | 网关（仅摘要） | 中心（资产整理）+ 网关（订阅） |
-| 幂等键 | `content_digest` | `(agent_id, revision)` |
+| 帧 | `OBSFACT: <ReportAgentFactSummary>`（同一条帧族） | `OBSFACT: <ReportDiscoverySnapshot>`（待做） |
+| 订阅方 | 网关（用途推断 + 落库） | 中心（资产整理） |
+| 幂等键 | `content_digest`（网关自算） | `(agent_id, revision)` |
 | 存储 | 网关 SQLite，覆盖式一台一条 | 中心库，需历史 |
 
-取舍理由：摘要只服务用途推断，不需要原文；且数据面接入目前**无身份校验**，而事实含进程路径与
-包名，走已认证的控制面更合理。所以**网关只接摘要，原文快照不进网关库** —— 这是架构级约束，不是约定。
+为什么统一：摘要与原文都是**观测数据**，只是粒度不同。分两条上行通道会让“同一件事”有两套连接、
+两套节流、两套失败模式；agentd 也就要维护两份上送状态。
 
-注意：原来 `ReportDiscoverySnapshot` 的注释写“网关再代报中心”，已被上述分流取代（已订正）。
+原来把摘要留在控制面的理由只有一条：数据面接入**没有身份校验**。所以统一的前提是
+**给数据面接入加身份校验**（§9 风险行），而**不是**保留一条旁路绕开它。
+
+注意：原来 `ReportDiscoverySnapshot` 的注释写“网关再代报中心”，已被“数据面分发 + 双方订阅”取代（已订正）。
 
 ## 5. 批次 3：用途识别接线 + 管理面
 
@@ -147,7 +151,7 @@ mac 机器选 `LinuxCompute` 被拒。**依赖批次 2。**
 
 | 风险 | 说明 | 处置 |
 |---|---|---|
-| 数据面接入**无鉴权** | 事实是资产清单（进程路径、包、端口），而 `tcp_src` 现在只校验 `seq` | 批次 2 里给 discovery receiver 加身份校验（凭据/签名） |
+| 数据面接入**无鉴权** | 事实是资产清单（进程路径、包、端口），而 `tcp_src` 现在只校验 `seq`。**摘要统一到数据面后这条从“待办”变成“前置”** —— 统一的前提就是它 | 批次 2 里给数据面接入加身份校验：agent 级（签名/短期数据面令牌，网关订阅端校验），wparse 只做接入与路由、不判身份 |
 | 运行态错配窗口 | agentd 旧二进制发 `RAW:`，新 WPL 只认 `LOGRAW:` | 批次 0 固定"先 agentd、后数据面" |
 | 模板全 `draft` | 4 个模板引用的单元多为 draft，按不变量不能 `active` | 批次 4；在此之前授权只能用于联调 |
 | Linux 侧零规则 | `models/wpl/linux/` 为空，无样本无 OML 无设计文档（现已补源清单文档） | 批次 4 第一组 |

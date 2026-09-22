@@ -25,27 +25,27 @@
 **冲突时以判定为准，但并列展示推断**（`推断：LinuxData（命中 postgres、5432 在听）｜已确认：LinuxCompute（张三 09-20）`）。
 不是谁盖掉谁 —— 差异本身就是有用信息（可能机器改用途了，也可能规则该调了）。
 
-## 3. 事实从哪来：**摘要走控制面、原文走数据面**（已实现）
+## 3. 事实从哪来：**统一走数据面**（摘要已实现，原文待做）
 
-事实拆成两条路，**不是同一条**：
+事实上报只有**一条上行通道**（2026-09-22 定，取代原先的“摘要走控制面 / 原文走数据面”分流）：
 
 ```
-agentd ──摘要──▶ 网关控制面（POST /api/v1/agent/facts，agent 凭据认证）
-                  └─ 入库（覆盖式）→ 规则推断 → 页面
-agentd ──原文快照──▶ 数据面（warp-parse 作发布/订阅中枢）
-                  ├─ 订阅：网关  → （网关不需要原文）
-                  └─ 订阅：中心  → 明细入库 → 资产整理（目录归并/软件归一化/漏洞关联）
+agentd ──OBSFACT: <摘要> ──────▶ 数据面（warp-parse 作发布/订阅中枢）
+                                 └─ 订阅：网关 → 入库（覆盖式）→ 规则推断 → 页面
+agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
+                                 └─ 订阅：中心 → 明细入库 → 资产整理（目录归并/软件归一化/漏洞关联）
 ```
 
 | | 摘要 | 原文快照 |
 |---|---|---|
 | 内容 | 去重后的进程可执行/包名/监听端口（10~30 KB） | 完整 resources + targets（一台几百 KB） |
-| 通道 | **控制面**（已认证 agent 凭据） | 数据面（`OBSFACT:` 帧） |
-| 幂等键 | `content_digest` | `(agent_id, revision)` |
+| 帧 | `OBSFACT: <ReportAgentFactSummary>` | `OBSFACT: <ReportDiscoverySnapshot>`（待做） |
+| 订阅方 | 网关 | 中心 |
+| 幂等键 | `content_digest`（网关自算） | `(agent_id, revision)` |
 | 存储 | 网关 SQLite，覆盖式一台一条 | 中心库，需历史 |
 
-- envelope（原文走数据面）：`Reporting.ReportDiscoverySnapshot` + `DiscoveryIngestAck`
-  （含 `snapshot_id` / `revision` / `report_attempt` / `report_mode`，模型已填实类型）；
+- envelope：`Reporting.ReportDiscoverySnapshot` + `DiscoveryIngestAck`（原文）与
+  `Reporting.ReportAgentFactSummary` + `FactSummaryAccepted`（摘要）；两条都走数据面帧，只是载荷不同；
   载荷：`Observed.Snapshot` 全模块（已按 `wist-contracts` 的真实契约填实）。
 - **不互相代报**：中心不靠网关转发，网关也不替 agent 上报 —— 一次上报、两个消费者。
 - 进程资源带 `process.executable.name`（macOS 上是**完整可执行路径**，信号很好；
