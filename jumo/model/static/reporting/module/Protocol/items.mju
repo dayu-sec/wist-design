@@ -147,10 +147,13 @@ message<command> ReportAgentFactSummary {
   unique report_id: String
   agent_id: String
   instance_id: String
-  // 内容摘要：**幂等键**。事实上报按内容变化触发，不按 revision 前进。
+  // 内容摘要：**幂等键**。事实上报按内容变化或周期触发，不按 revision 前进。
   content_digest: String
   revision: Int
   observed_at: DateTime
+  // 这条上报是怎么产生的（区别“没变所以没报”与“周期到了”）。
+  report_range: Discovery.ReportRange
+  report_trigger: Discovery.ReportTrigger
   os: String
   arch: String
   process_count: Int

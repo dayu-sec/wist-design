@@ -64,7 +64,8 @@
 | 交付物 | 仓 | 要点 |
 |---|---|---|
 | agentd 聚合 + `OBSFACT:` 帧 | `wist-agentd` | 去重进程名/路径 + 包清单（Linux）+ 监听端口；正文 `{content_digest, mode, snapshot}`；**不进 spool**（可重算，尽力而为） |
-| 发现方向与周期可配 | `wist-agentd` | 探针周期从**硬编码**改为按 `DiscoveryAspectPolicy` 调度（值在模型 `static/discovery/aspect-policies.mju`，当前 Host 900s / Process 300s / Package 1800s）；`Host` 为**基线不可关**；网关校验 `interval ∈ [min,max]`（改周期 = 改内容 → `plan_version +1` → 走审定） |
+| 发现方向与周期调度 | `wist-agentd` | **已落地一半**：运行时按各探针 `refresh_interval()` 调度（只刷到期的，未到期的**沿用上次输出** —— 快照是从各探针输出重拼的，少交一个就等于把它的资源删掉）。周期值已改为与模型 `DiscoveryAspectPolicy.default_interval_seconds` 一致（Host/Network 900s、Process/Endpoint/Container/K8s 300s） |
+| 周期值由策略表**下发** | `wist-gateway` + `wist-agentd` | 未做：周期目前仍是各探针里的**字面量**，不是从已发布的策略表读的。所以「改模型→生效」还没闭环；且 `Package` 没有探针 |
 | 数据面 receiver + sink | `wist-gateway-stack` | `obs_fact` rule（`symbol(OBSFACT:)`）+ OML（整块 JSON 透传，不做字段建模）+ sink group（`http_sink` → 网关、`kafka_sink` → 中心） |
 | 网关订阅端点 + 落库 | `wist-gateway` | 数据面 → 网关的**内部信任边界**；`(agent_id, revision)` / `content_digest` 幂等；派生**摘要视图**（不上送） |
 | 中心三层落库 | `wist-center` | ingress receipt / agent 当前快照 / 资源目录归并 |
@@ -136,6 +137,11 @@ mac 机器选 `LinuxCompute` 被拒。**依赖批次 2。**
 | 3 | 起点 | 先做批次 0（需一次重启）还是直接批次 1（不动运行态） |
 | 4 | 发现方向周期取值 | 已写入模型（Host/Network 900s、Process/Endpoint/Container/K8s 300s、Package 1800s）；**待确认**：`Container`/`K8s` 默认关、`Host` 15min 是否太滞后（自识别底座可以更快） |
 | 5 | 探针的平台覆盖与策略声明不一致 | `Endpoint` 在 macOS 是空实现 → 策略已改为 `platforms = linux`；`Network` 在 macOS 只拿到地址、无路由（`/proc/net/route` 仅 linux）→ 待定：补 mac 实现，还是接受“部分产出” |
+| 6 | 事实上报的触发与判重归属 | **已定（方案 2 + A）**：agentd **无条件周期上送**（全量·周期），判重挪到**网关**，且**网关自己从收到的内容算 digest**（agent 的声明只作参考、不一致记告警）。为何必须自算：若仍用 agent 的 digest 判重，agent 侧算法一退化就会让网关把所有上报当 `duplicate` —— 静默漏报，和原来的故障一模一样只换个地方。⚠ 未落地：需要 `wist-contracts` 加 hash 依赖 + 一次发布 |
+| 7 | 「内容没变」与「最近听到」要分开 | `duplicate` 分支只刷**留痕**（`revision`/`observed_at`/`process_count`/`received_at`），不动内容与幂等键。否则页面的「去重前 906」会停在几天前而看起来像实时值。待做 |
+| 8 | 快速信号的噪声归哪 | **规则层**（`min_support`）。不放 agent（要轻，且阈值是推断质量的调优）；不放网关（1000 台 ≈ 50 万行窗口计数、每次上报几百次写，会把控制面拖慢）。**已建模 + 已实现**（不足则 confidence 打折） |
+| 9 | TOP 的排序键 | 理想是“窗口内出现频次”，但那要 agent 侧窗口 → 与「agent 要轻」相冲，已否决。当下只能按**采样时的资源占用**排序，而它会把“在跑重活”当特征 → 所以定下一条硬规则：**有推断判据依赖的方向一律不得用 Top**。目前用 Top 的只有 `Container`/`K8s`（无判据） |
+| 10 | `revision` 每轮 +1 | 即使**没有任何探针到期**，也会重拼快照并推进 revision（连带重写缓存/派生视图）。待收敛为“真有观测才前进”（这也正是「不能拿 revision 当幂等键」的根源） |
 
 ## 9. 风险与约束
 

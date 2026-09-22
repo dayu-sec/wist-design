@@ -9,6 +9,12 @@
 # 计分：
 #   各机器类别累加 weight → 取最高分 s1、次高 s2
 #   confidence = 100 × (s1 − s2) / s1，若 s1 < weak_score 再乘 0.5（信号太弱，不冒充有把握）
+#   若某类别命中的规则条数 < min_support，confidence 再打对折（单条判据不足以成案）
+#
+# 为什么需要 min_support：进程集合里会混进**偶发进程**。一台 MacDaily 机器上碰巧跑一次
+# xcodebuild 就能命中 mac-dev-xcodebuild（40 分）、而次高分为 0 → confidence = 100，
+# 而 weak_score 拦不住它（40 ≥ 20）。
+# 阈值按**类别**的判据丰度定（MacDev 有 14 条判据、MacDaily 只有 4 条），所以放在规则册上而不是代码里。
 #   **无任何命中**时才用 baseline_class（置信度低）；没有 baseline 的平台不产出建议（宁可不猜）
 #
 # 权重口径：强特征 40（几乎决定性，如 postgres / nvidia-persistenced）
@@ -20,6 +26,7 @@ rule_set_id = "macos-v1"
 platform = "macos"
 baseline_class = "MacDaily"
 weak_score = 20
+min_support = 2
 published_at = "2026-09-22T00:00:00Z"
 
 # ── macOS：开发机特征 ──────────────────────────────────────────────
@@ -157,6 +164,7 @@ weight = 10
 rule_set_id = "linux-v1"
 platform = "linux"
 weak_score = 20
+min_support = 2
 published_at = "2026-09-22T00:00:00Z"
 
 # ── Linux：计算服务器特征 ──────────────────────────────────────────

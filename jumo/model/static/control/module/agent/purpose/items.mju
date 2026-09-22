@@ -16,11 +16,16 @@ struct AgentFactSummary {
   }
 
   unique agent_id: String
-  // 内容摘要：**幂等键**。事实上报按内容变化触发，不按 revision 前进。
+  // 内容摘要：**幂等键**。事实上报按内容变化或周期触发，不按 revision 前进。
   content_digest: String
   // 仅留痕，不参与判重。
   revision: Int
   observed_at: DateTime
+  // 这份事实是怎么得出来的（与“建议是哪版规则算的”同一纪律）。
+  // 注：一个摘要目前是一次快照，所以记在整体上；将来若各方向的模式分化到“同一份摘要里
+  // 有的全量有的 TOP”，这里要下沉成按信号组记。
+  report_range: ReportRange
+  report_trigger: ReportTrigger
   os: String
   arch: String
   // 去重前的进程条数（去重会毁掉基数，留一个原始计数备查）。
@@ -80,6 +85,20 @@ struct PurposeRuleSet {
   baseline_class: MachineClass?
   // 低于此总分视为“信号太弱”，置信度打折（不冒充有把握）。
   weak_score: Int
+  // 某类别至少命中几条规则才算“有把握”（`1` = 不启用）。
+  //
+  // 为什么需要它：快速信号（进程）里偶发进程会进集合。一台 MacDaily 机器上碰巧跑一次
+  // `xcodebuild` 就能命中 `mac-dev-xcodebuild`（权重 40），而次高分为 0 → `confidence = 100`。
+  // `weak_score` 拦不住它（40 ≥ 20），现有机制完全失效。
+  //
+  // 为什么放这里而不是 agent 或网关：噪声是**推断质量**问题，该在与知识同在的地方解决。
+  // 放 agent 要窗口状态（agent 要轻）；放网关要每台机器保留窗口计数（1000 台 ≈ 50 万行，
+  // 每次上报几百次写，会把控制面拖慢）。
+  //
+  // 为什么不能一个值套所有类别：各类别的判据丰度不同（MacDev 有 14 条、MacDaily 只有 4 条），
+  // 所以它该由策展侧按册调。
+  // 不足时的处置：**打折**（不回落基线）—— 保留“有倾向但不确信”的信息给人看。
+  min_support: Int
   published_at: DateTime
 }
 

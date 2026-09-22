@@ -3,12 +3,19 @@
 // 为什么用 flow + create：jumo 的类型定义装不下常量。实测结论：
 //   - 字段默认值 `Int = 900` **解析通过但不落实例**（create 时省略该字段 → 运行时取不到它）；
 //   - 同一类型多条记录时，`verify` 的类型级断言无法分辨是哪一条（实测失败）；
-//   - 因此唯一能承载字面量值的形式是 flow 里的 `create`，策略表以“**发布动作的产物**”落进模型。
+//   - 因此唯一能承载字面量值的形式是 flow 里的 `create`，策略表以"**发布动作的产物**"落进模型。
 //
 // 收益：生成代码时直接产出这组常量，不再依赖外部 TOML（避免模型与数据两份漂移）。
 //
+// 每个方向有两个正交维度（都要声明）：
+//   1. **观测频率** `default_interval_seconds` / `[min, max]`：多久采一次。采得密是为了少漏检。
+//   2. **上报模式** `report_range` × `report_trigger`：怎么把观测变成一条上报。报得疏是为了不噪声。
+//      两个决定依据不同 —— 范围由消费方定（有推断判据依赖它就必须全量），触发由时间尺度定。
+//      四个常见组合：全量变化 / TOP变化 / 全量周期 / TOP周期。
+//
 // 可验证到什么程度：同一类型的 7 条记录无法逐条断言，所以只对**集合级**不变式做 verify
-// （版本号、方向条数）；每条周期的 `[min, max]` 与“基线面不可关”由网关装载时校验。
+// （版本号、方向条数）；每条周期的 `[min, max]`、"基线面不可关"、以及"有推断判据依赖的方向
+// 不得用 TOP"由网关装载时校验。
 
 command PublishDiscoveryAspectPolicies {
   policy_version: Int
@@ -18,7 +25,7 @@ flow PublishDiscoveryAspectPoliciesFlow {
   meta {
     label zh "发布发现方向策略"
     label en "Publish Discovery Aspect Policies"
-    summary zh "发布一版发现方向策略表：每个方向的默认/最小/最大周期、是否基线、是否默认开、产出事实。"
+    summary zh "发布一版发现方向策略表：每个方向的观测周期与上报模式（范围 × 触发）、是否基线、是否默认开、产出事实。"
     tags "discovery", "probe", "policy", "publish"
   }
 
@@ -30,6 +37,7 @@ flow PublishDiscoveryAspectPoliciesFlow {
 
   step<stop> Publish {
     // ── 慢变量：资源画像与网络拓扑（15 分钟级）────────────────────
+    // 极慢信号：内容变了才报（装上/拔掉内存、换网卡这些事一辈子遇不到几次）。
     create DiscoveryAspectPolicy {
       aspect = Host
       default_interval_seconds = 900
@@ -39,6 +47,8 @@ flow PublishDiscoveryAspectPoliciesFlow {
       enabled_by_default = true
       platforms = "macos|linux"
       yields = "os/arch/核数/内存/磁盘/GPU"
+      report_range = Full
+      report_trigger = OnChange
     }
 
     create DiscoveryAspectPolicy {
@@ -50,9 +60,17 @@ flow PublishDiscoveryAspectPoliciesFlow {
       enabled_by_default = true
       platforms = "macos|linux"
       yields = "网卡/地址/路由"
+      report_range = Full
+      report_trigger = OnChange
     }
 
     // ── 半快变量：用途推断的主信号与辅证（5 分钟级）──────────────
+    // 进程是**唯一**一个"采样瞬间值"与"稳态集合"差别极大的信号，而且
+    // `process` / `process_path` 规则**全部**依赖它 —— 存在性判据不能截断，所以必须全量；
+    // 又因为它快，变化触发会噪声刷屏，所以用**周期**（它顺带承担"证明我还活着"）。
+    //
+    // 反例说明为什么不能 TOP：一台忙的 macOS 机器上，Xcode 的辅助进程排不进前 N 条，
+    // `mac-dev-xcode-app` 这条判据就丢了 —— 结论会掉回 MacDaily。
     create DiscoveryAspectPolicy {
       aspect = Process
       default_interval_seconds = 300
@@ -62,6 +80,11 @@ flow PublishDiscoveryAspectPoliciesFlow {
       enabled_by_default = true
       platforms = "macos|linux"
       yields = "进程名/可执行路径（用途推断主信号）"
+      report_range = Full
+      report_trigger = Periodic
+      // 上报周期 = 观测周期：没有窗口归一化（那需要 agent 侧状态与阈值参数，
+      // 属于推断质量的调优，不该下放），所以中间采样只喂明细链路。
+      report_interval_seconds = 300
     }
 
     create DiscoveryAspectPolicy {
@@ -75,6 +98,8 @@ flow PublishDiscoveryAspectPoliciesFlow {
       // 声明成 macos|linux 会让网关把一份永远产出为空的工作授权下去。补齐 mac 实现后再加回。
       platforms = "linux"
       yields = "监听端口（用途推断辅证，如 5432→数据库）"
+      report_range = Full
+      report_trigger = OnChange
     }
 
     create DiscoveryAspectPolicy {
@@ -86,6 +111,12 @@ flow PublishDiscoveryAspectPoliciesFlow {
       enabled_by_default = false
       platforms = "macos|linux"
       yields = "容器清单（运行时/镜像/命名空间）"
+      // 现在**没有任何规则表判据**依赖容器 → 可以 TOP（给人看"这台机器在跑什么容器"）。
+      // 一旦规则表要拿容器做判据，就必须改成 Full（与 Process 同理）。
+      report_range = Top
+      report_trigger = Periodic
+      report_interval_seconds = 300
+      top_n = 50
     }
 
     create DiscoveryAspectPolicy {
@@ -97,6 +128,10 @@ flow PublishDiscoveryAspectPoliciesFlow {
       enabled_by_default = false
       platforms = "macos|linux"
       yields = "K8s 节点/工作负载标识"
+      report_range = Top
+      report_trigger = Periodic
+      report_interval_seconds = 300
+      top_n = 50
     }
 
     // ── 低频且昂贵：包清单（30 分钟级）──────────────────────────
@@ -109,6 +144,8 @@ flow PublishDiscoveryAspectPoliciesFlow {
       enabled_by_default = true
       platforms = "linux"
       yields = "已装包清单（用途推断最稳信号 + 中心资产整理/软件归一化输入）"
+      report_range = Full
+      report_trigger = OnChange
     }
 
     create DiscoveryAspectPolicySet {
@@ -120,13 +157,13 @@ flow PublishDiscoveryAspectPoliciesFlow {
 
 verify DiscoveryAspectPoliciesPublished for flow PublishDiscoveryAspectPoliciesFlow {
   given {
-    PublishDiscoveryAspectPolicies.policy_version = 1
+    PublishDiscoveryAspectPolicies.policy_version = 2
   }
 
   when PublishDiscoveryAspectPolicies
 
   expect {
-    DiscoveryAspectPolicySet.policy_version == 1
+    DiscoveryAspectPolicySet.policy_version == 2
     DiscoveryAspectPolicySet.aspect_count == 7
   }
 }
