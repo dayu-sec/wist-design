@@ -147,8 +147,11 @@ message<command> ReportAgentFactSummary {
   unique report_id: String
   agent_id: String
   instance_id: String
-  // 内容摘要：**幂等键**。事实上报按内容变化或周期触发，不按 revision 前进。
+  // agent 声明的**内容摘要**。不是判重键：网关从下列内容字段自算，
+  // 声明与自算不一致时只记告警（可能是版本偏差，不据此拒收）。
+  // agentd 无条件周期全量上报（见 Discovery.ReportRange / ReportTrigger）。
   content_digest: String
+  // 仅留痕：快照 revision 每轮无条件 +1。
   revision: Int
   observed_at: DateTime
   // 这条上报是怎么产生的（区别“没变所以没报”与“周期到了”）。
@@ -163,7 +166,7 @@ message<command> ReportAgentFactSummary {
   reported_at: DateTime
 }
 
-// accepted（已入库）| duplicate（同 content_digest 已处理，不重复算）| rejected（envelope/身份非法）
+// accepted（已入库）| duplicate（网关按**自算**摘要判定内容未变：只刷留痕，不重算）| rejected（envelope/身份非法）
 variant FactSummaryAckStatus {
   Accepted
   Duplicate

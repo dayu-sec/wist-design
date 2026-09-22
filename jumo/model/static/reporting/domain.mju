@@ -87,7 +87,7 @@ flow IngestAgentFactSummaryFlow {
   meta {
     label zh "接收事实摘要并推断用途"
     label en "Ingest Fact Summary and Infer Agent Purpose"
-    summary zh "网关收到 agentd 的事实摘要：按 content_digest 幂等入库（覆盖式，一台一条），再按该机器平台的规则表算出用途建议与逐条依据。"
+    summary zh "网关收到 agentd 的事实摘要：用 content_digest（网关自算）幂等入库（覆盖式，一台一条），再按该机器平台的规则表算出用途建议与逐条依据。内容未变时只刷留痕、不重算。"
     tags "reporting", "agent-fact", "purpose", "ingest"
   }
 
@@ -104,7 +104,9 @@ flow IngestAgentFactSummaryFlow {
   step StoreFactSummary {
     create Control.AgentFactSummary {
       agent_id = ReportAgentFactSummary.agent_id
+      // 不是照抄声明：网关用与 agentd 同一个实现从下列内容字段自算（声明只当版本金丝雀）。
       content_digest = ReportAgentFactSummary.content_digest
+      // 以下三项仅留痕：内容未变时网关只刷它们，不改内容也不改幂等键。
       revision = ReportAgentFactSummary.revision
       observed_at = ReportAgentFactSummary.observed_at
       os = ReportAgentFactSummary.os

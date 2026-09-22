@@ -16,7 +16,8 @@ struct AgentFactSummary {
   }
 
   unique agent_id: String
-  // 内容摘要：**幂等键**。事实上报按内容变化或周期触发，不按 revision 前进。
+  // 内容摘要：**幂等键**，由**网关自算**（不信 agent 声明 —— 它会退化成常量
+  // 从而静默漏报）。agentd 无条件周期全量上报，判重只发生在网关这一处。
   content_digest: String
   // 仅留痕，不参与判重。
   revision: Int

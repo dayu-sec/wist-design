@@ -149,7 +149,7 @@ usecase IngestAgentFactSummary {
   meta {
     label zh "接收事实摘要并推断用途"
     label en "Ingest Agent Fact Summary and Infer Purpose"
-    summary zh "网关收到 agentd 上报的事实摘要（去重后的进程/包/端口）：按 content_digest 幂等入库（覆盖式，一台一条），再按该机器平台的规则表算出用途建议与逐条依据供人判定。重复摘要不改数据也不重复计分。"
+    summary zh "网关收到 agentd 上报的事实摘要（去重后的进程/包/端口）：按 content_digest（网关自算）幂等入库（覆盖式，一台一条），再按该机器平台的规则表算出用途建议与逐条依据供人判定。重复摘要只刷留痕，不重写内容也不重复计分。"
     tags "agent-fact", "purpose", "discovery", "ingest"
   }
 
