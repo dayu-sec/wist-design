@@ -330,7 +330,7 @@
       ]
     },
     {
-      "name": "System.WistGateway.ServeAgentWorkGrant",
+      "name": "System.WistGateway.ServeWorkGrant",
       "status": "Complete",
       "progress": 100,
       "flow": "Control.PollWorkFlow",

@@ -320,7 +320,7 @@ usecase ResumeAgentWork {
 }
 
 // 向 Agent 交付工作授权快照
-usecase ServeAgentWorkGrant {
+usecase ServeWorkGrant {
   meta {
     label zh "下发工作授权快照"
     label en "Serve Agent Work Grant"
