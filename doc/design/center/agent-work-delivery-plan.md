@@ -15,6 +15,7 @@
 | 三份策展数据 | `content/catalog.toml`（27 单元 / 18 面）、`content/templates.toml`（4 模板）、`content/purpose-rules.toml`（43 规则） |
 | 发现方向与周期策略 | `Discovery.Probe` 类型 + `content/aspect-policies.toml` 策展值；网关装载校验（七方向 / `[min,default,max]` / 基线不可关 / 平台闭集）并下发，agentd 应用后盖过内建默认周期。验证：`jumo verify` 0 error；`impl-check` 14 用例 0 warning；契约 24 / 网关 173 / agentd 338+2+45 全绿 |
 | 用途规则真机验证 | 用本机 906 个真实进程跑出 `MacDev`，置信度 90，依据可列（Xcode/mise/OrbStack） |
+| L1a 机械资产清单（`Control.Agent.Inventory`） | `agent_software_inventory` 表 + `DeriveSoftwareInventory` 派生步 + 两个查询端点（`GET /api/v1/admin/software`、`GET /api/v1/admin/agents/{id}/software`）；`jumo verify` 10 passed；`impl-check` 16 用例 0 warning；网关 `cargo test software` 6 passed |
 
 ### 1.2 已设计、未实现
 
@@ -108,18 +109,19 @@
 **验收**：真实 mac 跑出 `MacDev`（置信度 90，依据可列）；改判后 `decided_by` 是人；
 mac 机器选 `LinuxCompute` 被拒。**依赖批次 2。**
 
-### 5.1 L1a 机械资产清单（网关侧；**不依赖批次 2，可立即开工**）
+### 5.1 L1a 机械资产清单（网关侧；**已落地**）
 
 背景与归属分层见 §8.2。一句话：清单是**集合视图**问题，网关有台账 + 全部事实，天生能做；但「识别」必须在采集侧（网关读不到目标机器的文件）。
 
+模型 `Control.Agent.Inventory`（`jumo/model/static/control/module/agent/inventory/`）：`AgentSoftwareEntry`（一条清单行）+ `SoftwareEntryKind`（`App` | `Binary`）+ 两个视图 `AgentSoftwareInventory`（按机器看软件）/ `SoftwareHoldings`（按软件看机器，元素 `SoftwareHolding` / `SoftwareHolder`）。派生步 `DeriveSoftwareInventory` 挂在 `Reporting.IngestAgentFactSummaryFlow`（`StoreFactSummary` 之后、`InferPurpose` 之前）；两条查询用例 `ViewAgentSoftware` / `ViewSoftwareHoldings`。
+
 | 交付物 | 仓 | 要点 |
 |---|---|---|
-| 清单派生表 | `wist-gateway` | `(agent_id, software_key, path, source)`；事实入库时按 agent **覆盖式重建**（与摘要同语义，不记历史）；索引支持「按软件找机器」 |
+| 清单派生表 | `wist-gateway` | `agent_software_inventory`：`(agent_id, software_key, name, kind, matched_rule, path, received_at)`，主键 `(agent_id, path)`。事实入库时按 agent **覆盖式重建**（与摘要同语义，不记历史）；`software_key` 上建索引支持「按软件找机器」 |
 | 清单视图 | `wist-gateway-web` | 「按机器看软件」+「按软件看机器」两个视图，列出机器台账（谁来装过、哪台还活着） |
-| 路径→软件键 归并 | `wist-gateway` | 只做**机械**归并（`.app` 前缀、系统/厂商路径段、去重）；**不做版本解析**（那是 L1b） |
+| 路径→聚类键 归并 | `wist-gateway` | 只做**机械**归并，规则**只有两条**：`macos-app-bundle`（取**最外层** `.app` 包）与 `unix-path`（其余按路径自身）；**不做版本解析**（那是 L1b）。少一点猜测，少一点误导 |
 
-**验收**：本机现有摘要（627 条可执行标识）能出 15 个 `.app` 应用 + 路径前缀分布；
-勾选某个软件能看到持有它的机器列表。**切点：只有 L1a，不接中心也完全可用。**
+**验收**：本机现有摘要能出 `.app` 应用清单与路径分布；勾选某个软件能看到持有它的机器列表（`GET /api/v1/admin/software`）。未知 agent 回 404，有 agent 但没上报过清单 = 空清单 + 计数 0。**切点：只有 L1a，不接中心也完全可用。**
 
 **前置缺口（不阻塞 L1a，但决定了它有多“清楚”）**：版本与 vendor 靠 L1b（采集侧探针，同 `B118`/`B119`）；「端口→进程」靠原文快照。
 没这两样时 L1a 给出的是**路径级**清单。
@@ -169,7 +171,7 @@ mac 机器选 `LinuxCompute` 被拒。**依赖批次 2。**
 | 11 | 发现方向的**观测频率**怎么到 agentd | **已落地**：策展值放 `jumo/model/content/aspect-policies.toml`（与用途规则表同约定，模型只留结构），网关启动装载并校验（七方向各一条 / `[min,default,max]` 自洽 / 基线面不可关 / 平台闭集），`POST /api/v1/agent/discovery-policies:poll` 下发，agentd 拉到就盖过内建默认值、拉不到（含 503）就用默认值继续采集。本期只下发**周期**，不接管探针开关。细节见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) §6 |
 | 12 | **事件数据的落点选型**（日志 / 发现原文） | 现状实测：只有**指标**落地（VictoriaMetrics）；日志**半通**（sink 只配了文件）；发现原文**无落点**。候选与判据见 §8.1。建议：日志先落 **VictoriaLogs**（与已有 VM 同栈、最轻），要宽表归并与漏洞关联时再上 ClickHouse；原文快照 + 资产目录 → 中心的 **PG 或 ClickHouse**；指标保持 VM 不动 |
 | 13 | **事实摘要为什么不留历史** | **已定**：摘要是**状态**，覆盖式一台一条（`agent-purpose-inference.md:45`），因为推断判据是存在性（R1）。需要历史的那几件事各有归属 —— 见 §8.1 的表。**缺的那一件是「事实变更检测」**（“这台机器上新出现了什么”，如新监听端口）：现在 digest 变了但没任何地方记录，模型里也没这个类型。**建议暂不做**（消费方还没有；它更像中心资产目录的输入） |
-| 14 | **资产清单从哪里算** | **按层归属**（2026-09-22 订正）：**L1a 机械归并 → 网关**（可立即开工，不接中心也有清单）；**L1b 识别（名/版本/vendor）→ 采集侧 agentd**（**网关读不到目标机器的文件**）；**L2 归一化 + 漏洞 → 中心**（KB 高频变，分发成本）；**L3 历史/明细 → 中心，不在网关库**。详见 §8.2 |
+| 14 | **资产清单从哪里算** | **按层归属**（2026-09-22 订正）：**L1a 机械归并 → 网关**（**已落地**，不接中心也有清单）；**L1b 识别（名/版本/vendor）→ 采集侧 agentd**（**网关读不到目标机器的文件**）；**L2 归一化 + 漏洞 → 中心**（KB 高频变，分发成本）；**L3 历史/明细 → 中心，不在网关库**。详见 §8.2 |
 | 15 | **网关存储后端换 PG 的触发器** | 现状：库 256 KB、全部 O(agent)，`journal_mode = wal` 已是；`[store] database_url` 只放行 `sqlite:`。**触发再换，不提前付**：① 要**多网关副本**（HA/横向扩展 —— SQLite 单机文件跨机不安全）② 单表变成 O(事件) ③ 运维硬要求（集中备份/行级权限/审计/在线大版本升级）④ 要库内重分析。迁移成本低：`Store` trait + 唯一实现 `SqliteStore`，换 PG = 一个 scheme 分支 + 一个新 impl |
 | 16 | **网关库卫生** | `enrollment_tokens` 137 行（135 active / 2 used）且**没有清理**（过期只在使用时惰性标 `Expired`）；待定：删 / 归档 / TTL。备份：WAL 下必须用 `sqlite3 .backup`，`cp` 文件会拿到不一致快照 |
 | 17 | **数据面接入的身份校验**（安全线挂起） | **2026-09-22：挂起**，先跑通链路；当前是**有意接受的降级窗口**（网关订阅端不校身份，只做登记表对照 + 信封/正文一致性）。形态待定：短期数据面令牌（网关订阅端校，wparse 只接入与路由）／ 设备密钥签名（端到端，能挡管线内部改写）／ mTLS。判据是「数据面要不要对**跨网段** agent 开放」：单机可只绑环回 + 共享 token；多机就必须 agent 级身份。详见 §9 风险行 |
@@ -212,19 +214,19 @@ mac 机器选 `LinuxCompute` 被拒。**依赖批次 2。**
 
 | 层 | 内容 | 归属 | 为什么 | 现状 |
 |---|---|---|---|---|
-| **L1a 机械归并** | 按路径聚成应用/组件；「按软件看机器」「按机器看软件」两个视图（名字来自路径，**无版本**） | **网关** | 清单是**集合视图**问题，网关有台账 + 全部事实 → 天生能做；而且不接中心的部署也要有清单（「离线自足」，`agent-purpose-inference.md` §7） | **可立即开工** |
+| **L1a 机械归并** | 按路径聚成应用/组件；「按软件看机器」「按机器看软件」两个视图（名字来自路径，**无版本**）。模型 `Control.Agent.Inventory`：`AgentSoftwareEntry` / `SoftwareEntryKind`（`App`｜`Binary`）/ `AgentSoftwareInventory` / `SoftwareHoldings`；派生表 `agent_software_inventory`，派生步 `DeriveSoftwareInventory` | **网关** | 清单是**集合视图**问题，网关有台账 + 全部事实 → 天生能做；而且不接中心的部署也要有清单（「离线自足」，`agent-purpose-inference.md` §7） | **已落地** |
 | **L1b 识别** | 软件名 + 版本 + vendor（macOS 读 `Info.plist` / `pkgutil`；Linux 读 `/var/lib/dpkg/status`、`rpm -q`） | **采集侧（agentd）** | **网关读不到目标机器上的文件** —— 识别必须在有文件的那一端。这是**探针工作**，不是算力/位置问题 | 缺（同 `B118`/`B119`） |
 | **L2 归一化 + 漏洞关联** | CPE / purl 映射、CVE 挂载 | 中心 | KB 大且**高频变**（漏洞情报天天变）→ 不能下发到 N 台网关：**不是算力问题，是策展数据的分发成本** | 未做 |
 | **L3 长历史 + 明细** | 软件何时出现/消失、原文快照 | 中心（**不在网关库**） | 追加写 + 大表，与网关状态库访问模式相反（§8.1） | 未做 |
 
 **所以「在网关算清楚」是可行的，但“算清楚”的最后一段卡在采集侧，不在网关。**
 
-**L1a 的可行性核算**（实测：仅用现有摘要 —— 627 条可执行标识、包 0、端口 0 —— 机械聚类今天就能出 **15 个 `.app` 应用 + 路径前缀分布**）：
+**L1a 的可行性核算**（当初实测：仅用现有摘要 —— 627 条可执行标识、包 0、端口 0 —— 机械聚类就能出 **15 个 `.app` 应用 + 路径前缀分布**；现已按此落地）：
 
-- 表形状：`(agent_id, software_key, path, source)`。每台 200~2000 行 → 1000 台 20 万~200 万行；行小 + 索引，SQLite 放得下（现库 256 KB）
+- 表形状：`agent_software_inventory`（`(agent_id, software_key, name, kind, matched_rule, path, received_at)`，主键 `(agent_id, path)`）。每台 200~2000 行 → 1000 台 20 万~200 万行；行小 + 索引，SQLite 放得下（现库 256 KB）
 - 派生而非新协议：事实入库时**覆盖式重建**这台机器的行（与摘要同语义），**不记历史**
 - 查询：「哪些机器装了 Firefox」从「扫 N 份 JSON」变成**一条索引查询**
-- 实现注意：**别** per-path 调 `dpkg -S`（627 次子进程）；一次性读 `/var/lib/dpkg/status` 建索引
+- 实现注意（属 L1b，采集侧）：**别** per-path 调 `dpkg -S`（627 次子进程）；一次性读 `/var/lib/dpkg/status` 建索引
 - **不要**把 `agent_fact_summary` 改成 append-only 来“存清单历史”
 
 **L1a 做不到什么**（别指望，写清楚免得验收时才发现）：
