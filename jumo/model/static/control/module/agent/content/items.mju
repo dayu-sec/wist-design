@@ -46,7 +46,9 @@ struct CollectionUnit {
   rule_ref: String
   // none | root | fda
   requires_privilege: String
-  // active | draft | deprecated（draft = 面已定、规则未就绪）
+  // **规则就绪度**（运行时能不能真采到）：active 规则已就绪、能落数据面 |
+  // draft 面已定、规则未就绪 | deprecated。
+  // 与「策展成熟度」分开：包/模板的 status 是人定的成熟度，**不**由本字段决定。
   status: String
 }
 
@@ -108,7 +110,7 @@ struct ContentPack {
   // 引用采集目录的 unit_id（可跨能力面）。
   unit_refs: List<String>
   catalog_version: Int
-  // draft | active | deprecated
+  // **策展成熟度**（人定）：draft | active | deprecated；与单元的规则就绪度无关。
   status: String
   curated_by: String
   curated_at: DateTime
@@ -160,10 +162,35 @@ struct WorkTemplate {
   catalog_version: Int
   // 模板自身版本：组成变化时 +1；已授权的工作不追改（要改走新提案 + 审定）。
   template_version: Int
-  // draft | active | deprecated
+  // **策展成熟度**（人定）：draft | active | deprecated。
+  // 它不是授权闸门 —— 闸门是**面就绪度**（见 `FamilyReadiness`）：未就绪的面不展开成工作。
   status: String
   curated_by: String
   curated_at: DateTime
+}
+
+// 一个采集面在某平台上的就绪度（**派生**自该面单元的规则就绪度）。
+//
+// 为什么需要它：就绪度现在被 `status` 一字段背了两个含义（策展成熟度 + 规则就绪度），
+// 又把单元级就绪度整块往上传成模板二值（“引用到 draft 单元则整体不能 active”）——
+// 结果是一个面就绪也能采的面被全盘封死。拆开后：
+//   模板/包的 status = 策展成熟度（人定）；授权闸门 = 本结构（面就绪度）。
+// 授权按面展开：**就绪的面才展开成工作**；未就绪的面不展开，其单元进
+// SelectionBasis.excluded_units（reason_code = rule_not_ready）。
+// 规则落地后**无需重新策展**：下一次展开/刷新自动启用该面 —— 这就是「部分可用 / 渐进启用」。
+struct FamilyReadiness {
+  meta {
+    label zh "采集面就绪度"
+    label en "Family Readiness"
+    summary zh "某采集面在某平台上的规则就绪度（派生）：该面有多少 active 单元与总数，决定这个面能否展开成工作。"
+    tags "control", "collection", "readiness"
+  }
+
+  family: CollectionFamily
+  platform: String
+  // 该面上 **规则已就绪** 的单元数（`status = active`）。
+  active_units: Int
+  total_units: Int
 }
 
 // 一条事实依据：回答“凭什么选/不选”。
@@ -192,7 +219,7 @@ struct SelectionExclusion {
   }
 
   unit_id: String
-  // match_unsatisfied | platform_mismatch | privilege_missing | excluded_by_human
+  // match_unsatisfied | platform_mismatch | privilege_missing | rule_not_ready | excluded_by_human
   reason_code: String
   // match_unsatisfied 时指出是哪条条件（如 installed:redis-server）
   condition: String?

@@ -9,7 +9,7 @@
 #   match：装了什么/跑了什么才采；空 = 平台基线必采
 #   rule_ref：数据面 rule/oml 标识；空 = 规则未就绪（status 必然是 draft）
 #   requires_privilege：none | root | fda
-#   status：active（规则已就绪）| draft（面已定、规则未就绪）| deprecated
+#   status：**规则就绪度** —— active（规则已就绪、能落数据面）| draft（面已定、规则未就绪）| deprecated
 
 catalog_version = 1
 origin = "Gateway"
