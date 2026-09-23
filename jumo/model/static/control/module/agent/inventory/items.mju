@@ -1,0 +1,97 @@
+// Module: AgentInventory — L1a 机械资产清单（事实摘要的投影）
+
+// 一条清单行：一条可执行路径归并后的结果。
+//
+// `software_key` 是**机械聚类键**，不是软件身份：`.app` 包归到包路径，其余归到自身路径。
+// **没有版本列**：版本与 vendor 要读目标机器上的文件，网关读不到 —— 那是采集侧的探针工作（L1b）。
+struct AgentSoftwareEntry {
+  meta {
+    label zh "软件清单条目"
+    label en "Agent Software Entry"
+    summary zh "一台机器上的一条软件清单行：可执行路径归并后的聚类键、展示名、命中规则与路径。"
+    tags "control", "agentd", "inventory"
+  }
+
+  agent_id: String
+  // 机械聚类键：`/Applications/Firefox.app`，或某条二进制路径本身。
+  software_key: String
+  // 展示名：`.app` 包名去掉后缀，否则路径最后一段（Linux 侧 `comm` 是裸名时即原串）。
+  name: String
+  kind: SoftwareEntryKind
+  // 命中的归并规则，回答「这个名字是怎么来的」。
+  matched_rule: String
+  path: String
+  received_at: DateTime
+}
+
+// 归并规则只有两条：对运维少一点猜测，就少一点误导。
+variant SoftwareEntryKind {
+  meta {
+    label zh "清单条目类型"
+    label en "Software Entry Kind"
+    summary zh "app（macOS 应用包，取最外层 `.app`）或 binary（其余可执行路径）。"
+    tags "control", "agentd", "inventory"
+  }
+
+  App
+  Binary
+}
+
+// 「按机器看软件」：一台机器的清单（覆盖式，一台一套）。
+// agent 存在但没上报过清单 = 空清单 + 计数 0 —— 与「未知 agent」必须能区分。
+struct AgentSoftwareInventory {
+  meta {
+    label zh "Agent 软件清单视图"
+    label en "Agent Software Inventory View"
+    summary zh "管理面看某台机器的软件清单：可执行路径条数、其中 app 行数，以及逐条清单行。"
+    tags "control", "inventory", "view", "admin"
+  }
+
+  unique agent_id: String
+  paths: Int
+  apps: Int
+  entries: List<AgentSoftwareEntry>
+  generated_at: DateTime
+}
+
+// 持有某个软件的一台机器。只给 agent_id 与 path：主机名/状态属于机器台账，页面手上就有。
+struct SoftwareHolder {
+  meta {
+    label zh "软件持有机器"
+    label en "Software Holder"
+    tags "control", "inventory"
+  }
+
+  agent_id: String
+  path: String
+}
+
+// 「按软件看机器」：一个聚类键的机队聚合。
+struct SoftwareHolding {
+  meta {
+    label zh "软件持有情况"
+    label en "Software Holding"
+    summary zh "一个软件聚类键在机队里的持有情况：哪些机器装了、各在哪条路径。"
+    tags "control", "inventory"
+  }
+
+  software_key: String
+  name: String
+  kind: SoftwareEntryKind
+  agent_count: Int
+  holders: List<SoftwareHolder>
+}
+
+// 「按软件看机器」的返回：受 limit 约束取前 N 个聚类键，truncated 表示是否还有更多。
+struct SoftwareHoldings {
+  meta {
+    label zh "软件持有清单视图"
+    label en "Software Holdings View"
+    summary zh "按软件聚合的机队视图：受 limit 约束返回前 N 个聚类键，truncated 表示是否还有更多。"
+    tags "control", "inventory", "view", "admin"
+  }
+
+  truncated: Boolean
+  software: List<SoftwareHolding>
+  generated_at: DateTime
+}

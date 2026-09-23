@@ -156,6 +156,7 @@ usecase IngestAgentFactSummary {
   actor Control.Agentd
   trigger Reporting.ReportAgentFactSummary
   outcome Control.AgentFactSummary
+  outcome Control.AgentSoftwareEntry
   outcome Control.PurposeSuggestion
   flow Reporting.IngestAgentFactSummaryFlow
 }
@@ -200,4 +201,32 @@ usecase ViewAgentPurpose {
   actor Control.AdminOperator
   trigger Control.AdminViewAgentPurpose
   outcome Control.AgentPurposeView
+}
+
+// 查看 Agent 软件清单（按机器看软件）
+usecase ViewAgentSoftware {
+  meta {
+    label zh "查看 Agent 软件清单"
+    label en "View Agent Software"
+    summary zh "管理员按机器查看从事实摘要机械归并出的软件清单（可执行路径 → 聚类键 + 展示名）；未知 agent 回 404，有 agent 但没上报过清单则为空清单。"
+    tags "agent-inventory", "software", "admin", "view"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminViewAgentSoftware
+  outcome Control.AgentSoftwareInventory
+}
+
+// 按软件看机器（机队聚合）
+usecase ViewSoftwareHoldings {
+  meta {
+    label zh "按软件看机器"
+    label en "View Software Holdings"
+    summary zh "管理员按软件聚类键查看机队持有情况：哪些机器装了、各在哪条路径；受 limit 约束返回前 N 个聚类键。"
+    tags "agent-inventory", "software", "admin", "view"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminViewSoftwareHoldings
+  outcome Control.SoftwareHoldings
 }

@@ -80,14 +80,14 @@ verify AgentStatusReportVerified for flow AgentStatusReportFlow {
   }
 }
 
-// 事情摘要→入库→推断，一条流。
-// 为什么“算建议”是这一步而不是另一个用例：事实变了就要重算，两者永远同序、无独立触发点；
+// 事实摘要→入库→派生清单→推断，一条流。
+// 为什么派生清单与推断都是同一条流里的步而不是独立用例：事实变了才做，三者永远同序、无独立触发点；
 // 将来规则表可热变、需要“按新规则重算存量”时再拆出独立流程。
 flow IngestAgentFactSummaryFlow {
   meta {
-    label zh "接收事实摘要并推断用途"
-    label en "Ingest Fact Summary and Infer Agent Purpose"
-    summary zh "网关收到 agentd 的事实摘要：用 content_digest（网关自算）幂等入库（覆盖式，一台一条），再按该机器平台的规则表算出用途建议与逐条依据。内容未变时只刷留痕、不重算。"
+    label zh "接收事实摘要、派生清单并推断用途"
+    label en "Ingest Fact Summary, Derive Inventory and Infer Agent Purpose"
+    summary zh "网关收到 agentd 的事实摘要：用 content_digest（网关自算）幂等入库（覆盖式，一台一条），再机械归并出软件清单，并按该机器平台的规则表算出用途建议与逐条依据。内容未变时只刷留痕、不重算。"
     tags "reporting", "agent-fact", "purpose", "ingest"
   }
 
@@ -98,6 +98,7 @@ flow IngestAgentFactSummaryFlow {
   depends Control.PurposeRuleSet
 
   creates Control.AgentFactSummary
+  creates Control.AgentSoftwareEntry
   creates Control.PurposeSignal
   creates Control.PurposeSuggestion
 
@@ -115,6 +116,22 @@ flow IngestAgentFactSummaryFlow {
       process_executables = ReportAgentFactSummary.process_executables
       packages = ReportAgentFactSummary.packages
       listen_ports = ReportAgentFactSummary.listen_ports
+      received_at = ReportAgentFactSummary.reported_at
+    }
+    next DeriveSoftwareInventory
+  }
+
+  // 机械归并：把可执行标识集合投影成清单行（按 agent 覆盖式重建）。
+  // 只归并（路径 → 聚类键 + 展示名）、不识别 —— 识别要读目标机器上的文件，属采集侧（L1b）。
+  // 与推断同在内容变化时发生：内容没变就没这一步，清单不重写。
+  step DeriveSoftwareInventory {
+    create Control.AgentSoftwareEntry {
+      agent_id = ReportAgentFactSummary.agent_id
+      software_key = "/Applications/Xcode.app"
+      name = "Xcode"
+      kind = App
+      matched_rule = "macos-app-bundle"
+      path = "/Applications/Xcode.app/Contents/MacOS/Xcode"
       received_at = ReportAgentFactSummary.reported_at
     }
     next InferPurpose
@@ -165,5 +182,8 @@ verify AgentFactSummaryIngested for flow IngestAgentFactSummaryFlow {
     Control.AgentFactSummary.process_count == 906
     Control.PurposeSuggestion.confidence == 90
     Control.PurposeSuggestion.rule_set_id == "macos-v1"
+    Control.AgentSoftwareEntry.agent_id == "agent-001"
+    Control.AgentSoftwareEntry.software_key == "/Applications/Xcode.app"
+    Control.AgentSoftwareEntry.matched_rule == "macos-app-bundle"
   }
 }

@@ -58,6 +58,17 @@ message<command> AdminViewAgentPurpose = OperatorRequest {
   agent_id: String
 }
 
+// 查看某台 Agent 的软件清单（按机器看软件）：从事实摘要机械归并出的条目。
+// 未知 agent 回 404；有 agent 但没上报过清单 = 200 + 空清单 + 计数 0。
+message<command> AdminViewAgentSoftware = OperatorRequest {
+  agent_id: String
+}
+
+// 按软件看机器：把机队里同一聚类键的持有情况聚合起来，受 limit 约束。
+message<command> AdminViewSoftwareHoldings = OperatorRequest {
+  limit: Int?
+}
+
 // 授权或更新某 Agent 的工作：
 //   work_kind = Standing → 写期望版本（plan_version、spec），无自然结束；
 //   work_kind = OneShot  → 提交一件有期限的活（scheduled_at / deadline_at / timeout_seconds）。
@@ -241,6 +252,16 @@ interface WistGatewayManagementInterface {
   entry AdminViewAgentPurpose {
     actor AdminOperator
     output AgentPurposeView
+  }
+
+  entry AdminViewAgentSoftware {
+    actor AdminOperator
+    output AgentSoftwareInventory
+  }
+
+  entry AdminViewSoftwareHoldings {
+    actor AdminOperator
+    output SoftwareHoldings
   }
 
   entry AdminViewDiscoveryPolicies {

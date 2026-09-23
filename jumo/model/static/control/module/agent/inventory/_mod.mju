@@ -1,0 +1,26 @@
+// Control.Agent.Inventory 有界上下文：从事实摘要派生的「这台机器上有什么」（L1a 机械清单）。
+//
+// 只做**机械**归并（路径 → 聚类键 + 展示名），**不做识别**：软件名/版本/vendor 要读
+// 目标机器上的文件（macOS `Info.plist`、Linux `/var/lib/dpkg/status`），网关读不到 ——
+// 那是采集侧（agentd）的探针工作（L1b）。
+//
+// 为什么机械归并放网关：网关持 Agent 台账并收全部机器的事实，天然是机队聚合点；
+// 而且「网关不接中心时仍完全可用」是架构原则 —— 清单只在中心算，等于把能力绑死在中心。
+// 归一化到 CPE/purl 与漏洞关联才属中心（L2）。
+//
+// 与 Agent.Purpose 的分工：两者读同一份事实摘要，但回答不同问题 ——
+// Purpose 答「这台机器干什么用」，Inventory 答「装了哪些软件」。互不依赖。
+//
+// 它是**派生投影**，不是新的事实：每次内容变化时按 agent 覆盖式重建，不记历史
+// （要历史是中心/事件通道的事），随时可由摘要重算。
+
+module<entity> Agent.Inventory {
+  meta {
+    label zh "Agent 软件清单"
+    label en "Agent Software Inventory"
+    summary zh "从事实摘要机械归并出的软件清单（按可执行路径聚类，无版本）：按机器看软件、按软件看机器。只归并、不识别 —— 识别属采集侧。"
+    tags "control", "agentd", "inventory"
+  }
+
+  layer Domain
+}

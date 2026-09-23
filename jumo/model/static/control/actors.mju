@@ -58,6 +58,8 @@ actor AdminOperator {
   can AdminPauseWork
   can AdminResumeWork
   can AdminViewAgentPurpose
+  can AdminViewAgentSoftware
+  can AdminViewSoftwareHoldings
   can AdminViewDiscoveryPolicies
 }
 

@@ -197,7 +197,7 @@
           "name": "IngestAgentFactsFromDataPlane",
           "route": "POST /api/v1/ingest/agent-facts（内部明文端点，仅绑环回；由数据面 sink 投递）",
           "handler": "wist-gateway:ingest.rs:ingest_agent_facts",
-          "covers": ["StoreFactSummary", "InferPurpose"]
+          "covers": ["StoreFactSummary", "DeriveSoftwareInventory", "InferPurpose"]
         }
       ]
     },
@@ -215,6 +215,33 @@
       "gaps": [
         "只有读：人工判定（AgentClassification）的写入端点未实现，出参 classification 恒为 null",
         "建议过期靠读取路径重算（幂等）；没有独立的管理面『重新推断』入口"
+      ]
+    },
+    {
+      "name": "System.WistGateway.ViewAgentSoftware",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Reporting.IngestAgentFactSummaryFlow",
+      "entries": [
+        {
+          "name": "AdminViewAgentSoftware",
+          "route": "GET /api/v1/admin/agents/:agent_id/software",
+          "handler": "wist-gateway:software_ops.rs:view_agent_software",
+          "covers": ["DeriveSoftwareInventory"]
+        }
+      ]
+    },
+    {
+      "name": "System.WistGateway.ViewSoftwareHoldings",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Reporting.IngestAgentFactSummaryFlow",
+      "entries": [
+        {
+          "name": "AdminViewSoftwareHoldings",
+          "route": "GET /api/v1/admin/software",
+          "handler": "wist-gateway:software_ops.rs:view_software_holdings"
+        }
       ]
     },
     {

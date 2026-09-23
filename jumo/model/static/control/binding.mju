@@ -108,6 +108,23 @@ bind WistGatewayManagementInterface {
     status AgentPurposeView 200
   }
 
+  // 按机器看软件：从事实摘要机械归并出的清单。未知 agent 回 404，
+  // 「有 agent 但没上报过清单」= 200 + 空清单 + 计数 0（两者必须能区分）。
+  entry AdminViewAgentSoftware {
+    route GET "/api/v1/admin/agents/{agent_id}/software"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status AgentSoftwareInventory 200
+  }
+
+  // 按软件看机器：机队聚合，受 limit 约束。
+  entry AdminViewSoftwareHoldings {
+    route GET "/api/v1/admin/software"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status SoftwareHoldings 200
+  }
+
   // 看当前生效的发现方向策略表：表是平台策展数据，运维需要能看到“现在生效的是哪一版”。
   entry AdminViewDiscoveryPolicies {
     route GET "/api/v1/admin/discovery-policies"
