@@ -204,7 +204,7 @@
     {
       "name": "System.WistGateway.ViewAgentPurpose",
       "status": "Partial",
-      "progress": 80,
+      "progress": 90,
       "entries": [
         {
           "name": "AdminViewAgentPurpose",
@@ -213,8 +213,34 @@
         }
       ],
       "gaps": [
-        "只有读：人工判定（AgentClassification）的写入端点未实现，出参 classification 恒为 null",
         "建议过期靠读取路径重算（幂等）；没有独立的管理面『重新推断』入口"
+      ]
+    },
+    {
+      "name": "System.WistGateway.ClassifyAgentPurpose",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.AdminClassifyAgentFlow",
+      "entries": [
+        {
+          "name": "AdminClassifyAgent",
+          "route": "POST /api/v1/admin/agents/:agent_id/classification",
+          "handler": "wist-gateway:admin_ops.rs:classify_agent",
+          "covers": ["AgentClassification"]
+        }
+      ]
+    },
+    {
+      "name": "System.WistGateway.ViewPurposeCoverage",
+      "status": "Complete",
+      "progress": 100,
+      "entries": [
+        {
+          "name": "AdminViewPurposeCoverage",
+          "route": "GET /api/v1/admin/agents/purpose-coverage",
+          "handler": "wist-gateway:admin_ops.rs:view_purpose_coverage",
+          "covers": ["FleetPurposeCoverage"]
+        }
       ]
     },
     {
