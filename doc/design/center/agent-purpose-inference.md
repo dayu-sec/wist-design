@@ -132,3 +132,4 @@ agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
 | 4 | 确定的资源画像（核数/内存/磁盘/GPU）+ macOS `machine_id`/`ip_addresses` | **已记需求 `B118`** |
 | 5 | 中心侧模型推断（`method = model`，需建议表支持多条 + `model_version`） | 待做 |
 | 6 | 人工判定的**写入**端点 | **模型已补**（`AdminClassifyAgent` + 绑定 `POST /api/v1/admin/agents/{agent_id}/classification` + 用例 `ClassifyAgentPurpose`）；**代码待实现** |
+| 7 | 机队覆盖度（各类别台数 + 未归类） | **模型已补**（`FleetPurposeCoverage` + `AdminViewPurposeCoverage` + 绑定 `GET /api/v1/admin/agents/purpose-coverage`）；**代码待实现** |

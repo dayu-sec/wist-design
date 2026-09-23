@@ -17,6 +17,37 @@ variant CatalogOrigin {
   Gateway
 }
 
+// 采集来源：单元“从哪读、多久读一次”。原先是一个自由文本 `spec_fragment`（前缀迷你语法）：
+// 无法校验、也无法把多来源拆开。现在结构化成 kind + target，**一个来源一条**。
+// 一个单元可有多来源（如“wifi 日志文件 + 统一日志 predicate”），故是 List。
+variant CollectionSourceKind {
+  meta {
+    label zh "采集来源类型"
+    label en "Collection Source Kind"
+    summary zh "FileGlob（可直接 tail 的路径/通配）| Exporter（需周期导出器）| UnifiedLogPredicate（统一日志 predicate）| MetricInterval（指标间隔）。"
+    tags "control", "collection", "source"
+  }
+
+  FileGlob
+  Exporter
+  UnifiedLogPredicate
+  MetricInterval
+}
+
+struct CollectionSource {
+  meta {
+    label zh "采集来源"
+    label en "Collection Source"
+    summary zh "单元的一个采集来源：类型 + 取值（路径/导出器名/predicate/间隔）。"
+    tags "control", "collection", "source"
+  }
+
+  kind: CollectionSourceKind
+  // 按 kind 取值：FileGlob → 路径/通配；Exporter → 导出器名（可带参数）；
+  // UnifiedLogPredicate → predicate；MetricInterval → 间隔（如 `15s`）。
+  target: String
+}
+
 struct CollectionUnit {
   meta {
     label zh "采集单元"
@@ -42,8 +73,8 @@ struct CollectionUnit {
   // 而是“无法判定” —— 不得当成“没装”（同“空 = 没采不是没装”的原则）。
   // 三态分别落 SelectionBasis：选中 / excluded(match_unsatisfied) / excluded(fact_not_collected)。
   match: String
-  // 采集参数片段（路径/过滤/间隔），写进 spec 时直接拼装。
-  spec_fragment: String
+  // 采集来源（一个单元可有多条；原先是一个自由文本 `spec_fragment`）。
+  sources: List<CollectionSource>
   // 数据面 rule/oml 标识（如 agent_uplink/metrics_frame）：保证“采得到 = 解析得了”。
   rule_ref: String
   // none | root | fda

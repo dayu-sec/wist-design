@@ -217,6 +217,20 @@ usecase ClassifyAgentPurpose {
   outcome Control.AgentClassification
 }
 
+// 查看机队用途覆盖度（各类别台数 + 未归类）
+usecase ViewPurposeCoverage {
+  meta {
+    label zh "查看机队用途覆盖度"
+    label en "View Fleet Purpose Coverage"
+    summary zh "管理员查看机队按机器类别归类的覆盖度：总数 / 已归类 / 未归类，以及各类别台数。让『4 类覆盖多少』从断言变成一个可度量的数，也为是否要扩 MachineClass 提供基数。"
+    tags "agent-purpose", "coverage", "admin", "view"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminViewPurposeCoverage
+  outcome Control.FleetPurposeCoverage
+}
+
 // 查看 Agent 软件清单（按机器看软件）
 usecase ViewAgentSoftware {
   meta {

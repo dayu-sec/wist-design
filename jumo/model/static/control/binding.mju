@@ -116,6 +116,14 @@ bind WistGatewayManagementInterface {
     status AgentClassification 200
   }
 
+  // 机队用途覆盖度：各类别台数与未归类台数。
+  entry AdminViewPurposeCoverage {
+    route GET "/api/v1/admin/agents/purpose-coverage"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status FleetPurposeCoverage 200
+  }
+
   // 按机器看软件：从事实摘要机械归并出的清单。未知 agent 回 404，
   // 「有 agent 但没上报过清单」= 200 + 空清单 + 计数 0（两者必须能区分）。
   entry AdminViewAgentSoftware {

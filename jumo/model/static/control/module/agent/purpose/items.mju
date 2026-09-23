@@ -190,3 +190,36 @@ struct AgentPurposeView {
   classification: AgentClassification?
   generated_at: DateTime
 }
+
+// ── 机队覆盖度 ─────────────────────────────────────────────────
+// “4 类覆盖约 80%”不能凭空断言：覆盖率要**可度量**才有意义。
+// 这份视图把机队按判定结果数一遍，并单独列出**未归类**的机器 ——
+// “覆盖不到的那部分”从此是一个数，而不是一句估计。
+
+struct MachineClassCount {
+  meta {
+    label zh "机器类别计数"
+    label en "Machine Class Count"
+    tags "control", "purpose", "coverage"
+  }
+
+  machine_class: MachineClass
+  agent_count: Int
+}
+
+struct FleetPurposeCoverage {
+  meta {
+    label zh "机队用途覆盖度"
+    label en "Fleet Purpose Coverage"
+    summary zh "机队按机器类别归类的覆盖度：总数、已归类、未归类，以及各类别台数 —— 让『覆盖约 80%』从断言变成可度量的数。"
+    tags "control", "purpose", "coverage", "admin"
+  }
+
+  total_agents: Int
+  // 有人工判定（AgentClassification）的台数。
+  classified_agents: Int
+  // 既没有有效建议、也没有人工判定的机器（“覆盖不到的那部分”）。
+  unclassified_agents: Int
+  by_class: List<MachineClassCount>
+  generated_at: DateTime
+}

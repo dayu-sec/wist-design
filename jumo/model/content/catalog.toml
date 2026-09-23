@@ -1,12 +1,13 @@
 # 采集目录 v1 —— 内容数据（对应模型 Control.Agent.Content.CollectionCatalog）
 #
-# 字段值写法约定（loader 尚未实现，此处先固定写法，便于评审）：
-#   spec_fragment：
-#     glob:...          文件路径 / 通配，可直接 tail
-#     exporter:...      需周期导出器（二进制、DB、统一日志、审计链，不能直接 tail）
-#     predicate:...     统一日志 predicate
-#     interval:...      指标采集间隔
-#   match：装了什么/跑了什么才采；空 = 平台基线必采
+# 字段约定（loader 尚未实现，此处先固定**结构**，便于评审与校验）：
+#   sources：采集来源列表（结构化的 kind + target，**替代原先自由文本的 spec_fragment**）：
+#     kind = FileGlob            可直接 tail 的路径 / 通配
+#            Exporter            需周期导出器（二进制、DB、统一日志、审计链、dmesg，不能直接 tail）
+#            UnifiedLogPredicate 统一日志 predicate
+#            MetricInterval      指标采集间隔
+#     一个单元可有多来源；`glob:A|B` 这种在一个串里塞多路径的写法已拆成多条来源。
+#   match：装了什么/跑了什么才采；空 = 平台基线必采（三态求值，见模型 CollectionUnit.match）
 #   rule_ref：数据面 rule/oml 标识；空 = 规则未就绪（status 必然是 draft）
 #   requires_privilege：none | root | fda
 #   status：**规则就绪度** —— active（规则已就绪、能落数据面）| draft（面已定、规则未就绪）| deprecated
@@ -23,10 +24,13 @@ family = "LoginSession"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "exporter:last,lastb"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "Exporter"
+target = "last,lastb"
 
 [[units]]
 unit_id = "mac-privilege-exec"
@@ -34,10 +38,13 @@ family = "PrivilegeExecution"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "exporter:praudit(/var/audit)"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "Exporter"
+target = "praudit(/var/audit)"
 
 [[units]]
 unit_id = "mac-software-change"
@@ -45,10 +52,13 @@ family = "SoftwareChange"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "glob:/var/log/install.log"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/install.log"
 
 [[units]]
 unit_id = "mac-launchd-service"
@@ -56,10 +66,13 @@ family = "ServiceLifecycle"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "glob:/var/log/com.apple.xpc.launchd/launchd.log*"
 rule_ref = "mac-drafts/launchd-service"
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/com.apple.xpc.launchd/launchd.log*"
 
 [[units]]
 unit_id = "mac-crash-panic"
@@ -67,10 +80,17 @@ family = "CrashPanic"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "glob:/Library/Logs/DiagnosticReports/*.ips|*.panic"
 rule_ref = "mac-drafts/crash-panic"
 requires_privilege = "fda"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/Library/Logs/DiagnosticReports/*.ips"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/Library/Logs/DiagnosticReports/*.panic"
 
 [[units]]
 unit_id = "mac-network-wifi"
@@ -78,10 +98,17 @@ family = "NetworkFirewall"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "glob:/var/log/wifi.log*|predicate:com.apple.alf"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/wifi.log*"
+
+[[units.sources]]
+kind = "UnifiedLogPredicate"
+target = "com.apple.alf"
 
 [[units]]
 unit_id = "mac-privacy-tcc"
@@ -89,10 +116,13 @@ family = "PrivacyTcc"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "exporter:sqlite-snapshot(TCC.db)"
 rule_ref = ""
 requires_privilege = "fda"
 status = "draft"
+
+[[units.sources]]
+kind = "Exporter"
+target = "sqlite-snapshot(TCC.db)"
 
 [[units]]
 unit_id = "mac-gatekeeper"
@@ -100,10 +130,13 @@ family = "GatekeeperQuarantine"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "predicate:syspolicyd"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "UnifiedLogPredicate"
+target = "syspolicyd"
 
 [[units]]
 unit_id = "mac-reboot-power"
@@ -111,10 +144,13 @@ family = "RebootPower"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "glob:/var/log/shutdown_monitor.log"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/shutdown_monitor.log"
 
 [[units]]
 unit_id = "mac-misc-system"
@@ -122,10 +158,21 @@ family = "MiscSystem"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-spec_fragment = "glob:/var/log/fsck_apfs*|/var/log/cups/*|/var/log/apache2/*"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/fsck_apfs*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/cups/*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/apache2/*"
 
 [[units]]
 unit_id = "mac-dev-toolchain"
@@ -133,10 +180,17 @@ family = "DevToolchain"
 capability = "collect_logs"
 platform = "macos"
 match = "installed:homebrew|xcode|orbstack"
-spec_fragment = "glob:~/Library/Logs/Homebrew/*|~/Library/Developer/Xcode/DerivedData/*/Logs/*"
 rule_ref = ""
 requires_privilege = "none"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "~/Library/Logs/Homebrew/*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "~/Library/Developer/Xcode/DerivedData/*/Logs/*"
 
 [[units]]
 unit_id = "mac-host-metrics"
@@ -144,10 +198,13 @@ family = "HostMetrics"
 capability = "collect_metrics"
 platform = "macos"
 match = ""
-spec_fragment = "interval:15s"
 rule_ref = "agent_uplink"
 requires_privilege = "none"
 status = "active"
+
+[[units.sources]]
+kind = "MetricInterval"
+target = "15s"
 
 # ── Linux ─────────────────────────────────────────────────────────
 
@@ -157,10 +214,21 @@ family = "LoginSession"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "glob:/var/log/auth.log|/var/log/secure|/var/log/wtmp"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/auth.log"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/secure"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/wtmp"
 
 [[units]]
 unit_id = "linux-privilege-exec"
@@ -169,10 +237,17 @@ capability = "collect_logs"
 platform = "linux"
 match = ""
 # sudo 触发行同时落在 secure/auth.log（由 linux-auth-session 采），这里只收命令级审计
-spec_fragment = "glob:/var/log/sudo.log|exporter:auditd-execve"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/sudo.log"
+
+[[units.sources]]
+kind = "Exporter"
+target = "auditd-execve"
 
 [[units]]
 unit_id = "linux-software-change"
@@ -180,10 +255,25 @@ family = "SoftwareChange"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "glob:/var/log/dpkg.log|/var/log/apt/history.log|/var/log/dnf.log|/var/log/yum.log"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/dpkg.log"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/apt/history.log"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/dnf.log"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/yum.log"
 
 [[units]]
 unit_id = "linux-service-lifecycle"
@@ -191,10 +281,13 @@ family = "ServiceLifecycle"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "exporter:journalctl-unit"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "Exporter"
+target = "journalctl-unit"
 
 [[units]]
 unit_id = "linux-crash-panic"
@@ -202,10 +295,21 @@ family = "CrashPanic"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "glob:/var/lib/systemd/coredump/*|/var/crash/*|dmesg:panic"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/lib/systemd/coredump/*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/crash/*"
+
+[[units.sources]]
+kind = "Exporter"
+target = "dmesg:panic"
 
 [[units]]
 unit_id = "linux-network-firewall"
@@ -213,10 +317,17 @@ family = "NetworkFirewall"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "exporter:nft-ruleset|iptables-save"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "Exporter"
+target = "nft-ruleset"
+
+[[units.sources]]
+kind = "Exporter"
+target = "iptables-save"
 
 [[units]]
 unit_id = "linux-reboot-power"
@@ -224,10 +335,17 @@ family = "RebootPower"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "exporter:journalctl-shutdown|last-reboot"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "Exporter"
+target = "journalctl-shutdown"
+
+[[units.sources]]
+kind = "Exporter"
+target = "last-reboot"
 
 [[units]]
 unit_id = "linux-misc-system"
@@ -235,10 +353,17 @@ family = "MiscSystem"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "glob:/var/log/cron|/var/log/alternatives.log"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/cron"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/alternatives.log"
 
 [[units]]
 unit_id = "linux-kernel-system"
@@ -246,10 +371,17 @@ family = "KernelSystem"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "glob:/var/log/kern.log|/var/log/messages"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/kern.log"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/messages"
 
 [[units]]
 unit_id = "linux-db-service"
@@ -257,10 +389,25 @@ family = "DatabaseService"
 capability = "collect_logs"
 platform = "linux"
 match = "installed:postgresql|mysql|redis|mongodb"
-spec_fragment = "glob:/var/log/postgresql/*|/var/log/mysql/*|/var/log/redis/*|/var/log/mongodb/*"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/postgresql/*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/mysql/*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/redis/*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/mongodb/*"
 
 [[units]]
 unit_id = "linux-storage-health"
@@ -268,10 +415,17 @@ family = "StorageHealth"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "exporter:smartctl|glob:/var/log/fsck*"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "Exporter"
+target = "smartctl"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/fsck*"
 
 [[units]]
 unit_id = "linux-compute-workload"
@@ -279,10 +433,21 @@ family = "ComputeWorkload"
 capability = "collect_logs"
 platform = "linux"
 match = "installed:slurm|kubelet"
-spec_fragment = "glob:/var/log/slurm/*|/var/log/pods/*|dmesg:nvidia-xid"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/slurm/*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/pods/*"
+
+[[units.sources]]
+kind = "Exporter"
+target = "dmesg:nvidia-xid"
 
 [[units]]
 unit_id = "linux-backup-job"
@@ -290,10 +455,17 @@ family = "BackupJob"
 capability = "collect_logs"
 platform = "linux"
 match = "installed:borg|restic|rsync"
-spec_fragment = "glob:/var/log/borg/*|/var/log/restic/*"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/borg/*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/restic/*"
 
 [[units]]
 unit_id = "linux-network-service"
@@ -301,10 +473,17 @@ family = "NetworkService"
 capability = "collect_logs"
 platform = "linux"
 match = ""
-spec_fragment = "glob:/var/log/nginx/*|/var/log/samba/*"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/nginx/*"
+
+[[units.sources]]
+kind = "FileGlob"
+target = "/var/log/samba/*"
 
 [[units]]
 unit_id = "linux-host-metrics"
@@ -312,7 +491,10 @@ family = "HostMetrics"
 capability = "collect_metrics"
 platform = "linux"
 match = ""
-spec_fragment = "interval:15s"
 rule_ref = ""
 requires_privilege = "root"
 status = "draft"
+
+[[units.sources]]
+kind = "MetricInterval"
+target = "15s"

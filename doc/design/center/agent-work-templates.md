@@ -99,16 +99,22 @@ Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkl
 两件事必须一起排期：**补 Linux 采集设计文档 + 写规则**，否则 Linux 模板授权下去必然全是
 `default`/`residue` 杂音。
 
-## 5. 剩下的约 20%
+## 5. 覆盖度：从“约 80%”到可度量
 
-组合模型下，**“多属性机器”不再是缺口**：`K8s 节点 / GPU 训练机` 仍是 Linux 机器，
-由 `linux-workload` 包 + 单元 `match`（`installed:slurm|kubelet`、`device:gpu`）按**事实**命中，
-**不必新增 `MachineClass`**。真正没覆盖的是：
+原先“4 类覆盖约 80%”是**没有基数支撑的断言**。组合模型先把“多属性机器”从缺口里拿掉：
+`K8s 节点 / GPU 训练机` 仍是 Linux 机器，由 `linux-workload` 包 + 单元 `match`
+（`installed:slurm|kubelet`、`device:gpu`）按**事实**命中，不必新增 `MachineClass`。
+
+剩下的是两类**真**缺口，而且现在它们都能**数出来**（`FleetPurposeCoverage`：
+各类别台数 + 未归类台数，走 `GET /api/v1/admin/agents/purpose-coverage`）：
 
 | 缺什么 | 怎么补 |
 |---|---|
 | Windows 终端（整块**平台**缺失，目录里无 windows 单元） | 先补平台与单元，再加类别 |
 | 网络设备（非主机语义）、数据库专用机（已有独立指标规格） | 待定；可能不是“主机用途”问题 |
+
+**判据**：看 `by_class` 的分布与 `unclassified_agents`。若未归类占比可观，就是从数据里挑下一个
+`MachineClass` 的依据 —— 而不是拍一个“80%”。
 
 ## 6. 内容数据（TOML）
 
@@ -118,15 +124,17 @@ Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkl
 - `jumo/model/content/packs.toml`：内容包（平台基线 + 特性包，字段与 `ContentPack` 一一对应）
 - `jumo/model/content/templates.toml`：4 个模板（只带 `pack_refs`，字段与 `WorkTemplate` 一一对应）
 
-`spec_fragment` 的写法（`glob:` / `exporter:` / `predicate:` / `interval:`）是**待定约定**，
-loader 尚未实现；单元的 `rule_ref` 为空 = 规则未就绪，该单元的 `status` 必为 `draft`。
+单元的**采集来源**是结构化的 `sources: [{kind, target}]`（`FileGlob` / `Exporter` /
+`UnifiedLogPredicate` / `MetricInterval`），不再是自由文本 `spec_fragment` —— 一个来源一条，
+`glob:A|B` 这种一串多路径已拆并。loader 仍未实现（把 sources 编译成数据面输入）；`rule_ref`
+为空 = 解析规则未就绪，该单元 `status` 必为 `draft`。
 
 发现方向的**观测周期**是一份独立的策展数据：`jumo/model/content/aspect-policies.toml`
 （与用途规则表同一约定 —— 模型只留类型与字段语义，值留 `content/`），
 由网关装载校验后下发给 agentd（Host 900s / Process 300s / Package 1800s，含 `[min,max]` 与基线开关；
 链路见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) §6）。
 
-别与采集目录/模板 `spec_fragment` 里的 `interval:` 混为一谈：那个是**采集**节拍（工作 spec 层面），
+别与单元来源里的 `MetricInterval`（`target = "15s"`）混为一谈：那是**采集**节拍（工作 spec 层面），
 这里是**发现**方向的观测频率 —— 两者量级与归属都不同。
 
 网关侧待实现的校验：`pack_refs` 必须在 `packs.toml` 里全部解析、每个包的 `unit_refs` 必须能在其
@@ -203,7 +211,8 @@ loader 尚未实现；单元的 `rule_ref` 为空 = 规则未就绪，该单元�
 > **部分可用**：拆开“规则就绪度 / 策展成熟度”，闸门改为面就绪度（未就绪的面不展开）；
 > **目录版本**：多版并存 + 模板可滞后 + 已授权工作锁版；
 > **事实缺位**与“条件不满足”分开（三态）；
-> **权限面**从模板级改为**裁剪后**派生；**`MachineClass` 降为预设键**。
+> **权限面**从模板级改为**裁剪后**派生；**`MachineClass` 降为预设键**；
+> **来源结构化**（`spec_fragment` → `CollectionSource`）、**覆盖度可度量**（`FleetPurposeCoverage`）。
 
 | # | 不足 | 状态 |
 |---|---|---|
@@ -212,5 +221,5 @@ loader 尚未实现；单元的 `rule_ref` 为空 = 规则未就绪，该单元�
 | 3 | ~~`catalog_version` 单值**整版绑定** → 无新旧目录共存 / 模板逐个迁移 / 已授权锁旧版~~ | **已解决**：多版并存（`CollectionCatalog.superseded_by`）、模板可滞后、已授权工作锁版（`StandingWork.catalog_version`），见 §6.2 |
 | 4 | 上游无入口：类别来自 `AgentClassification`，其**写入端点未实现** | 见 `agent-purpose-inference.md` §9 |
 | 5 | 裁剪空转：`match` 依赖的 `installed`/`device`/`resource` 事实未采 | **设计已解决**（三态：`fact_not_collected` 与 `match_unsatisfied` 分开，见 §6.3）；**事实仍待采**：`B118`/`B119` |
-| 6 | `spec_fragment` 语法待定、loader 未实现 → “采得到 = 解析得了”仅靠 `rule_ref` 一个弱链接 | 待做 |
-| 7 | 覆盖假设未验证（“约 80%”无基数支撑） | 待验证 |
+| 6 | ~~`spec_fragment` 语法待定~~ | **设计已解决**：来源结构化为 `CollectionSource{kind, target}`（4 种来源类型），一串多路径已拆条；**loader 仍待实现**（把 sources 编译成数据面输入） |
+| 7 | ~~覆盖假设未验证（“约 80%”无基数支撑）~~ | **已解决**：`FleetPurposeCoverage`（各类别台数 + 未归类）+ `GET /api/v1/admin/agents/purpose-coverage`，覆盖度成为可度量的数（见 §5） |

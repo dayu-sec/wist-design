@@ -52,6 +52,10 @@ message<command> AdminViewAgentInstallPackageAddress = OperatorRequest {
 message<command> AdminViewDiscoveryPolicies = OperatorRequest {
 }
 
+// 查看机队用途覆盖度：各类别台数 + 未归类台数（让“覆盖多少”成为可度量的数）。
+message<command> AdminViewPurposeCoverage = OperatorRequest {
+}
+
 // 查看某台 Agent 的用途：事实摘要、网关推断建议（含逐条依据）、人工判定三者并列。
 // 推断可过期，判定留痕 —— 所以两者都回，不是只回一个“结论”。
 message<command> AdminViewAgentPurpose = OperatorRequest {
@@ -270,6 +274,11 @@ interface WistGatewayManagementInterface {
   entry AdminClassifyAgent {
     actor AdminOperator
     output AgentClassification
+  }
+
+  entry AdminViewPurposeCoverage {
+    actor AdminOperator
+    output FleetPurposeCoverage
   }
 
   entry AdminViewAgentSoftware {
