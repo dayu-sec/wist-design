@@ -68,13 +68,62 @@ struct CollectionCatalog {
   published_at: DateTime
 }
 
+// ── 内容包：可复用的单元组合（模板的积木）──────────────────────────
+// 为什么**不用「模板继承」**：机器类别之间是**交叉**关系 —— `LinuxCompute` 与 `LinuxData`
+// 各有专有面（作业调度 vs 数据库/备份），谁也不含谁。把内容集合的并集错记成类别的继承链，
+// 只会逼出一边用 `base`、一边逐条复制清单，基线一改就**静默漂移**（现实里 `linux-data`
+// 就是抄了 `linux-compute` 的单元）。正确的形状是**组合**：模板 = 平台基线包 ⊕ 若干特性包。
+// 类别（`MachineClass`）因此退化为「预设选哪几个包」的快捷方式，而不是继承的根。
+//
+// 内容包**不带门**：事实门（什么条件才采）仍在**单元**的 `match` 上 —— 一门在一处生效，
+// 避免两级门（包级 + 单元级）互相干扰、各自漏判。
+
+// 包的性质。
+variant PackKind {
+  meta {
+    label zh "内容包性质"
+    label en "Content Pack Kind"
+    summary zh "baseline（平台公共基线，所有类别都采）或 feature（按类别/事实叠加的专有集）。"
+    tags "control", "collection", "pack"
+  }
+
+  Baseline
+  Feature
+}
+
+struct ContentPack {
+  meta {
+    label zh "内容包"
+    label en "Content Pack"
+    summary zh "可复用的单元组合：平台基线或某类特性面的一组单元；模板由若干包叠加而成（组合，非继承）。"
+    tags "control", "collection", "pack"
+  }
+
+  // 形如 macos-base / macos-dev / linux-base / linux-workload / linux-datastore。
+  unique pack_id: String
+  platform: String
+  kind: PackKind
+  // 覆盖的采集面（= unit_refs 对应面的并集，供审计与覆盖度清点）。
+  families: List<CollectionFamily>
+  // 引用采集目录的 unit_id（可跨能力面）。
+  unit_refs: List<String>
+  catalog_version: Int
+  // draft | active | deprecated
+  status: String
+  curated_by: String
+  curated_at: DateTime
+}
+
 // ── 常驻工作模板：常见机器类别的开箱内容组合 ────────────────────────
-// 目录回答“能采什么”，模板回答“这类机器该采什么”。模板是人工策展 + 审定的结果，
-// 只**引用**某一版目录里的单元（unit_refs），不内联 spec —— 内容随目录走，避免两处漂移。
+// 目录回答“能采什么”，包回答“哪些单元常一起出现”，模板回答“这类机器该采什么”。
+// 模板是人工策展 + 审定的结果，只**引用内容包**（pack_refs），不内联 spec 也不列单元 ——
+// 公共集随基线包走、内容随目录走，避免两处漂移。
 // 一份工作 = 一个能力面（collect_logs / collect_metrics）；一个模板跨能力面，
 // 授权时按 capability_scope 展开成多份常驻工作。
 
 // 机器类别：开箱模板覆盖的 4 类机器。加类别 = 改模型（采集范围属于合规面，要走审定）。
+// 类别是**预设**（选哪几个包），不是继承的根；一台机器同时具备多种属性时，用
+// 「预设 + 单机 WorkProposal 叠加一个包」表达，不必为此新增类别。
 variant MachineClass {
   meta {
     label zh "机器类别"
@@ -93,25 +142,23 @@ struct WorkTemplate {
   meta {
     label zh "常驻工作模板"
     label en "Work Template"
-    summary zh "某类机器开箱即用的采集内容组合：引用某一版采集目录的单元，授权时展开成常驻工作的 spec。"
+    summary zh "某类机器开箱即用的采集内容组合：由平台基线包 ⊕ 若干特性包叠加而成，授权时展开成常驻工作的 spec。"
     tags "control", "collection", "template"
   }
 
   // macos-daily | macos-dev | linux-compute | linux-data
   unique template_id: String
+  // 预设键：这台机器归到该类时用本模板；多属性机器用「模板 + 单机提案」叠加。
   machine_class: MachineClass
-  // 覆盖的能力面：collect_logs / collect_metrics（= unit_refs 里单元能力的并集）。
+  platform: String
+  // 组成 = pack_refs 的并集（平台基线包 + 类别专有包；可叠加，**无继承链**）。
+  pack_refs: List<String>
+  // 覆盖的能力面：= 解析后单元能力的并集（**派生值**，装载时校验，不手写）。
   capability_scope: List<String>
-  // 引用采集目录的 unit_id（可跨能力面）；模板不内联 spec，避免与目录漂移。
-  unit_refs: List<String>
-  // 模板针对哪一版目录策展：目录换版后引用必须能重新解析。
+  // 模板针对哪一版目录（与各包的 catalog_version 一致）策展：换版后引用必须能重新解析。
   catalog_version: Int
-  // 模板自身版本：单元组合变化时 +1；已授权的工作不追改（要改走新提案 + 审定）。
+  // 模板自身版本：组成变化时 +1；已授权的工作不追改（要改走新提案 + 审定）。
   template_version: Int
-  // 基线模板：本模板 = 基线模板的全部单元 + 自己的 unit_refs（如 macos-dev 以 macos-daily 为基线）；独立模板为空。
-  base_template_id: String?
-  // 跑通这套内容所需的最小权限集合：单元 requires_privilege 去掉 none 后的并集（none / root / fda）
-  required_privileges: List<String>
   // draft | active | deprecated
   status: String
   curated_by: String
@@ -170,6 +217,9 @@ struct SelectionBasis {
   facts_used: List<SelectionFact>
   selected_units: List<String>
   excluded_units: List<SelectionExclusion>
+  // 裁剪后单元的权限并集（none/root/fda）—— 在网关展开时**派生**，不写进模板：
+  // 权限面跟着「这台机器实际选中的单元」走，而不是被模板里某个高特权单元把整机拉高。
+  required_privileges: List<String>
   decided_by: String
   decided_at: DateTime
 }

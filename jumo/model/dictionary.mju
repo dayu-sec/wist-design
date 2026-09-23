@@ -59,7 +59,9 @@ lexicon {
   term SelectionBasis { aliases "SelectionReason", "SelectionRecord" }
 
   // 开箱模板：把“这类机器该采什么”固化成可审定的单元组合（目录定“能采什么”）。
+  // 模板 = 平台基线包 ⊕ 特性包（**组合，非继承**）；类别只是预设键。
   term WorkTemplate { aliases "StandingWorkTemplate", "CollectionTemplate", "AgentWorkTemplate" }
+  term ContentPack { aliases "CollectionPack", "UnitPack", "ContentBundle" }
   term MachineClass { aliases "MachineType", "HostMachineClass" }
 
   // ── 用途识别（域 Agent.Purpose）──────────────────────────────────

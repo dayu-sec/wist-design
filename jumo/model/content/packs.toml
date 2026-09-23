@@ -1,0 +1,139 @@
+# 内容包 —— 内容数据（对应模型 Control.Agent.Content.ContentPack）
+#
+# 包 = 可复用的**单元组合**：把“常一起出现”的单元收成一块积木，模板由若干包**叠加**而成。
+# 为什么不用「模板继承」：机器类别之间是**交叉**关系（LinuxCompute 与 LinuxData 各有专有面，
+# 谁也不含谁），把内容集合的并集错记成继承链，只会一边用 base、一边抄清单，基线一改就漂移。
+# 组合则各包独立版本化，模板只声明“选哪几块”。
+#
+# kind = Baseline：该平台所有类别都采的公共集（每平台恰好一个）；
+# kind = Feature ：按类别叠加的专有集。
+# 包**不带门**：事实门（什么条件才采）在单元的 `match` 上，一门在一处生效。
+# families 是覆盖的采集面（= unit_refs 对应面的并集），供审计与覆盖度清点。
+#
+# 状态：除含 mac-host-metrics（唯一 active 单元）的包外，仍为 draft。
+
+# ── macOS ─────────────────────────────────────────────────────────
+
+[[pack]]
+pack_id = "macos-base"
+platform = "macos"
+kind = "Baseline"
+families = [
+  "LoginSession",
+  "SoftwareChange",
+  "CrashPanic",
+  "NetworkFirewall",
+  "PrivacyTcc",
+  "GatekeeperQuarantine",
+  "ServiceLifecycle",
+  "RebootPower",
+  "MiscSystem",
+  "HostMetrics",
+]
+unit_refs = [
+  "mac-login-session",
+  "mac-software-change",
+  "mac-crash-panic",
+  "mac-network-wifi",
+  "mac-privacy-tcc",
+  "mac-gatekeeper",
+  "mac-launchd-service",
+  "mac-reboot-power",
+  "mac-misc-system",
+  "mac-host-metrics",
+]
+catalog_version = 1
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"
+
+[[pack]]
+pack_id = "macos-dev"
+platform = "macos"
+kind = "Feature"
+families = ["PrivilegeExecution", "DevToolchain"]
+unit_refs = [
+  "mac-privilege-exec",
+  "mac-dev-toolchain",
+]
+catalog_version = 1
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"
+
+# ── Linux ─────────────────────────────────────────────────────────
+
+[[pack]]
+pack_id = "linux-base"
+platform = "linux"
+kind = "Baseline"
+families = [
+  "LoginSession",
+  "PrivilegeExecution",
+  "SoftwareChange",
+  "ServiceLifecycle",
+  "CrashPanic",
+  "NetworkFirewall",
+  "RebootPower",
+  "KernelSystem",
+  "StorageHealth",
+  "HostMetrics",
+]
+unit_refs = [
+  "linux-auth-session",
+  "linux-privilege-exec",
+  "linux-software-change",
+  "linux-service-lifecycle",
+  "linux-crash-panic",
+  "linux-network-firewall",
+  "linux-reboot-power",
+  "linux-kernel-system",
+  "linux-storage-health",
+  "linux-host-metrics",
+]
+catalog_version = 1
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"
+
+# 作业/调度/加速卡：由单元 `match = installed:slurm|kubelet` 做事实门。
+[[pack]]
+pack_id = "linux-workload"
+platform = "linux"
+kind = "Feature"
+families = ["ComputeWorkload"]
+unit_refs = [
+  "linux-compute-workload",
+]
+catalog_version = 1
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"
+
+[[pack]]
+pack_id = "linux-datastore"
+platform = "linux"
+kind = "Feature"
+families = ["DatabaseService", "BackupJob"]
+unit_refs = [
+  "linux-db-service",
+  "linux-backup-job",
+]
+catalog_version = 1
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"
+
+[[pack]]
+pack_id = "linux-ops-extra"
+platform = "linux"
+kind = "Feature"
+families = ["MiscSystem", "NetworkService"]
+unit_refs = [
+  "linux-misc-system",
+  "linux-network-service",
+]
+catalog_version = 1
+status = "draft"
+curated_by = "platform-maintenance"
+curated_at = "2026-09-22T00:00:00Z"

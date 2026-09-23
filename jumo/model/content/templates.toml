@@ -1,8 +1,12 @@
 # 常驻工作模板 —— 内容数据（对应模型 Control.Agent.Content.WorkTemplate）
 #
-# base_template_id 空 = 独立模板；非空 = 本模板 = 基线模板的全部单元 + 自己的 unit_refs。
-# capability_scope / required_privileges 只写本模板自己的单元（基线部分由 base 带）；
-# 展开后的有效能力面与权限 = 基线 ∪ 自身。
+# 模板 = **平台基线包 ⊕ 若干特性包**（组合，非继承）。模板只声明“选哪几块”，
+# 不列单元、不内联 spec —— 公共集随基线包走、内容随目录走，避免两处漂移。
+# 类别（machine_class）是**预设键**，不是继承的根；一台机器多属性时用「模板 + 单机提案」叠加包。
+#
+# 以下字段**不写**（由装载/展开时派生并校验，写死只会漂移）：
+#   capability_scope   = 解析后单元能力的并集（collect_logs / collect_metrics）
+#   required_privileges = **裁剪后**单元的 requires_privilege 并集（记进 SelectionBasis，非模板）
 #
 # 状态：4 个模板现在都是 draft —— 引用的单元里除 mac-host-metrics 外全为 draft，
 # 按不变量“引用到 draft 单元的模板不能 active”，所以目前没有一个模板可授权投产。
@@ -10,38 +14,22 @@
 [[template]]
 template_id = "macos-daily"
 machine_class = "MacDaily"
-capability_scope = ["collect_logs", "collect_metrics"]
-unit_refs = [
-  "mac-login-session",
-  "mac-software-change",
-  "mac-crash-panic",
-  "mac-network-wifi",
-  "mac-privacy-tcc",
-  "mac-gatekeeper",
-  "mac-launchd-service",
-  "mac-reboot-power",
-  "mac-misc-system",
-  "mac-host-metrics",
-]
+platform = "macos"
+pack_refs = ["macos-base"]
 catalog_version = 1
 template_version = 1
-required_privileges = ["root", "fda"]
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"
 
+# 开发机 = 日常机基线 + 开发包（不再用 base_template_id；公共集由 macos-base 承担）。
 [[template]]
 template_id = "macos-dev"
 machine_class = "MacDev"
-base_template_id = "macos-daily"
-capability_scope = ["collect_logs"]
-unit_refs = [
-  "mac-privilege-exec",
-  "mac-dev-toolchain",
-]
+platform = "macos"
+pack_refs = ["macos-base", "macos-dev"]
 catalog_version = 1
 template_version = 1
-required_privileges = ["root"]
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"
@@ -49,51 +37,22 @@ curated_at = "2026-09-22T00:00:00Z"
 [[template]]
 template_id = "linux-compute"
 machine_class = "LinuxCompute"
-capability_scope = ["collect_logs", "collect_metrics"]
-unit_refs = [
-  "linux-auth-session",
-  "linux-privilege-exec",
-  "linux-software-change",
-  "linux-service-lifecycle",
-  "linux-crash-panic",
-  "linux-network-firewall",
-  "linux-reboot-power",
-  "linux-kernel-system",
-  "linux-compute-workload",
-  "linux-storage-health",
-  "linux-host-metrics",
-]
+platform = "linux"
+pack_refs = ["linux-base", "linux-workload"]
 catalog_version = 1
 template_version = 1
-required_privileges = ["root"]
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"
 
+# 数据机 = 公共基线 + 作业包 + 数据包 + 运维杂项包（**引用**，不再抄 linux-compute 的清单）。
 [[template]]
 template_id = "linux-data"
 machine_class = "LinuxData"
-capability_scope = ["collect_logs", "collect_metrics"]
-unit_refs = [
-  "linux-auth-session",
-  "linux-privilege-exec",
-  "linux-software-change",
-  "linux-service-lifecycle",
-  "linux-crash-panic",
-  "linux-network-firewall",
-  "linux-reboot-power",
-  "linux-misc-system",
-  "linux-kernel-system",
-  "linux-db-service",
-  "linux-storage-health",
-  "linux-compute-workload",
-  "linux-network-service",
-  "linux-backup-job",
-  "linux-host-metrics",
-]
+platform = "linux"
+pack_refs = ["linux-base", "linux-workload", "linux-datastore", "linux-ops-extra"]
 catalog_version = 1
 template_version = 1
-required_privileges = ["root"]
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"
