@@ -108,6 +108,14 @@ bind WistGatewayManagementInterface {
     status AgentPurposeView 200
   }
 
+  // 人工判定：落 AgentClassification（采纳建议或改判）。分类必须与机器平台一致，实现层校验。
+  entry AdminClassifyAgent {
+    route POST "/api/v1/admin/agents/{agent_id}/classification"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status AgentClassification 200
+  }
+
   // 按机器看软件：从事实摘要机械归并出的清单。未知 agent 回 404，
   // 「有 agent 但没上报过清单」= 200 + 空清单 + 计数 0（两者必须能区分）。
   entry AdminViewAgentSoftware {

@@ -131,4 +131,4 @@ agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
 | 3 | Linux 补采集：`cmdline` + 已装包清单 | **已记需求 `B119`** |
 | 4 | 确定的资源画像（核数/内存/磁盘/GPU）+ macOS `machine_id`/`ip_addresses` | **已记需求 `B118`** |
 | 5 | 中心侧模型推断（`method = model`，需建议表支持多条 + `model_version`） | 待做 |
-| 6 | 人工判定的**写入**端点（目前只读，`classification` 恒 `null`） | 待做 |
+| 6 | 人工判定的**写入**端点 | **模型已补**（`AdminClassifyAgent` + 绑定 `POST /api/v1/admin/agents/{agent_id}/classification` + 用例 `ClassifyAgentPurpose`）；**代码待实现** |

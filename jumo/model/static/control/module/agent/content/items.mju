@@ -38,7 +38,9 @@ struct CollectionUnit {
   // kind ∈ installed（已装包）| device（设备，如 gpu）| service（systemd/launchd 单元）
   //   | port（监听端口）| resource（资源量，值可带比较符，如 mem_gib>=64）。
   // 例：installed:homebrew|xcode;device:gpu
-  // 求值不满足的单元**不进 spec**，但要在 SelectionBasis.excluded_units 里留下原因。
+  // 求值是**三态**：命中 / 不命中 / **无法判定**。事实缺位（如包探针未采）**不是**“不命中”，
+  // 而是“无法判定” —— 不得当成“没装”（同“空 = 没采不是没装”的原则）。
+  // 三态分别落 SelectionBasis：选中 / excluded(match_unsatisfied) / excluded(fact_not_collected)。
   match: String
   // 采集参数片段（路径/过滤/间隔），写进 spec 时直接拼装。
   spec_fragment: String
@@ -68,6 +70,9 @@ struct CollectionCatalog {
   // 从中心同步的时间；本地策展版本为空。
   synced_at: DateTime?
   published_at: DateTime
+  // 被哪一版目录取代（**空 = 仍是当前版**）。多版**并存**：老版仍可被模板引用、被已授权工作锁定；
+  // 只标取代关系，不删、不改历史 —— 这样目录换版不会让已有模板/工作一起失效。
+  superseded_by: Int?
 }
 
 // ── 内容包：可复用的单元组合（模板的积木）──────────────────────────
@@ -210,6 +215,8 @@ struct SelectionFact {
 }
 
 // 没采的原因：运维最常问的“为什么这台机器没采 X”。
+// 注意区分 match_unsatisfied（条件**判为不满足**）与 fact_not_collected（**事实没采到、无法判定**）——
+// 把后者报成前者，等于把“没采”说成“没装”。
 struct SelectionExclusion {
   meta {
     label zh "排除项"
@@ -219,9 +226,9 @@ struct SelectionExclusion {
   }
 
   unit_id: String
-  // match_unsatisfied | platform_mismatch | privilege_missing | rule_not_ready | excluded_by_human
+  // match_unsatisfied | fact_not_collected | platform_mismatch | privilege_missing | rule_not_ready | excluded_by_human
   reason_code: String
-  // match_unsatisfied 时指出是哪条条件（如 installed:redis-server）
+  // match_unsatisfied / fact_not_collected 时指出是哪条条件（如 installed:redis-server）
   condition: String?
 }
 

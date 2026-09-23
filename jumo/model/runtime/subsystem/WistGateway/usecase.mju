@@ -203,6 +203,20 @@ usecase ViewAgentPurpose {
   outcome Control.AgentPurposeView
 }
 
+// 归档 Agent 用途判定（人工判定）
+usecase ClassifyAgentPurpose {
+  meta {
+    label zh "归档 Agent 用途判定"
+    label en "Classify Agent Purpose"
+    summary zh "管理员把某台 Agent 的用途判定归档：采纳网关建议或人工改判，落 AgentClassification（含判定人与时间）；分类必须与机器平台一致。这是按机器类别授权工作模板的前置。"
+    tags "agent-purpose", "classification", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminClassifyAgent
+  outcome Control.AgentClassification
+}
+
 // 查看 Agent 软件清单（按机器看软件）
 usecase ViewAgentSoftware {
   meta {

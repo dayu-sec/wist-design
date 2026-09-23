@@ -59,6 +59,9 @@ struct StandingWork {
   // 内容由采集目录的条目组合而成，不是自由文本。
   // **不携带 capability**：该面由哪个采集器承接，由 spec 里的单元（各自带 capability）决定。
   spec: String
+  // 本工作按**哪一版目录**展开（物化溯源 + 版本锁）：目录换版**不追改**已授权工作，
+  // 要让这台机器跟到新版，走新提案 + 审定（与 template_version 同一条不变式）。
+  catalog_version: Int
   // 生效依据：指向已批准的提案（人工直填 spec 时为空）。采集范围变更必须留审。
   proposal_id: String?
   // 期望版本：网关每次改动 +1；Agent 上报实际版本，与它比对即得漂移。

@@ -58,6 +58,17 @@ message<command> AdminViewAgentPurpose = OperatorRequest {
   agent_id: String
 }
 
+// 归档某台 Agent 的用途判定（人工判定）：采纳某条建议，或直接改判 / 推翻建议。
+// 采集范围是合规边界 —— 判定是按机器类别授权工作模板的前置，必须由人落这一笔。
+// 分类必须与该机器平台一致（MacDaily/MacDev → macos，Linux* → linux），校验在实现层。
+message<command> AdminClassifyAgent = OperatorRequest {
+  agent_id: String
+  machine_class: MachineClass
+  // 采纳了哪条建议；人工直判/推翻建议时为空。
+  suggestion_id: String?
+  note: String?
+}
+
 // 查看某台 Agent 的软件清单（按机器看软件）：从事实摘要机械归并出的条目。
 // 未知 agent 回 404；有 agent 但没上报过清单 = 200 + 空清单 + 计数 0。
 message<command> AdminViewAgentSoftware = OperatorRequest {
@@ -254,6 +265,11 @@ interface WistGatewayManagementInterface {
   entry AdminViewAgentPurpose {
     actor AdminOperator
     output AgentPurposeView
+  }
+
+  entry AdminClassifyAgent {
+    actor AdminOperator
+    output AgentClassification
   }
 
   entry AdminViewAgentSoftware {
@@ -464,6 +480,18 @@ flow AdminResumeWorkFlow {
 
   actor AdminOperator
   trigger AdminResumeWork
+}
+
+flow AdminClassifyAgentFlow {
+  meta {
+    label zh "归档 Agent 用途判定"
+    label en "Classify Agent Flow"
+    summary zh "管理员把某台 Agent 的用途判定归档（采纳建议或人工改判）；分类必须与机器平台一致，落 AgentClassification 并留判定人与时间。"
+    tags "admin", "purpose", "classification"
+  }
+
+  actor AdminOperator
+  trigger AdminClassifyAgent
 }
 
 flow AdminViewGatewayManagementStateFlow {
