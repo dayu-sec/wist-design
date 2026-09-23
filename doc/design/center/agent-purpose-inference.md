@@ -50,13 +50,13 @@ agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
 - **不互相代报**：中心不靠网关转发，网关也不替 agent 上报 —— 一次上报、两个消费者。
 - 进程资源带 `process.executable.name`（macOS 上是**完整可执行路径**，信号很好；
   Linux 的 `/proc/<pid>/comm` 只有 15 字符短名，见 §6）。
-- **为什么摘要走控制面**：数据面这条接入路径目前**没有鉴权**（裸 TCP），而摘要里是
-  进程路径与包名（接近资产清单）；走已认证的控制面反而更合理。**网关只接摘要，
-  原文快照不进网关库** —— 这是架构级约束，不是约定。
+- **网关只接摘要，原文快照不进网关库**（架构级约束）：摘要是 10~30 KB 的状态、覆盖式写；
+  原文是一台几百 KB 的明细、要历史 —— 访问模式相反（见 `agent-work-delivery-plan.md` §8.1）。
 
 > 现状（已落地，2026-09）：agentd 侧聚合与上报已实现（`reporting/fact_summary.rs` +
-> `report_fact_summary_if_changed`）；网关侧入库与推断已实现（`app/purpose.rs` +
-> `POST /api/v1/agent/facts` + `GET /api/v1/admin/agents/{id}/purpose`）。
+> `report_fact_summary_if_changed`），摘要以 `OBSFACT:` 帧走数据面；网关侧入库与推断已实现
+> （`app/purpose.rs` + 内部订阅端点 `POST /api/v1/ingest/agent-facts` +
+> `GET /api/v1/admin/agents/{id}/purpose`），控制面直报端点 `POST /api/v1/agent/facts` **已删除**。
 > 仍欠的是**原文快照那条路**：数据面的 discovery receiver 尚未实现。
 
 ## 4. 上送什么（聚合，不是明细）

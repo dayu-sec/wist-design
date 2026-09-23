@@ -15,6 +15,7 @@
 | 三份策展数据 | `content/catalog.toml`（27 单元 / 18 面）、`content/templates.toml`（4 模板）、`content/purpose-rules.toml`（43 规则） |
 | 发现方向与周期策略 | `Discovery.Probe` 类型 + `content/aspect-policies.toml` 策展值；网关装载校验（七方向 / `[min,default,max]` / 基线不可关 / 平台闭集）并下发，agentd 应用后盖过内建默认周期。验证：`jumo verify` 0 error；`impl-check` 14 用例 0 warning；契约 24 / 网关 173 / agentd 338+2+45 全绿 |
 | 用途规则真机验证 | 用本机 906 个真实进程跑出 `MacDev`，置信度 90，依据可列（Xcode/mise/OrbStack） |
+| 事实摘要统一走数据面 + 落库 + 用途推断 | 摘要以 `OBSFACT:` 帧上报、网关订阅（内部明文端点 `POST /api/v1/ingest/agent-facts`）；控制面直报 `POST /api/v1/agent/facts` 已删；`agent_fact_summary` 覆盖式入库（网关自算 `content_digest` 幂等）；管理面 `GET /api/v1/admin/agents/{id}/purpose`。验证：`jumo verify` 10 passed（`AgentFactSummaryIngested`）；重启后数据面 `parse_stat`/`sink_stat` 全 success、库 revision 刷新 |
 | L1a 机械资产清单（`Control.Agent.Inventory`） | `agent_software_inventory` 表 + `DeriveSoftwareInventory` 派生步 + 两个查询端点（`GET /api/v1/admin/software`、`GET /api/v1/admin/agents/{id}/software`）；`jumo verify` 10 passed；`impl-check` 16 用例 0 warning；网关 `cargo test software` 6 passed |
 
 ### 1.2 已设计、未实现
@@ -23,9 +24,8 @@
 |---|---|---|
 | 工作授权（常驻/一次性、grant/revoke/propose/review/pause/resume） | `Agent.Work` + `gateway-app` 接口 | 模型完备；**9 条 binding 缺失**（readiness Blocked） |
 | 采集内容（面 → 单元 → 模板） | `Agent.Content` + 三份 TOML | 模型与数据就绪；无 loader、无校验 |
-| 用途识别（建议 → 依据 → 人工判定） | `Agent.Purpose` + 规则表 | 模型与规则就绪；无匹配实现、无管理面 |
-| 事实上报（数据通道 + 双订阅） | `Reporting.Protocol` + `Observed.Snapshot`（已按真实契约填实） | envelope/载荷已定；agentd 无聚合上报、数据面无 receiver |
-| 事实**摘要**落库 + 用途推断 | `Reporting.ReportAgentFactSummary` + `Control.AgentFactSummary` + `IngestAgentFactSummaryFlow`（verify `AgentFactSummaryIngested` passed） | 网关侧已实现（`agent_fact_summary` 表 / 幂等 / 用途推断 / 管理面 `/api/v1/admin/agents/{id}/purpose`）；**通道待改**：现为控制面 HTTPS 直报，按 §4.1 统一到数据面 |
+| 用途识别（建议 → 依据 → 人工判定） | `Agent.Purpose` + 规则表 | 推断与只读管理面**已实现**（`app/purpose.rs` + `GET /api/v1/admin/agents/{id}/purpose`）；**人工判定的写入端点未实现**（出参 `classification` 恒空），规则口径（`min_support` 打折等）未定 |
+| 事实**原文快照**上行 + 中心三层落库 | `Reporting.ReportDiscoverySnapshot` + `Observed.Snapshot`（已按真实契约填实） | envelope/载荷已定；摘要已走同一条数据面通道（见 §1.1），**原文的 receiver 与中心订阅、三层落库未做** |
 
 ### 1.3 已登记需求
 
