@@ -113,6 +113,8 @@ link<call> ManagedServiceHost -> WistGatewayHost
 // 代价：网关的“离线自足”取决于数据面与网关同栈可达。
 //
 // 注：上面的分发关系**用 link<data> + dataflow 表达不了** —— link<data> 要求对应的 dataflow 边，
-// 而 dataflow 的节点必须是 struct/resource（实测报错：
-// “resource node `AgentHost1` is not defined as a struct or resource”），
-// 而本部署视图里的主机是 `node` 构造。待模型支持“以拓扑 node 为端点的数据流”后再补。
+// 而 dataflow 的端点必须是**模型条目**（message / flow / struct / resource），
+// 本部署视图里的主机是 `node` 构造（实测报错：“resource node `AgentHost1` is not defined as a
+// struct or resource”）。**数据移动本身**已用 `dataflow AssetDiscoveryDataFlow` 表达
+// （见 `runtime/global/asset-discovery-dataflow.mju` 与 doc/design/center/asset-discovery-data-flow.md）；
+// 待模型支持“以拓扑 node 为端点的数据流”后，再把这层“哪台机器连哪台机器”补上。

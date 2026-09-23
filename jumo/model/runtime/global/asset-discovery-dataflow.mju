@@ -1,0 +1,69 @@
+// 资产发现（事实）数据流：从「发现」到「清单 / 用途」的落地路径。
+//
+// 为什么单列一条 dataflow，而不是画进 `topology.mju` 的节点连线：
+//   topology 的 `link<data>` 要求两端是**主机节点**（`node`），而 dataflow 的端点必须是
+//   **模型条目**（message / flow / struct / …）。两者表达的不是同一件事 ——
+//   前者是「哪台机器连哪台机器」，后者是「什么数据经哪一步变成了什么」。
+//   本文件只表达后者：事实**只有一条上行通道**，摘要以 `OBSFACT:` 帧到数据面，
+//   数据面作发布/订阅中枢，网关**订阅**它（见 `doc/design/center/asset-discovery-data-flow.md`）。
+//
+// 为什么声明 `domain Reporting`：本流的端点主要是 Reporting 域的契约对象与该域的 ingest flow；
+//   未限定名按 Reporting 解析，`Control.*` 的表则显式限定。这样 `node<flow>` 与 interface 的
+//   输出（`FactSummaryAccepted`）才同域对得上（jumo 的跨域解析做不到）。
+//
+// 现状边界（模型只记已定的形态，不记待做）：
+//   - 只有**摘要**这条已通；**原文快照**（`ReportDiscoverySnapshot`）的 receiver 与中心订阅未做，
+//     故本条 dataflow 只画摘要链。
+//   - 数据面接入**身份校验未落地**，本图不表达鉴权（见交付计划 §9 风险行）。
+
+domain Reporting
+
+dataflow AssetDiscoveryDataFlow {
+  meta {
+    label zh "资产发现数据流"
+    label en "Asset Discovery Data Flow"
+    summary zh "agentd 采集事实、压成摘要，以 OBSFACT 帧上报数据面；数据面作发布/订阅中枢，网关订阅并派生出用途建议与 L1a 软件清单，并回 ACK。"
+    tags "reporting", "discovery", "agent-fact", "inventory"
+  }
+
+  // 事实摘要的上行载荷（契约对象，正文原样透传；契约见 Reporting.Protocol）。
+  node<message> ReportAgentFactSummary
+  // 数据面（warp-parse）：发布/订阅中枢。外部件 —— 只验接口契约，不为引擎内部建模。
+  node<external> WarpParseDataPlane
+  // 网关订阅端：校验 / 判重 / 入库 / 派生的那一条流。
+  node<flow> IngestAgentFactSummaryFlow
+  // 网关库里的三张派生表（覆盖式，非追加）。
+  node<resource> Control.AgentFactSummary
+  node<resource> Control.AgentSoftwareEntry
+  node<resource> Control.PurposeSuggestion
+
+  // agentd → 数据面：把摘要发成 `OBSFACT:` 帧（TCP 上行）。
+  edge<write> ReportAgentFactSummary -> WarpParseDataPlane {
+    data ReportAgentFactSummary
+  }
+
+  // 数据面 → 网关：sink 把同一批记录投递到网关内部端点。trigger 边必须带上目标 flow 的
+  // trigger（模型规则），故 data 即该 flow 的触发消息。
+  edge<trigger> WarpParseDataPlane -> IngestAgentFactSummaryFlow {
+    data ReportAgentFactSummary
+  }
+
+  // 网关订阅端：内容变时覆盖写事实摘要，并派生清单行与用途建议。
+  edge<write> IngestAgentFactSummaryFlow -> Control.AgentFactSummary {
+    data Control.AgentFactSummary
+  }
+
+  edge<write> IngestAgentFactSummaryFlow -> Control.AgentSoftwareEntry {
+    data Control.AgentSoftwareEntry
+  }
+
+  edge<write> IngestAgentFactSummaryFlow -> Control.PurposeSuggestion {
+    data Control.PurposeSuggestion
+  }
+
+  // 订阅端回执：interface `WistAgentdOnlineRegistrationInterface.ReportAgentFactSummary` 的
+  // 输出是 `FactSummaryAccepted`，建模为 flow 就必须在 dataflow 里 emit 出来（模型规则）。
+  edge<emit> IngestAgentFactSummaryFlow -> WarpParseDataPlane {
+    data FactSummaryAccepted
+  }
+}
