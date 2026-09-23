@@ -10,35 +10,35 @@
 ```mermaid
 flowchart TD
   subgraph EDGE["wist-agentd（边缘）"]
-    PR["发现探针<br/>host / network / endpoint / process<br/>（container / k8s 关）"]
-    SN["快照 combine<br/>每个探针按自己的周期刷新<br/>未到期沿用上次输出"]
-    FS["事实摘要 build_summary<br/>去重 + 只留推断/展示字段"]
+    PR["发现探针：host / network / endpoint / process"]
+    SN["快照 combine：按周期刷新，未到期沿用上次"]
+    FS["事实摘要 build_summary：去重 + 只留推断/展示字段"]
     PR --> SN --> FS
   end
 
   FS -->|"OBSFACT: 帧 · TCP :9000"| WPL
-  PR -.->|"控制面：拉周期策略<br/>POST /agent/discovery-policies:poll"| GW
+  PR -.->|"控制面：拉周期策略"| GW
 
   subgraph DP["数据面 warp-parse"]
-    WPL["WPL agent_uplink/obs_fact<br/>拆信封，正文 body 原样透传"]
-    OML["OML agent_obs_fact<br/>rule=agent_uplink/obs_fact"]
-    SG["sink_group agent-facts<br/>tags biz:agent-fact"]
+    WPL["WPL agent_uplink/obs_fact：拆信封，正文透传"]
+    OML["OML agent_obs_fact"]
+    SG["sink_group agent-facts"]
     WPL --> OML --> SG
   end
 
-  SG -->|"file sink"| F1[("agent-facts.jsonl<br/>肉眼验证")]
-  SG -->|"http_sink POST · 明文<br/>127.0.0.1:3001"| ING
+  SG -->|"file sink"| F1[("agent-facts.jsonl（肉眼验证）")]
+  SG -->|"http_sink POST · 明文 127.0.0.1:3001"| ING
 
   subgraph GW["wist-gateway"]
-    ING["内部端点<br/>POST /api/v1/ingest/agent-facts"]
-    CORE["ingest_fact_summary<br/>网关自算 digest 判重"]
+    ING["内部端点 POST /api/v1/ingest/agent-facts"]
+    CORE["ingest_fact_summary：网关自算 digest 判重"]
     ING --> CORE
-    CORE --> T1[("agent_fact_summary<br/>覆盖式·一台一条")]
-    CORE --> T2[("agent_software_inventory<br/>L1a 机械归并")]
+    CORE --> T1[("agent_fact_summary（覆盖式一台一条）")]
+    CORE --> T2[("agent_software_inventory（L1a）")]
     CORE --> T3[("purpose_suggestion")]
   end
 
-  T1 --> PG["管理面 / 页面<br/>/admin/software<br/>/admin/agents/{id}/software<br/>/admin/agents/{id}/purpose"]
+  T1 --> PG["管理面 / 页面：/admin/software 等"]
   T2 --> PG
   T3 --> PG
 ```

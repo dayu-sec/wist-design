@@ -10,7 +10,7 @@
   `wist-exec` / 本地状态 / 故障处理 / 资源发现（agentd 专属设计文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
 - `center/`
-  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、发现上报的模式与规则、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板、Agent 工作体系交付计划、资产发现数据流
+  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、发现上报的模式与规则、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板（含采集内容与工作总览·通俗版）、Agent 工作体系交付计划、资产发现数据流
 - `telemetry/`
   metrics 集成、discovery、resource mapping、uplink 设计、数据防丢失与 Batch A 规格（logs file input / macOS 采集文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
@@ -52,3 +52,4 @@
 29. [foundation/implementation-backlog.md](./foundation/implementation-backlog.md)
 30. [foundation/jumo-verification-model.md](./foundation/jumo-verification-model.md)
 31. [center/asset-discovery-data-flow.md](./center/asset-discovery-data-flow.md)
+32. [center/agent-content-and-work-overview.md](./center/agent-content-and-work-overview.md)
