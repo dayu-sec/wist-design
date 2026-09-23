@@ -35,6 +35,7 @@ usecase CollectLogs {
   meta {
     label zh "采集日志"
     label en "Collect Logs"
+    summary zh "按网关授权的工作采集日志：工作的单元指向哪些文件通配就采哪些（含数据面规则标识），本地运维在配置里手工加的采集单元作为逃生舱并存。没有授权就没有采集任务。"
     tags "log-collection", "wp-agent"
   }
 
@@ -48,10 +49,26 @@ usecase CollectMetrics {
   meta {
     label zh "采集 Metric"
     label en "Collect Metrics"
+    summary zh "按网关授权的工作上送指标：只有持有生效的指标工作（`collect_metrics` 单元）才上送，周期取工作声明的最密值；没有授权就**不上送**，一个不做任务工作的 Agent 不该有顺手的默认指标。"
     tags "metric-collection", "wp-agent"
   }
 
   actor Discovery.Collector
   trigger Discovery.CollectMetrics
   outcome Discovery.MetricsSamplesSnapshot
+}
+
+// 拉取并应用网关授权的工作
+usecase PullGrantedWork {
+  meta {
+    label zh "拉取并应用授权工作"
+    label en "Pull Granted Work"
+    summary zh "agentd 定期拉取工作授权快照并应用（日志任务、指标开关与周期），再按版本回报确认。幂等：断网或重启后重新拉一次就回到期望状态；拉不到就保留上次应用的工作，不把网络抖动放大成采集中断。"
+    tags "agent-work", "wp-agent", "polling"
+  }
+
+  actor Control.Agentd
+  trigger Control.PollWork
+  outcome Control.WorkGrant
+  flow Control.PollWorkFlow
 }

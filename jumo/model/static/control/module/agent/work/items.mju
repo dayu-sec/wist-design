@@ -56,8 +56,10 @@ struct StandingWork {
   // 裹了十几个面，任何按面控制都无从下手；也让工作粒度与 SelectionBasis 的单元级审计对得上。
   family: CollectionFamily
   // 工作参数（清单/参数）。随 plan_version 整体替换，不做字段级增量合并。
-  // 内容由采集目录的条目组合而成，不是自由文本。
-  // **不携带 capability**：该面由哪个采集器承接，由 spec 里的单元（各自带 capability）决定。
+  // 内容由采集目录的条目**物化**而成，不是自由文本：单元的采集来源（sources）与
+  // 数据面规则标识（rule_ref）一并带上，agentd 拿到就能直接采，不必再去网关拉目录。
+  // 编码：`{"units":[{unit_id, capability, rule_ref, requires_privilege, sources:[{kind,target}]}]}`。
+  // **不携带 capability 作为工作级字段**：该面由哪个采集器承接，由 spec 里的单元各自决定。
   spec: String
   // 本工作按**哪一版目录**展开（物化溯源 + 版本锁）：目录换版**不追改**已授权工作，
   // 要让这台机器跟到新版，走新提案 + 审定（与 template_version 同一条不变式）。

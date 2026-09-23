@@ -364,6 +364,60 @@
       ]
     },
     {
+      "name": "System.WistAgentd.PullGrantedWork",
+      "status": "Partial",
+      "progress": 75,
+      "entries": [
+        {
+          "name": "PollWork",
+          "route": "POST /api/v1/agent/work:poll（agentd 侧发起；从网关拉到授权快照后应用并确认）",
+          "handler": "wist-agentd:control/work.rs:fetch_work_grant",
+          "covers": ["WorkGrant"]
+        },
+        {
+          "name": "AckWork",
+          "route": "POST /api/v1/agent/work:ack（确认只对真正应用了的工作发，成功才记版本）",
+          "handler": "wist-agentd:control/work.rs:ack_work",
+          "covers": ["WorkAccepted"]
+        },
+        {
+          "name": "ApplyWorkGrant",
+          "route": "daemon 主循环：拉取→折算→确认（写入 runtime/daemon.rs:refresh_work_grant）",
+          "handler": "wist-agentd:control/work.rs:apply",
+          "covers": ["StandingWork", "WorkSpec"]
+        }
+      ],
+      "gaps": [
+        "只能承接 FileGlob（日志文件）与 MetricInterval（指标周期）两类来源；Exporter / UnifiedLogPredicate 如实报 WorkUnitUnsupported，不静默丢",
+        "只应用常驻工作：一次性工作（OneShotWork）尚未在 agentd 侧执行",
+        "采集目录里没有 startup_position 字段，授权采集一律按 tail 起（不重放历史），要回放得本地配置"
+      ]
+    },
+    {
+      "name": "System.WistAgentd.CollectLogs",
+      "status": "Complete",
+      "progress": 100,
+      "entries": [
+        {
+          "name": "CollectLogsFromGrantedWork",
+          "route": "daemon 采集 tick：配置 file_inputs + 工作折算出的输入（runtime/daemon_telemetry.rs:process_telemetry_inputs）",
+          "handler": "wist-agentd:control/work.rs:log_inputs"
+        }
+      ]
+    },
+    {
+      "name": "System.WistAgentd.CollectMetrics",
+      "status": "Complete",
+      "progress": 100,
+      "entries": [
+        {
+          "name": "GateMetricsUplinkOnGrantedWork",
+          "route": "daemon 主循环：无生效指标工作则不上送，有则按工作声明的最密周期节流",
+          "handler": "wist-agentd:control/work.rs:metrics_interval"
+        }
+      ]
+    },
+    {
       "name": "System.WistGateway.ServeDiscoveryPolicies",
       "status": "Complete",
       "progress": 100,
