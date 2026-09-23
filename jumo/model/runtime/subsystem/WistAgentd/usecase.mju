@@ -63,7 +63,7 @@ usecase PullGrantedWork {
   meta {
     label zh "拉取并应用授权工作"
     label en "Pull Granted Work"
-    summary zh "agentd 定期拉取工作授权快照并应用（日志任务、指标开关与周期），再按版本回报确认。幂等：断网或重启后重新拉一次就回到期望状态；拉不到就保留上次应用的工作，不把网络抖动放大成采集中断。"
+    summary zh "agentd 定期拉取工作授权快照并应用（日志任务、指标开关与周期），再按版本回报确认。幂等：断网或重启后重新拉一次就回到期望状态；拉不到快照时会先按**本地留痕的最后已知期望**继续干活（state/work/grant.json），而不是静默停采 —— 代价是断网期间撤回会晚一步生效。"
     tags "agent-work", "wp-agent", "polling"
   }
 

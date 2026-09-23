@@ -390,7 +390,8 @@
       "gaps": [
         "只能承接 FileGlob（日志文件）与 MetricInterval（指标周期）两类来源；Exporter / UnifiedLogPredicate 如实报 WorkUnitUnsupported，不静默丢",
         "只应用常驻工作：一次性工作（OneShotWork）尚未在 agentd 侧执行",
-        "采集目录里没有 startup_position 字段，授权采集一律按 tail 起（不重放历史），要回放得本地配置"
+        "采集目录里没有 startup_position 字段，授权采集一律按 tail 起（不重放历史），要回放得本地配置",
+        "本地留痕 state/work/grant.json 记最后已知期望（含已确认版本）：断网/重启后先按它干活，连上网关即回到期望 —— 代价是断网期间撤回会晚一步生效"
       ]
     },
     {
