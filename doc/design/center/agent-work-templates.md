@@ -130,9 +130,12 @@ loader 尚未实现；`rule_ref` 为空 = 规则未就绪，因此 `status` 必�
 这里是**发现**方向的观测频率 —— 两者量级与归属都不同。
 
 网关侧待实现的校验：`pack_refs` 必须在 `packs.toml` 里全部解析、每个包的 `unit_refs` 必须能在其
-`catalog_version` 里全部解析；每平台**恰好一个** `Baseline` 包；`capability_scope`（派生）= 展开后单元能力的并集；
+`catalog_version` 里全部解析；每平台**恰好一个** `Baseline` 包；`family_scope`（派生）= 展开后的面集；
 模板覆盖的每个面在该平台上至少有一个 `status = active` 的单元（否则只是“定义了但采不到”）。
 （不再有 `base_template_id` 的无环校验 —— 组合没有继承链。）
+
+**展开粒度 = 面**：授权一个模板 → 按 `family_scope` 展开成「一面一份常驻工作」（`StandingWork.family`），
+于是每个面都能单独暂停 / 限流 / 审计；单元的挑拣（`match`）仍在这一面自己的工作里做。
 
 ## 7. 组合怎么形成：事实 → 用途 → 模板 → 裁剪
 
@@ -163,12 +166,13 @@ loader 尚未实现；`rule_ref` 为空 = 规则未就绪，因此 `status` 必�
 ## 8. 已知不足与待决
 
 > 本轮已解决：**继承 → 组合**（消除 `linux-data` 复制漂移、`linux-compute` 基线可复用）；
+> **工作粒度**从 capability 改为**面**（一面一份常驻工作，可按面暂停/限流/审计）；
 > **权限面**从模板级改为**裁剪后**派生（不再被单个高特权单元拉高整机）；
 > **`MachineClass` 降为预设键**（多属性机器走「模板 + 单机提案」）。
 
 | # | 不足 | 状态 |
 |---|---|---|
-| 1 | 工作颗粒度 = capability（只有 2 个）→ 一份 `collect_logs` 塞十几个面，**无法按面暂停/限流**；与 `SelectionBasis` 的单元级审计粒度不匹配 | 待决 |
+| 1 | ~~工作颗粒度 = capability（只有 2 个）→ 一份 `collect_logs` 塞十几个面，**无法按面暂停/限流**~~ | **已解决**：工作粒度改为**面**（`StandingWork.family`，模板按 `family_scope` 展开成一面一份） |
 | 2 | `status` 二值 → 无法“**部分可用/渐进启用**”（现实是部分面有规则、部分没有） | 待决 |
 | 3 | `catalog_version` 单值**整版绑定** → 无新旧目录共存 / 模板逐个迁移 / 已授权锁旧版 | 待决 |
 | 4 | 上游无入口：类别来自 `AgentClassification`，其**写入端点未实现** | 见 `agent-purpose-inference.md` §9 |

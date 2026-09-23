@@ -51,11 +51,13 @@ struct StandingWork {
 
   unique work_id: String
   agent_id: String
-  // 工作的能力面：collect_logs / collect_metrics / ...（决定 Agent 侧由哪个采集器承接，
-  // 也决定从采集目录的哪个子集里选内容）
-  capability: String
+  // 工作粒度 = **采集面**（CollectionFamily）：“一个面 = 一份常驻工作”。
+  // 这样才做得到“按面暂停 / 限流 / 审计” —— 原先按 capability 授权，一份 collect_logs
+  // 裹了十几个面，任何按面控制都无从下手；也让工作粒度与 SelectionBasis 的单元级审计对得上。
+  family: CollectionFamily
   // 工作参数（清单/参数）。随 plan_version 整体替换，不做字段级增量合并。
   // 内容由采集目录的条目组合而成，不是自由文本。
+  // **不携带 capability**：该面由哪个采集器承接，由 spec 里的单元（各自带 capability）决定。
   spec: String
   // 生效依据：指向已批准的提案（人工直填 spec 时为空）。采集范围变更必须留审。
   proposal_id: String?
@@ -114,6 +116,7 @@ struct WorkGrant {
   }
 
   unique agent_id: String
+  // 每个面一条（模板按 family_scope 展开成“一面一份工作”）。
   standing: List<StandingWork>
   one_shot: List<OneShotWork>
   // 授权序号：Agent 据此判断快照是否有变化（不承担“指令重放”的语义）。
@@ -214,7 +217,8 @@ struct WorkProposal {
   agent_id: String
   // 变更既有常驻工作时指向它；新建时为空。
   work_id: String?
-  capability: String
+  // 提案针对**哪个面**的内容（与工作同粒度：面）。
+  family: CollectionFamily
   basis: SelectionBasis
   proposed_spec: String
   // proposed | approved | rejected | withdrawn

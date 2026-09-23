@@ -118,8 +118,8 @@ struct ContentPack {
 // 目录回答“能采什么”，包回答“哪些单元常一起出现”，模板回答“这类机器该采什么”。
 // 模板是人工策展 + 审定的结果，只**引用内容包**（pack_refs），不内联 spec 也不列单元 ——
 // 公共集随基线包走、内容随目录走，避免两处漂移。
-// 一份工作 = 一个能力面（collect_logs / collect_metrics）；一个模板跨能力面，
-// 授权时按 capability_scope 展开成多份常驻工作。
+// 一份工作 = 一个**面**（CollectionFamily）；模板授权时按 family_scope 展开成
+// “一面一份常驻工作”，这样每个面都能单独暂停 / 限流 / 审计。
 
 // 机器类别：开箱模板覆盖的 4 类机器。加类别 = 改模型（采集范围属于合规面，要走审定）。
 // 类别是**预设**（选哪几个包），不是继承的根；一台机器同时具备多种属性时，用
@@ -153,8 +153,9 @@ struct WorkTemplate {
   platform: String
   // 组成 = pack_refs 的并集（平台基线包 + 类别专有包；可叠加，**无继承链**）。
   pack_refs: List<String>
-  // 覆盖的能力面：= 解析后单元能力的并集（**派生值**，装载时校验，不手写）。
-  capability_scope: List<String>
+  // 覆盖的采集面：= pack_refs 解析后各面单元的并集（**派生值**，装载时校验，不手写）。
+  // 展开粒度即此：一个面 → 一份常驻工作。
+  family_scope: List<CollectionFamily>
   // 模板针对哪一版目录（与各包的 catalog_version 一致）策展：换版后引用必须能重新解析。
   catalog_version: Int
   // 模板自身版本：组成变化时 +1；已授权的工作不追改（要改走新提案 + 审定）。

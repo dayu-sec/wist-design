@@ -76,7 +76,9 @@ message<command> AdminViewSoftwareHoldings = OperatorRequest {
 message<command> AdminGrantWork = OperatorRequest {
   agent_id: String
   work_kind: WorkKind
-  capability: String?
+  // 常驻工作按**面**授权（work_kind = Standing 时必填）：一个面 = 一份工作。
+  family: CollectionFamily?
+  // 一次性工作按**动作**授权（work_kind = OneShot 时必填）。
   action: String?
   spec: String
   plan_version: Int?
@@ -99,7 +101,7 @@ message<command> AdminRevokeWork = OperatorRequest {
 message<command> AdminProposeWork = OperatorRequest {
   agent_id: String
   work_id: String?
-  capability: String
+  family: CollectionFamily
   mode: String
   catalog_version: Int
   facts_used: List<SelectionFact>

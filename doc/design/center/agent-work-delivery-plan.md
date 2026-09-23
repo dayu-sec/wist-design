@@ -49,9 +49,9 @@
 |---|---|---|
 | 9 条 binding | `wist-design` | 6 个 `Admin*Work` + `PollWork`/`AckWork` + `ReportAgentStatus` → readiness **Blocked 归零** |
 | 网关 work 存储 | `wist-gateway` | `WorkGrant` 快照 + `plan_version` + 状态机（active/paused/superseded/revoked） |
-| 网关内容装载 | `wist-gateway` | 读 `catalog.toml` / `packs.toml` / `templates.toml`；校验：`pack_refs` 可解析、包内 `unit_refs` 在 `catalog_version` 内可解析、每平台恰好一个 `Baseline` 包、`capability_scope`（派生）= 展开后单元能力并集。模板由包**组合**而成（**无继承**） |
+| 网关内容装载 | `wist-gateway` | 读 `catalog.toml` / `packs.toml` / `templates.toml`；校验：`pack_refs` 可解析、包内 `unit_refs` 在 `catalog_version` 内可解析、每平台恰好一个 `Baseline` 包、`family_scope`（派生）= 展开后面集。模板由包**组合**而成（**无继承**）；**展开粒度 = 面**（一面一份常驻工作） |
 | 授权端点 | `wist-gateway` | 6 个管理面端点 + `GET /api/v1/agent/work` + `/work:ack` |
-| agentd 消费授权 | `wist-agentd` | 最小实现：常驻工作 `collect_logs` → `file_inputs` 落地 |
+| agentd 消费授权 | `wist-agentd` | 最小实现：按**面**消费常驻工作（一面一份）→ `file_inputs` 落地 |
 
 **验收**：`POST …/work` 后 `GET /api/v1/agent/work` 返回快照（幂等、`sequence` 递增）；
 模板展开的 `SelectionBasis` 含 `template_id` / `facts_used` / `excluded_units`；
