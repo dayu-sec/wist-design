@@ -144,6 +144,20 @@ struct WorkReceipt {
   created_at: DateTime
 }
 
+struct WorkAccepted {
+  meta {
+    label zh "工作已确认"
+    label en "Work Accepted"
+    summary zh "Agent 对某份工作的确认结果：accepted（版本对得上，收到了）/ stale（版本对不上，请重拉快照）/ unknown（网关不认识这份工作）。"
+    tags "control", "work", "ack"
+  }
+
+  work_id: String
+  // accepted | stale | unknown
+  status: String
+  accepted_at: DateTime
+}
+
 event WorkGranted {
   meta {
     label zh "工作已授权"

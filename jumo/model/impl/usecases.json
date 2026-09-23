@@ -271,6 +271,99 @@
       ]
     },
     {
+      "name": "System.WistGateway.GrantAgentWork",
+      "status": "Partial",
+      "progress": 80,
+      "flow": "Control.AdminGrantWorkFlow",
+      "entries": [
+        {
+          "name": "AdminGrantWork",
+          "route": "POST /api/v1/admin/agents/:agent_id/work",
+          "handler": "wist-gateway:admin_ops.rs:grant_work",
+          "covers": ["StandingWork", "OneShotWork", "WorkReceipt"]
+        }
+      ],
+      "gaps": [
+        "一次性工作的 interruptible 一律按不可中断收（动作目录未就位），即暂时不允许运行中暂停",
+        "proposal_id 恒为空：AdminProposeWork / AdminReviewWork 还没有代码落点"
+      ]
+    },
+    {
+      "name": "System.WistGateway.RevokeAgentWork",
+      "status": "Partial",
+      "progress": 80,
+      "flow": "Control.AdminRevokeWorkFlow",
+      "entries": [
+        {
+          "name": "AdminRevokeWork",
+          "route": "POST /api/v1/admin/agents/:agent_id/work/:work_id/revoke",
+          "handler": "wist-gateway:admin_ops.rs:revoke_work"
+        }
+      ],
+      "gaps": ["reason_code 收下但未落库：审计事件（WorkRevoked）还没建"]
+    },
+    {
+      "name": "System.WistGateway.PauseAgentWork",
+      "status": "Partial",
+      "progress": 80,
+      "flow": "Control.AdminPauseWorkFlow",
+      "entries": [
+        {
+          "name": "AdminPauseWork",
+          "route": "POST /api/v1/admin/agents/:agent_id/work/:work_id/pause",
+          "handler": "wist-gateway:admin_ops.rs:pause_work"
+        }
+      ],
+      "gaps": ["一次性工作因 interruptible 一律为 false，实际只能暂停常驻工作"]
+    },
+    {
+      "name": "System.WistGateway.ResumeAgentWork",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.AdminResumeWorkFlow",
+      "entries": [
+        {
+          "name": "AdminResumeWork",
+          "route": "POST /api/v1/admin/agents/:agent_id/work/:work_id/resume",
+          "handler": "wist-gateway:admin_ops.rs:resume_work"
+        }
+      ]
+    },
+    {
+      "name": "System.WistGateway.ServeAgentWorkGrant",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.PollWorkFlow",
+      "entries": [
+        {
+          "name": "PollWork",
+          "route": "POST /api/v1/agent/work:poll",
+          "handler": "wist-gateway:agent_ops.rs:poll_work",
+          "covers": ["WorkGrant"]
+        },
+        {
+          "name": "AdminViewAgentWork",
+          "route": "GET /api/v1/admin/agents/:agent_id/work（手加端点：模型只声明了授权/撤回，没有查看）",
+          "handler": "wist-gateway:admin_ops.rs:view_agent_work"
+        }
+      ],
+      "gaps": ["wait_ms 未实现长轮询：现在一律立即返回"]
+    },
+    {
+      "name": "System.WistGateway.AcceptWorkAcknowledgement",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.AckWorkFlow",
+      "entries": [
+        {
+          "name": "AckWork",
+          "route": "POST /api/v1/agent/work:ack",
+          "handler": "wist-gateway:agent_ops.rs:ack_work",
+          "covers": ["WorkAccepted"]
+        }
+      ]
+    },
+    {
       "name": "System.WistGateway.ServeDiscoveryPolicies",
       "status": "Complete",
       "progress": 100,

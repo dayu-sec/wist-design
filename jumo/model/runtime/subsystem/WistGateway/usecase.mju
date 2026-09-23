@@ -258,3 +258,93 @@ usecase ViewSoftwareHoldings {
   trigger Control.AdminViewSoftwareHoldings
   outcome Control.SoftwareHoldings
 }
+
+// 授权或更新某台 Agent 的工作（常驻按面、一次性按动作）
+usecase GrantAgentWork {
+  meta {
+    label zh "授权 Agent 工作"
+    label en "Grant Agent Work"
+    summary zh "管理员给某台 Agent 授权工作：常驻工作按采集面授权（一个面一份，spec 由采集目录按该机器事实展开或逐条校验），一次性工作按动作授权（带计划开始、绝对截止与执行预算）。授权闸门是面就绪度：规则未就绪的面不许授权；用途判定是前置，没有判定就没有机器类别、取不到模板。"
+    tags "agent-work", "grant", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminGrantWork
+  outcome Control.WorkReceipt
+  flow Control.AdminGrantWorkFlow
+}
+
+// 撤回某台 Agent 的一份工作
+usecase RevokeAgentWork {
+  meta {
+    label zh "撤回 Agent 工作"
+    label en "Revoke Agent Work"
+    summary zh "管理员撤回某台 Agent 的一份工作：常驻工作撤销授权（从 revoked 恢复要走新的提案加审定），一次性工作取消未了结的活。撤回不删行，留痕供审计。"
+    tags "agent-work", "revoke", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminRevokeWork
+  outcome Control.WorkReceipt
+  flow Control.AdminRevokeWorkFlow
+}
+
+// 暂停某台 Agent 的一份工作
+usecase PauseAgentWork {
+  meta {
+    label zh "暂停 Agent 工作"
+    label en "Pause Agent Work"
+    summary zh "管理员暂停某台 Agent 的一份工作：常驻工作的暂停是期望状态的一部分（保留授权与版本，Agent 没在做不算漂移）；一次性工作只有可中断且正在执行时才允许暂停，不可中断的动作一律拒绝，而不是尽力暂停。"
+    tags "agent-work", "pause", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminPauseWork
+  outcome Control.WorkReceipt
+  flow Control.AdminPauseWorkFlow
+}
+
+// 继续某台 Agent 被暂停的工作
+usecase ResumeAgentWork {
+  meta {
+    label zh "继续 Agent 工作"
+    label en "Resume Agent Work"
+    summary zh "管理员继续某台 Agent 被暂停的工作：仍用暂停前的同一版本，不重新审定；一次性工作从步级断点继续，并把本次暂停时长计入累计（暂停期间不消耗执行预算的依据）。"
+    tags "agent-work", "resume", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminResumeWork
+  outcome Control.WorkReceipt
+  flow Control.AdminResumeWorkFlow
+}
+
+// 向 Agent 交付工作授权快照
+usecase ServeAgentWorkGrant {
+  meta {
+    label zh "下发工作授权快照"
+    label en "Serve Agent Work Grant"
+    summary zh "网关向 agentd 交付工作授权快照：常驻工作的当前生效版本（含暂停的）加未了结的一次性工作，带授权序号。幂等、可重复拉取：断网或重启后重新拉一次就回到期望状态，网关不必记推到哪了。"
+    tags "agent-work", "grant", "agentd", "serve"
+  }
+
+  actor Control.Agentd
+  trigger Control.PollWork
+  outcome Control.WorkGrant
+  flow Control.PollWorkFlow
+}
+
+// 接收 Agent 的工作确认
+usecase AcceptWorkAcknowledgement {
+  meta {
+    label zh "接收工作确认"
+    label en "Accept Work Acknowledgement"
+    summary zh "网关接收 agentd 对某份工作的确认：常驻工作比对生效版本（对不上回报 stale，请其重拉快照），一次性工作从已派发进到已接受。网关据此判断期望与实际是否一致，一直没确认的就是漂移。"
+    tags "agent-work", "ack", "agentd"
+  }
+
+  actor Control.Agentd
+  trigger Control.AckWork
+  outcome Control.WorkAccepted
+  flow Control.AckWorkFlow
+}

@@ -43,11 +43,9 @@ message<command> AckWork {
   acknowledged_at: DateTime
 }
 
-message<response> WorkAccepted {
-  work_id: String
-  status: String
-  accepted_at: DateTime
-}
+// 确认的回应是**工作域的结构**（与 WorkGrant 同类），不是一条协议消息：
+// 它要能被用例当成 outcome 引用（message 不行），而且它描述的就是「工作已被确认」
+// 这个领域事实。见 Control.Agent.Work 的 WorkAccepted。
 
 interface WistAgentdOnlineRegistrationInterface {
   meta {
