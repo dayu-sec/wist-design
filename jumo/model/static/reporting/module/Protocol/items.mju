@@ -3,7 +3,13 @@ message<command> AgentStatusReport {
   instance_id: String
   version: String
   memory_bytes: Int?
+  // **单核口径**：100% = 占满一个核（多线程可 >100）。只统计 agent 进程**自己**的 CPU 时间，
+  // 不含它拉起的子进程。
   cpu_percent: Float?
+  // 本机**逻辑核数**。与 cpu_percent 同一份上报：核数缺了，「这台机器被它占了百分之几」
+  // 既算不出来也无法复核（4 核上的 13% 与 64 核上的 13% 不是一回事）。
+  // 换算成整机占比由消费侧（gateway）做 —— agent 只交原始事实，派生值只留一处实现。
+  cpu_cores: Int?
   admin_latency_ms: Int?
   // 本机**实际生效**的发现方向策略版本；空 = 还没拿到策略表（在用内建默认周期）。
   // 为什么由 agent 上报：网关知道自己**发布**了哪一版，但不知道哪台机器**拉到并应用**了哪一版

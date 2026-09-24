@@ -59,6 +59,7 @@ struct RecentOnlineRegisteredAgent {
   meta {
     label zh "最近上线注册 Agent"
     label en "Recent Online Registered Agent"
+    summary zh "总览页“最近上线的 Agent”卡片：身份/版本/上线时长，加上**最近一次上报的运行态快照**（与 AgentRuntimeStatus 同源，只是随列表一起带出）。"
     tags "agentd", "status", "overview", "recent-online"
   }
 
@@ -68,6 +69,51 @@ struct RecentOnlineRegisteredAgent {
   registered_at: DateTime
   online_since: DateTime
   online_duration_seconds: Int
+  // 真实注册还是空态演示数据：`example` 只在“一条真 Agent 都没有”时用来撑页面，
+  // 必须能区分，否则演示数据会被读成真实资产。
+  source: RecentOnlineRegisteredAgentSource
+  memory_bytes: Int?
+  // **单核口径**：100% = 占满一个核（多线程可 >100）。只统计 agent 进程**自己**的 CPU 时间，
+  // 不含它拉起的子进程。
+  cpu_percent: Float?
+  // **整机口径**（0..100）= cpu_percent / cpu_cores。核数缺失或为 0 时为空 ——
+  // “算不出来”不得写成 0，那会在页面上伪造出一段“整机空闲”的假读数。
+  cpu_percent_of_machine: Float?
+  cpu_cores: Int?
+  admin_latency_ms: Int?
+  // 尾部采样窗口（时序全量在 VictoriaMetrics，库里只留最近值）。
+  metrics_history: List<AgentStatusMetricSample>
+}
+
+variant RecentOnlineRegisteredAgentSource {
+  meta {
+    label zh "最近上线 Agent 数据来源"
+    label en "Recent Online Registered Agent Source"
+    summary zh "real = 真实注册的 Agent；example = 没有真实 Agent 时用于空态演示的示例数据。"
+    tags "agentd", "status", "overview"
+  }
+
+  Real
+  Example
+}
+
+// 时序指标的一个采样点：`at` 为观测时刻，其余为当期读数（缺 = 该点没测到，不是 0）。
+//
+// 名字带 `Status`：它是**运行状态视图**的采样点（字符串时间戳、只含自身上报的几项），
+// 与中心仓里那个同名的 VM 查询行（数值时间戳、全 `Float`）不是一回事，必须能分开。
+struct AgentStatusMetricSample {
+  meta {
+    label zh "Agent 指标采样点"
+    label en "Agent Metric Sample"
+    tags "agentd", "status", "metrics"
+  }
+
+  at: DateTime
+  memory_bytes: Int?
+  cpu_percent: Float?
+  cpu_percent_of_machine: Float?
+  cpu_cores: Int?
+  admin_latency_ms: Int?
 }
 
 struct AgentOverview {
