@@ -10,7 +10,7 @@
 # 包**不带门**：事实门（什么条件才采）在单元的 `match` 上，一门在一处生效。
 # families 是覆盖的采集面（= unit_refs 对应面的并集），供审计与覆盖度清点。
 #
-# 状态：除含 mac-host-metrics（唯一 active 单元）的包外，仍为 draft。
+# 状态：包 status 是**策展成熟度**（人定），不是闸门；闸门看单元的采集就绪度（见 catalog.toml）。
 
 # ── macOS ─────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ unit_refs = [
   "mac-misc-system",
   "mac-host-metrics",
 ]
-catalog_version = 1
+catalog_version = 2
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"
@@ -56,7 +56,7 @@ unit_refs = [
   "mac-privilege-exec",
   "mac-dev-toolchain",
 ]
-catalog_version = 1
+catalog_version = 2
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"
@@ -91,7 +91,7 @@ unit_refs = [
   "linux-storage-health",
   "linux-host-metrics",
 ]
-catalog_version = 1
+catalog_version = 2
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"
@@ -105,7 +105,7 @@ families = ["ComputeWorkload"]
 unit_refs = [
   "linux-compute-workload",
 ]
-catalog_version = 1
+catalog_version = 2
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"
@@ -119,7 +119,7 @@ unit_refs = [
   "linux-db-service",
   "linux-backup-job",
 ]
-catalog_version = 1
+catalog_version = 2
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"
@@ -133,7 +133,7 @@ unit_refs = [
   "linux-misc-system",
   "linux-network-service",
 ]
-catalog_version = 1
+catalog_version = 2
 status = "draft"
 curated_by = "platform-maintenance"
 curated_at = "2026-09-22T00:00:00Z"

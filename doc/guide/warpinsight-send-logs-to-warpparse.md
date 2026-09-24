@@ -89,6 +89,7 @@ framing = "line"
 [[telemetry.logs.file_inputs]]
 input_id = "monitoring-app"
 path = "/var/log/monitoring/app.log"
+# 显式选 head：要的是这个文件已有的内容（不写则默认 tail，只采新增）
 startup_position = "head"
 multiline_mode = "none"
 ```
@@ -111,8 +112,8 @@ multiline_mode = "none"
 - `path`
   - 要采集的日志文件路径。
 - `startup_position`
-  - `head` 表示首次启动从文件开头读。
-  - `tail` 表示首次启动从文件尾部开始，只采新增内容。
+  - 不写时默认 `tail`：首次读到这个文件时从**尾部**开始，只采之后新增的内容（**不重放历史**）。
+  - `head`：首次读到这个文件时从**文件头**读一遍 —— 要看历史才显式写。
 - `multiline_mode`
   - `none` 表示逐行采集。
   - `indented` 适合带缩进续行的堆栈日志。

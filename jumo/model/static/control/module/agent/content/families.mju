@@ -1,13 +1,28 @@
 // 工作内容的分类面（平台无关）
-
+//
 // 同一个面在 macOS 与 Linux 上是不同的单元：如 CrashPanic 在 macOS 是
 // `/Library/Logs/DiagnosticReports/*.ips|.panic`，在 Linux 是 dmesg / kern.log 的内核崩溃。
 // 面是“覆盖到了哪些类”，模板按面清点内容覆盖；平台差异由单元的 platform 字段表达。
+//
+// **面是本模型里的一个闭集，而且它描述的是“要看见什么”（需求），不是“从哪拿”（载体）**：
+//   - 载体随时会变：路径随系统版本变、轮转时改名（`wifi.log` → `wifi.log.0`）、格式被换掉；
+//     需求变得慢得多（“我要看见异常 launch”不会因为 launchd 换了文件就不算）；
+//   - 所以把面放进数据帧（记录带 `family`）比放进路径/文件别名稳。
+//
+// 闭集的维护规矩（这三条是**约定，要靠评审守住**，没有机制能自动拦改名）：
+//   1. **只增不改名**。面名一旦进入协议（数据帧/记录/接口），改名就是破坏性变更：
+//      历史数据里那个值会变成一个不存在的面，按面统计与回溯都会断。
+//   2. **要改语义就出新面**：旧面保留（历史仍可解释）、标 `deprecated` 退场。
+//      （退场机制本身还没定：`CollectionUnit.status` 有 `deprecated`，面这一层还没有，见 §待决）
+//   3. **加面要同时改两处**：本文件（模型）+ 网关的运行期白名单（`FAMILIES`）。
+//      网关装载时按白名单拒未知面，两侧不一致会被测试直接抳住。
+//
+// 每个面的含义、平台侧重、典型来源与事件：见 `doc/design/center/collection-families.md`。
 variant CollectionFamily {
   meta {
     label zh "采集面"
     label en "Collection Family"
-    summary zh "工作内容的分类面：登录、提权、软件变更、服务、崩溃、网络、重启、系统杂项、指标，以及 macOS 侧重与 Linux 侧重的面。"
+    summary zh "工作内容的分类面（**闭集**，共 18 个）：登录、提权、软件变更、服务、崩溃、网络、重启、系统杂项、指标，以及 macOS 侧重与 Linux 侧重的面。面描述**需求**（要看见什么类别的事件），不是**载体**（从哪个文件/接口拿）；只增不改名，改名即新面 + 旧面 deprecated。"
     tags "control", "collection", "content"
   }
 

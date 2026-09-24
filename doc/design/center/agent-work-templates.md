@@ -4,7 +4,7 @@
 
 | 层 | 模型项 | 作用 |
 |---|---|---|
-| 采集面 | `variant CollectionFamily`（`families.mju`） | 按事件/资源类别切的面，平台无关 |
+| 采集面 | `variant CollectionFamily`（`families.mju`） | 按事件/资源类别切的面，平台无关。**闭集（18 个）、只增不改名**；含义与维护规矩见 `collection-families.md` |
 | 采集单元 | `struct CollectionUnit`（`items.mju`） | 某面上的具体条目，带 `family` 与 `rule_ref`（绑数据面 rule/oml） |
 | 内容包 | `struct ContentPack` + `variant PackKind`（`items.mju`） | 可复用的单元组合：平台基线或特性面，模板的积木 |
 | 常驻工作模板 | `struct WorkTemplate` + `variant MachineClass` | 某类机器的开箱组合 = 平台基线包 ⊕ 若干特性包 |
@@ -156,7 +156,7 @@ Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkl
 授权闸门是**面就绪度**（`FamilyReadiness`，派生：该面至少有一个 `active` 单元），不是 `template.status`：
 
 - **就绪的面**才展开成工作；
-- **未就绪的面不展开**，其单元进 `SelectionBasis.excluded_units`（`reason_code = rule_not_ready`）；
+- **采集未就绪的面不展开**，其单元进 `SelectionBasis.excluded_units`（`reason_code = collect_not_ready`）；
 - 规则落地后**无需重新策展模板**，下一次展开/刷新自动启用该面。
 
 > 旧写法“引用到 draft 单元的模板不能 active”把单元级就绪度整块传成模板二值，

@@ -8,20 +8,22 @@
 #   capability_scope   = 解析后单元能力的并集（collect_logs / collect_metrics）
 #   required_privileges = **裁剪后**单元的 requires_privilege 并集（记进 SelectionBasis，非模板）
 #
-# 状态语义（与目录里单元的**规则就绪度**分开，不再混成一个 status）：
+# 状态语义（与目录里单元的**采集就绪度**分开，不再混成一个 status）：
 #   template.status = **策展成熟度**（人定）：active 策展完成可授权 / draft 草稿 / deprecated。
-#   授权闸门**不是** template.status，而是**面就绪度**：某个面在本平台至少有一个 active 单元才展开成工作；
-#   未就绪的面**不展开**（其单元进 SelectionBasis.excluded_units，reason_code = rule_not_ready）。
-#   规则落地后**无需重新策展**，下次展开/刷新自动启用 —— 即「部分可用 / 渐进启用」。
+#   授权闸门**不是** template.status，而是**面就绪度**：某个面在本平台至少有一个**采集就绪**
+#   （status = active）的单元才展开成工作；采集未就绪的面**不展开**
+#   （其单元进 SelectionBasis.excluded_units，reason_code = collect_not_ready）。
+#   采集要素齐了就自动启用，**不用等解析规则** —— 即「部分可用 / 渐进启用」。
 #
-# 现状：4 个模板的策展状态都是 draft；即便如此，其中“已就绪的面”（如 HostMetrics）也能单独授权发下去。
+# 现状：4 个模板的策展状态都是 draft；即便如此，其中“采集已就绪的面”（如 HostMetrics、
+#   SoftwareChange、CrashPanic）也能单独授权发下去。
 
 [[template]]
 template_id = "macos-daily"
 machine_class = "MacDaily"
 platform = "macos"
 pack_refs = ["macos-base"]
-catalog_version = 1
+catalog_version = 2
 template_version = 1
 status = "draft"
 curated_by = "platform-maintenance"
@@ -33,7 +35,7 @@ template_id = "macos-dev"
 machine_class = "MacDev"
 platform = "macos"
 pack_refs = ["macos-base", "macos-dev"]
-catalog_version = 1
+catalog_version = 2
 template_version = 1
 status = "draft"
 curated_by = "platform-maintenance"
@@ -44,7 +46,7 @@ template_id = "linux-compute"
 machine_class = "LinuxCompute"
 platform = "linux"
 pack_refs = ["linux-base", "linux-workload"]
-catalog_version = 1
+catalog_version = 2
 template_version = 1
 status = "draft"
 curated_by = "platform-maintenance"
@@ -56,7 +58,7 @@ template_id = "linux-data"
 machine_class = "LinuxData"
 platform = "linux"
 pack_refs = ["linux-base", "linux-workload", "linux-datastore", "linux-ops-extra"]
-catalog_version = 1
+catalog_version = 2
 template_version = 1
 status = "draft"
 curated_by = "platform-maintenance"

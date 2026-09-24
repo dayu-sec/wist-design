@@ -24,7 +24,7 @@ variant CollectionSourceKind {
   meta {
     label zh "采集来源类型"
     label en "Collection Source Kind"
-    summary zh "FileGlob（可直接 tail 的路径/通配）| Exporter（需周期导出器）| UnifiedLogPredicate（统一日志 predicate）| MetricInterval（指标间隔）。"
+    summary zh "FileGlob（本地文件路径）| Exporter（需周期导出器）| UnifiedLogPredicate（统一日志 predicate）| MetricInterval（指标间隔）。"
     tags "control", "collection", "source"
   }
 
@@ -43,8 +43,12 @@ struct CollectionSource {
   }
 
   kind: CollectionSourceKind
-  // 按 kind 取值：FileGlob → 路径/通配；Exporter → 导出器名（可带参数）；
+  // 按 kind 取值：FileGlob → 路径；Exporter → 导出器名（可带参数）；
   // UnifiedLogPredicate → predicate；MetricInterval → 间隔（如 `15s`）。
+  //
+  // **采集端今天只支持显式绝对路径**：通配（glob）与 `~` 尚未实现，写了也采不到
+  // （见 wist-agentd/docs/design/log-file-input-spec.md §2 的能力边界）。
+  // 所以带通配的单元不能标 active —— 网关装载时会拦（见 `is_executable_source`）。
   target: String
   // 怎么读这个来源（只对可 tail 的 FileGlob 有意义）：none（一行一条）| indented（行首缩进是上一条的续行）。
   // 放在**来源**上而不是单元上：一个单元可有多来源、格式可能不同；agentd 的归并也按文件（source_path）做。
@@ -208,27 +212,32 @@ struct WorkTemplate {
   curated_at: DateTime
 }
 
-// 一个采集面在某平台上的就绪度（**派生**自该面单元的规则就绪度）。
+// 一个采集面在某平台上的就绪度（**派生**自该面单元）。
 //
-// 为什么需要它：就绪度现在被 `status` 一字段背了两个含义（策展成熟度 + 规则就绪度），
-// 又把单元级就绪度整块往上传成模板二值（“引用到 draft 单元则整体不能 active”）——
-// 结果是一个面就绪也能采的面被全盘封死。拆开后：
-//   模板/包的 status = 策展成熟度（人定）；授权闸门 = 本结构（面就绪度）。
-// 授权按面展开：**就绪的面才展开成工作**；未就绪的面不展开，其单元进
-// SelectionBasis.excluded_units（reason_code = rule_not_ready）。
-// 规则落地后**无需重新策展**：下一次展开/刷新自动启用该面 —— 这就是「部分可用 / 渐进启用」。
+// 为什么需要它：就绪度曾把三件事背在 `status` 一个字段上（策展成熟度 + 规则就绪度 +
+// 单元级就绪度整块往上传成模板二值），结果是一个面本来就能采、却被“规则没写”全盘封死。
+// 拆开后，三个轴各归各位：
+//   模板/包的 status = 策展成熟度（人定）；
+//   单元的 status    = **采集就绪度**（能不能派下去采原文）→ 授权闸门；
+//   单元的 rule_ref  = **解析就绪度**（采下来能不能归类、抽字段）→ 只是信号，**不是**闸门。
+// 授权按面展开：**采集就绪的面才展开成工作**；未就绪的面不展开，其单元进
+// SelectionBasis.excluded_units（reason_code = collect_not_ready）。
+// 采集要素齐了就自动启用，**不用等解析规则** —— 这就是「部分可用 / 渐进启用」。
 struct FamilyReadiness {
   meta {
     label zh "采集面就绪度"
     label en "Family Readiness"
-    summary zh "某采集面在某平台上的规则就绪度（派生）：该面有多少 active 单元与总数，决定这个面能否展开成工作。"
+    summary zh "某采集面在某平台上两个轴的就绪度（派生）：采集（能不能把原文拿回来，决定该面能否展开成工作）与解析（拿回来的能否归类、抽字段，不参与闸门）。"
     tags "control", "collection", "readiness"
   }
 
   family: CollectionFamily
   platform: String
-  // 该面上 **规则已就绪** 的单元数（`status = active`）。
+  // **采集就绪**的单元数（`status = active`）：决定这个面能否展开成工作。
   active_units: Int
+  // 采集就绪且**解析就绪**的 `active` 单元数（`rule_ref` 非空）：为 0 意味着
+  // 该面采下来的记录只会以未归类的原文落地（当前是单个 agent.log 类）。
+  parse_ready_units: Int
   total_units: Int
 }
 
@@ -260,7 +269,7 @@ struct SelectionExclusion {
   }
 
   unit_id: String
-  // match_unsatisfied | fact_not_collected | platform_mismatch | privilege_missing | rule_not_ready | excluded_by_human
+  // match_unsatisfied | fact_not_collected | platform_mismatch | privilege_missing | collect_not_ready | excluded_by_human
   reason_code: String
   // match_unsatisfied / fact_not_collected 时指出是哪条条件（如 installed:redis-server）
   condition: String?

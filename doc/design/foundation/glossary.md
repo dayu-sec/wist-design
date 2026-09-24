@@ -545,8 +545,8 @@ IR 中 `kind = "output"` 的 step 类型。
 
 第一版推荐枚举：
 
-- `head`
-- `tail`
+- `tail`（**默认**：只采新增，不重放历史）
+- `head`（从文件头读一遍；要看历史才显式写）
 
 ### 9.12 `discovered_file_position`
 
