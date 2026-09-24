@@ -46,6 +46,9 @@ struct CollectionSource {
   // 按 kind 取值：FileGlob → 路径/通配；Exporter → 导出器名（可带参数）；
   // UnifiedLogPredicate → predicate；MetricInterval → 间隔（如 `15s`）。
   target: String
+  // 怎么读这个来源（只对可 tail 的 FileGlob 有意义）：none（一行一条）| indented（行首缩进是上一条的续行）。
+  // 放在**来源**上而不是单元上：一个单元可有多来源、格式可能不同；agentd 的归并也按文件（source_path）做。
+  multiline: String
 }
 
 struct CollectionUnit {

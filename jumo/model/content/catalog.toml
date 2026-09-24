@@ -6,6 +6,8 @@
 #            Exporter            需周期导出器（二进制、DB、统一日志、审计链、dmesg，不能直接 tail）
 #            UnifiedLogPredicate 统一日志 predicate
 #            MetricInterval      指标采集间隔
+#     multiline = none           一行一条（默认）
+#                 indented       行首缩进/制表符是上一条的续行（拟一整个多行记录上送）
 #     一个单元可有多来源；`glob:A|B` 这种在一个串里塞多路径的写法已拆成多条来源。
 #   match：装了什么/跑了什么才采；空 = 平台基线必采（三态求值，见模型 CollectionUnit.match）
 #   rule_ref：数据面 rule/oml 标识；空 = 规则未就绪（status 必然是 draft）
@@ -52,13 +54,20 @@ family = "SoftwareChange"
 capability = "collect_logs"
 platform = "macos"
 match = ""
-rule_ref = ""
-requires_privilege = "root"
-status = "draft"
+# rule_ref 只声明「帧能落数据面」：本面由 agent_uplink/log_frame 承接（原文原样保留），
+# 与 mac-host-metrics 同一口径。**正文归类尚未做**（记录带泛化的 log_type=agent.log）——
+# 有意的中间态：先把真实样本采回来，再据样本决定要不要写正文规则。
+rule_ref = "agent_uplink"
+# install.log 实测是 `-rw-r--r-- root wheel`，非 root 也读得到（原标 root 与实况不符）。
+requires_privilege = "none"
+status = "active"
 
 [[units.sources]]
 kind = "FileGlob"
 target = "/var/log/install.log"
+# 实测：install.log 里约 28% 的行是缩进续行（一条 installer 事件后面跟 plist/TOML 详情块）。
+# 不归并的话这些续行会被当成独立记录上送。
+multiline = "indented"
 
 [[units]]
 unit_id = "mac-launchd-service"
