@@ -36,6 +36,10 @@ lexicon {
   term AckWork { aliases "AckAgentWork", "ConfirmWork" }
   term WorkAccepted { aliases "AgentWorkGrantReturned", "WorkAckAccepted" }
 
+  // Agent 侧：上报一次性工作的执行结果（进度/终态），与“确认收到”分开。
+  term ReportWorkResult { aliases "SubmitWorkResult", "WorkResultReported", "ReportAgentWorkResult" }
+  term WorkResultAccepted { aliases "AgentWorkResultAccepted", "WorkResultAck" }
+
   // 管理面：授权 / 撤回。动词统一到 grant / revoke（不混用 Dispatch / Assign / Submit / Cancel）。
   term AdminGrantWork { aliases "AdminDispatchStandingWork", "AdminAssignWork", "AdminSubmitWork", "AdminSubmitOneShotWork", "AdminSetWork" }
   term AdminRevokeWork { aliases "AdminRevokeStandingWork", "AdminCancelWork", "AdminUnassignWork", "AdminDeleteWork" }

@@ -1,5 +1,9 @@
 // warp-insight 生成与部署目标
-
+//
+// 注意：wist-upgrader 是 **wist-agentd crate 内的第二个 bin**（与 wist-exec 并列），
+// 不是独立 crate —— 升级要换的就是 agentd 自己的二进制，版本必须跟 agentd 锁死；
+// 但它作为**分离进程**运行，不进 wist-exec 的生命周期管理
+// （exec 会超时杀/取消，升级不能被杀死在「已换件、未重启」的中间态）。
 target<bin> wist-upgrader {
   modules Discovery.Execute, Reporting.Contract
 }

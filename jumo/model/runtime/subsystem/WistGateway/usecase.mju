@@ -348,3 +348,18 @@ usecase AcceptWorkAcknowledgement {
   outcome Control.WorkAccepted
   flow Control.AckWorkFlow
 }
+
+// 接收 Agent 上报的工作执行结果
+usecase AcceptWorkResult {
+  meta {
+    label zh "接收工作执行结果"
+    label en "Accept Work Result"
+    summary zh "网关接收 agentd 上报的一次性工作执行结果（进度与终态）：未了结的活推进到对应状态并留下结果记录；已了结的回归 stale、不覆盖终态（一件活只能有一个终态），但结果照存 —— 机器上确实发生过那次执行。回滚在控制面上映射为 failed，说明里写清回到哪一版。"
+    tags "agent-work", "result", "agentd"
+  }
+
+  actor Control.Agentd
+  trigger Control.ReportWorkResult
+  outcome Control.WorkResultAccepted
+  flow Control.ReportWorkResultFlow
+}

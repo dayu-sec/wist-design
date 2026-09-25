@@ -180,6 +180,15 @@ bind WistAgentdOnlineRegistrationInterface {
     outcome AgentControlCommandsReturned on ControlCommandsReturned
   }
 
+  // 一次性工作的执行结果（进度/终态）。与 ack 分开一条路由：确认回答「我收到了」，
+  // 结果回答「我做得怎么样了」—— 两者失效的代价不同，不挤一条路。
+  entry ReportWorkResult {
+    route POST "/api/v1/agent/work:result"
+    auth bearer
+    actor_identity Agentd.id from credential.agent_id
+    status WorkResultAccepted 200
+  }
+
   entry ReportActionResult {
     route POST "/api/v1/agent/action-results"
     auth bearer

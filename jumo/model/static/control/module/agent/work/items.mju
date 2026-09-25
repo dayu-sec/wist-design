@@ -19,6 +19,8 @@
 //     而不是“尽力暂停”（挂起半个升级进程比不暂停更危险）。
 //   - 时间语义：暂停期间**不消耗执行预算**（timeout_seconds），但**照走绝对截止**
 //     （deadline_at）—— 两者任一先到即终结：预算尽 = timed_out，截止到 = expired。
+//     **判定在网关侧**：到期与预算尽由网关的定时扫描收敛成终态，不依赖 agent 在线 ——
+//     agent 掉线恰恰是这活最可能卡住的时候。agent 只报结果；「它没成」这个结论由网关落成终态。
 //   - 恢复**从步级断点继续**（completed_steps 保留、current_step 重做），不整件重来；
 //     执行载体 Reporting.ActionPlan 本来就是多步，StepActionRecord 已记每步结果，
 //     不必另造进度概念。
@@ -152,6 +154,20 @@ struct WorkAccepted {
     label en "Work Accepted"
     summary zh "Agent 对某份工作的确认结果：accepted（版本对得上，收到了）/ stale（版本对不上，请重拉快照）/ unknown（网关不认识这份工作）。"
     tags "control", "work", "ack"
+  }
+
+  work_id: String
+  // accepted | stale | unknown
+  status: String
+  accepted_at: DateTime
+}
+
+struct WorkResultAccepted {
+  meta {
+    label zh "工作结果已接收"
+    label en "Work Result Accepted"
+    summary zh "网关对 Agent 上报的执行结果的回应：accepted（已推进工作状态并留下结果记录）/ stale（这件活已了结：结果不覆盖终态但照存）/ unknown（不认识这件活或不属于它）。"
+    tags "control", "work", "result"
   }
 
   work_id: String

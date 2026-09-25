@@ -43,10 +43,25 @@ message<command> AckWork {
   acknowledged_at: DateTime
 }
 
+// 上报一次性工作的**执行结果**（进度与终态）。
+// 与 AckWork 分开：确认回答「我收到了」，结果回答「我做得怎么样了」—— 两者失效的代价不同
+// （确认丢了只是页面晚一拍；结果丢了则是一件改变机器状态的活做完了，而控制面永远不知道），
+// 不挤一条路。回滚在控制面上就是 failed，说明里写清回到哪一版（见 Control.Agent.Work）。
+message<command> ReportWorkResult {
+  agent_id: String
+  instance_id: String
+  work_id: String
+  // running | succeeded | failed（agent 可上报的真子集：dispatched 归网关、
+  // paused/canceled/expired 归控制面与期限）。
+  status: String
+  // 人看的说明：失败原因原样带上（如「摘要不符」「新版 60s 没起来，已回滚到 0.1.3」）。
+  detail: String
+  reported_at: DateTime
+}
+
 // 确认的回应是**工作域的结构**（与 WorkGrant 同类），不是一条协议消息：
 // 它要能被用例当成 outcome 引用（message 不行），而且它描述的就是「工作已被确认」
 // 这个领域事实。见 Control.Agent.Work 的 WorkAccepted。
-
 interface WistAgentdOnlineRegistrationInterface {
   meta {
     label zh "WistAgentd 在线注册接口"
@@ -85,6 +100,11 @@ interface WistAgentdOnlineRegistrationInterface {
   entry AckWork {
     actor Agentd
     output WorkAccepted
+  }
+
+  entry ReportWorkResult {
+    actor Agentd
+    output WorkResultAccepted
   }
 
   // 上报事实**摘要**（不是原文快照，原文走数据面）。
@@ -150,6 +170,18 @@ flow AckWorkFlow {
 
   actor Agentd
   trigger AckWork
+}
+
+flow ReportWorkResultFlow {
+  meta {
+    label zh "上报工作执行结果"
+    label en "Report Work Result Flow"
+    summary zh "Agentd 上报一次性工作的执行结果（进度与终态）：网关据此把工作推进到对应状态并留下结果记录；已了结的回归 stale，不覆盖终态。"
+    tags "agentd", "work", "result"
+  }
+
+  actor Agentd
+  trigger ReportWorkResult
 }
 
 flow RenewAgentCredentialFlow {
