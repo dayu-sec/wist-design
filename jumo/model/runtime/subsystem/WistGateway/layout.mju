@@ -7,7 +7,7 @@ region AdminTopNavigation {
   meta {
     label zh "顶部导航"
     label en "Top Navigation"
-    summary zh "WistGateway 的顶部导航区，作为各独立页面共享的页面级导航，提供首页、初始化、安装、安装包地址、控制中心与灰度发布入口，并展示在线业务区和操作者上下文。"
+    summary zh "WistGateway 的顶部导航区，作为各独立页面共享的页面级导航，提供首页、初始化、安装、安装包地址、控制中心与 Agent 升级入口，并展示在线业务区和操作者上下文。"
     tags "admin", "navigation", "top-navigation", "layout-index"
   }
 
@@ -87,32 +87,32 @@ region<page> AgentInstallPackagePage {
   layout fill_remaining
 }
 
-region<page> RolloutPlansPage {
+region<page> AgentUpgradePage {
   meta {
-    label zh "灰度发布"
-    label en "Rollout Plans"
-    summary zh "WistGateway 的灰度发布计划页：列出机队级的灰度发布计划，并创建草稿（动作 + 分阶段范围 + 阶段内并发）。计划是编排层，不在此页批准或推进。"
-    tags "admin", "rollout", "plan", "gray-release", "page"
+    label zh "Agent 升级"
+    label en "Agent Upgrade"
+    summary zh "WistGateway 的 Agent 升级页：把 agentd 升级按灰度阶段铺到机队。列出升级计划并创建草稿（任务类型 + 升级参数 + 升级节奏 + 灰度阶段）；批准/推进在详情页。"
+    tags "admin", "upgrade", "rollout", "plan", "page"
   }
 
   orientation vertical
   contains AdminTopNavigation
-  contains RolloutPlanListPanel { slot_usecase: ListRolloutPlans }
-  contains RolloutPlanCreateCard { slot_usecase: CreateRolloutPlan }
+  contains AgentUpgradePlanListPanel { slot_usecase: ListRolloutPlans }
+  contains AgentUpgradeCreateCard { slot_usecase: CreateRolloutPlan }
   layout fill_remaining
 }
 
-region<page> RolloutPlanDetailPage {
+region<page> AgentUpgradeDetailPage {
   meta {
-    label zh "灰度发布计划详情"
-    label en "Rollout Plan Detail"
-    summary zh "WistGateway 的灰度发布计划详情页：查看一份计划及其逐目标进度，并承载灰度发布的两处人工闸门（批准进入第一阶段 / 确认无问题后推进下一阶段）。"
-    tags "admin", "rollout", "plan", "gray-release", "page"
+    label zh "升级计划详情"
+    label en "Agent Upgrade Plan Detail"
+    summary zh "WistGateway 的升级计划详情页：查看一份 Agent 升级计划及其逐台进度，并承载灰度升级的两处人工闸门（批准进入第 1 批 / 确认无问题后推进下一批）。"
+    tags "admin", "upgrade", "rollout", "plan", "page"
   }
 
   orientation vertical
   contains AdminTopNavigation
-  contains RolloutPlanDetailPanel { slot_usecase: ViewRolloutPlan }
-  contains RolloutPlanGates { slot_usecase: ApproveRolloutPlan }
+  contains AgentUpgradeDetailPanel { slot_usecase: ViewRolloutPlan }
+  contains AgentUpgradeGates { slot_usecase: ApproveRolloutPlan }
   layout fill_remaining
 }

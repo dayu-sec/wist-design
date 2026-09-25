@@ -1,8 +1,9 @@
 // 灰度发布计划（RolloutPlan）：把一个「动作」按阶段（灰度）铺到一组目标（target）上。
 //
 // 这是一个**通用模式**，不是「升级专用」，也不是「agent 专用」：
-//   - action + spec 决定「做什么」——今天只有 upgrade，spec 就是 agentd 侧 UpgradeSpec 的
-//     {"target_version","package_url","package_sha256"}，物化时原样放进执行单元；
+//   - action + spec 决定「做什么」——今天只有 upgrade，spec 是 agentd 侧 UpgradeSpec 的
+//     {"package_url","package_sha256"}（+ 可选 "target_version"；不给就以**包内 agentd 自报的版本**为准），
+//     物化时原样放进执行单元；
 //     将来新增动作（改配置 / 下发策略 / 重启……）只需加 action，不用再建一套计划。
 //   - phases 决定「分几批、每批什么范围、何时推进」——灰度发布的过程控制（金丝雀 → 扩大 → 全量）。
 //   - target 是通用标识：网关用它铺自己的机队（target = agent），中心也可用它铺网关
@@ -68,8 +69,10 @@ struct RolloutPlan {
   unique plan_id: String
   // 要执行的动作：与 OneShotWork.action 同一目录，今天只有 upgrade。
   action: String
-  // 动作参数（JSON）：upgrade 时是 {"target_version","package_url","package_sha256"}，
-  // 与 agentd 侧 UpgradeSpec 同形；物化时原样放进每个执行单元。
+  // 动作参数（JSON）：upgrade 时是 {"package_url","package_sha256"}（+ 可选 "target_version"），
+  // 与 agentd 侧 UpgradeSpec 同形；物化时原样放进每个执行单元。目标版本可省 —— 版本是
+  // 「那份包里的版本」，缺省时由升级器解包后从内置 agentd 自报的版本取；
+  // 但**旧 agentd 要求该键存在**，升级还没跟上的旧 Agent 时要把它填上。
   spec: String
   // 物化到每件一次性工作的执行约束（灰度发布各阶段共用一份）。
   deadline_at: DateTime

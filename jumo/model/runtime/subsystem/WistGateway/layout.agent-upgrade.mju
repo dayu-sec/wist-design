@@ -1,0 +1,204 @@
+// WistGateway Agent 升级页 layout regions
+//
+// 「Agent 升级」是通用灰度发布引擎（模型 `Control.Rollout`）的**具体化**：今天只有这一种
+// 任务类型，页面对操作者要具体。页面分两处：列表页承载「看升级计划 + 建草稿」，详情页承载
+// 「逐台进度 + 两处人工闸门」。将来日志清理、数据备份等任务照此各加一处。
+
+region AgentUpgradePlanListPanel {
+  meta {
+    label zh "升级计划列表"
+    label en "Agent Upgrade Plan List"
+    summary zh "列出机队级的 Agent 升级计划：计划标识、目标版本、状态、进行到第几批、覆盖的 Agent 数与创建信息；一行一份，点进详情。"
+    tags "admin", "upgrade", "rollout", "plan", "list"
+  }
+
+  orientation vertical
+}
+
+region AgentUpgradeCreateCard {
+  meta {
+    label zh "新建升级计划"
+    label en "Create Agent Upgrade Plan Card"
+    summary zh "创建一份升级草稿：升级参数（目标版本、包地址、制品摘要 —— 都必填）、升级节奏（截止/超时/阶段内并发）与灰度阶段（只选阶段数，agent 自动分配）。任务类型固定为 Agent 升级，**不在此选择**。创建后是草稿，批准才动手。"
+    tags "admin", "upgrade", "rollout", "plan", "form"
+  }
+
+  orientation vertical
+  contains AgentUpgradeParamsFields
+  contains AgentUpgradePacingFields
+  contains AgentUpgradePhaseConfig
+  contains SubmitCreateAgentUpgradeAction { slot_command: AdminCreateRolloutPlan }
+}
+
+region AgentUpgradeParamsFields {
+  meta {
+    label zh "升级参数"
+    label en "Upgrade Params"
+    summary zh "从哪取包（包地址：https 链接或目标 Agent 主机上的绝对路径）与制品摘要（64 位 hex）两项必填；**目标版本可留空**（版本就是那份包里的版本，由升级器解包后从包内 agentd 自报取得）—— 但**旧 agentd 要求这个键存在**，升级还没跟上的旧 Agent 时要填。这些参数各阶段共用一份。"
+    tags "admin", "upgrade", "params"
+  }
+
+  orientation vertical
+  contains AgentUpgradeTargetVersionInput { slot_field: target_version }
+  contains AgentUpgradePackageUrlInput { slot_field: package_url }
+  contains AgentUpgradePackageSha256Input { slot_field: package_sha256 }
+}
+
+region AgentUpgradeTargetVersionInput {
+  meta {
+    label zh "目标版本输入（可选）"
+    label en "Target Version Input"
+    summary zh "可留空：新 agentd 会从包内 agentd 自报的版本取；旧 agentd 要求这个键存在，升级旧 Agent 时填（且必须与包内版本一致）。"
+    tags "admin", "upgrade", "input"
+  }
+
+  orientation vertical
+}
+
+region AgentUpgradePacingFields {
+  meta {
+    label zh "升级节奏"
+    label en "Upgrade Pacing"
+    summary zh "整份计划的截止时间、单个 Agent 的升级超时与阶段内并发（0 = 不节流）。"
+    tags "admin", "upgrade", "pacing"
+  }
+
+  orientation vertical
+}
+
+region AgentUpgradePhaseConfig {
+  meta {
+    label zh "灰度阶段配置"
+    label en "Upgrade Phase Config"
+    summary zh "只选阶段数（2 / 3 / 4 / 5）；每个阶段的 agent 由系统按「1 台 → 10% → 30% → 70% → 全量」的阶梯自动分配（切片互不重叠，一个 Agent 只升一次），运维**不填 agent_id**。"
+    tags "admin", "upgrade", "rollout", "phase"
+  }
+
+  orientation vertical
+  contains AgentUpgradePhaseCountSelect { slot_field: phase_count }
+  contains AgentUpgradeAssignmentPreview
+}
+
+region AgentUpgradePhaseCountSelect {
+  meta {
+    label zh "阶段数选择"
+    label en "Phase Count Select"
+    summary zh "选灰度分几个阶段：2 / 3 / 4 / 5。选项按机队台数**收窄** —— 每段至少 1 台，台数少就不再多轮；单台机器退化为「1 阶段（不分批）」。"
+    tags "admin", "upgrade", "input"
+  }
+
+  orientation horizontal
+}
+
+region AgentUpgradeAssignmentPreview {
+  meta {
+    label zh "阶段分配预览"
+    label en "Assignment Preview"
+    summary zh "逐阶段展示：覆盖口径（第 1 批是金丝雀 1 台，其余读「覆盖 ~X%」）、本批新增台数与具体的 agent_id 清单；按排序后的 agent_id 依次切片。"
+    tags "admin", "upgrade", "preview"
+  }
+
+  orientation vertical
+}
+
+region AgentUpgradePackageUrlInput {
+  meta {
+    label zh "安装包地址输入"
+    label en "Package URL Input"
+    summary zh "升级取的制品地址：https 链接，或**目标 Agent 主机上的绝对路径**（离线/联调把制品预置到目标机，升级器直接读本机文件）。必填。"
+    tags "admin", "upgrade", "input"
+  }
+
+  orientation vertical
+}
+
+region AgentUpgradePackageSha256Input {
+  meta {
+    label zh "安装包摘要输入"
+    label en "Package Sha256 Input"
+    summary zh "制品摘要（64 位十六进制，可带 sha256: 前缀）：升级器按它校验制品，不符不换件。必填。"
+    tags "admin", "upgrade", "input"
+  }
+
+  orientation vertical
+}
+
+region SubmitCreateAgentUpgradeAction {
+  meta {
+    label zh "创建升级计划"
+    label en "Submit Create Agent Upgrade"
+    tags "admin", "upgrade", "action"
+  }
+
+  orientation horizontal
+}
+
+region AgentUpgradeDetailPanel {
+  meta {
+    label zh "升级计划与逐台进度"
+    label en "Upgrade Plan & Per-agent Progress"
+    summary zh "一份升级计划的摘要、参数、灰度阶段与逐台进度：计划是目录，逐 Agent 条目才是事实（哪台升成了没、失败原因是什么、回滚到哪一版）。"
+    tags "admin", "upgrade", "rollout", "detail"
+  }
+
+  orientation vertical
+  contains AgentUpgradeSummary
+  contains AgentUpgradeMetaList
+  contains AgentUpgradePhaseList
+  contains AgentUpgradeEntryTable
+}
+
+region AgentUpgradeSummary {
+  meta {
+    label zh "升级摘要"
+    label en "Upgrade Summary"
+    summary zh "覆盖的 Agent 数与成功 / 失败 / 升级中 / 待派发的逐台计数，以及进行到第几批；计数由逐 Agent 条目派生。"
+    tags "admin", "upgrade", "summary"
+  }
+
+  orientation grid
+}
+
+region AgentUpgradeMetaList {
+  meta {
+    label zh "升级参数"
+    label en "Upgrade Meta"
+    summary zh "计划本身：任务类型（Agent 升级）、目标版本、安装包地址与摘要、截止时间、单个 Agent 超时、阶段内并发，以及创建 / 批准留痕。"
+    tags "admin", "upgrade", "meta"
+  }
+
+  orientation vertical
+}
+
+region AgentUpgradePhaseList {
+  meta {
+    label zh "灰度阶段列表"
+    label en "Upgrade Phase List"
+    summary zh "逐批展示范围、推进条件与了结情况；进行中的批次被点亮。"
+    tags "admin", "upgrade", "phase"
+  }
+
+  orientation vertical
+}
+
+region AgentUpgradeEntryTable {
+  meta {
+    label zh "逐台进度表"
+    label en "Upgrade Entry Table"
+    summary zh "一个 Agent 一行：Agent、条目状态、派发出的升级工作标识、结果说明（失败/回滚到哪一版）与更新时间。"
+    tags "admin", "upgrade", "entry", "table"
+  }
+
+  orientation vertical
+}
+
+region AgentUpgradeGates {
+  meta {
+    label zh "人工闸门"
+    label en "Upgrade Gates"
+    summary zh "灰度升级的两处人工确认：批准（草稿 → 第 1 批金丝雀）与推进（本批确认无问题 → 下一批）。这是灰度发布「确认无问题再推下一批」的落点。"
+    tags "admin", "upgrade", "gate", "action"
+  }
+
+  orientation horizontal
+}
