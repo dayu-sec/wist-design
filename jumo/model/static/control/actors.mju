@@ -64,6 +64,11 @@ actor AdminOperator {
   can AdminViewAgentSoftware
   can AdminViewSoftwareHoldings
   can AdminViewDiscoveryPolicies
+  can AdminCreateRolloutPlan
+  can AdminListRolloutPlans
+  can AdminApproveRolloutPlan
+  can AdminAdvanceRolloutPlan
+  can AdminViewRolloutPlan
 }
 
 actor<system> WistGateway {

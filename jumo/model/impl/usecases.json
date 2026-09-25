@@ -472,6 +472,71 @@
           "handler": "wist-gateway:admin_ops.rs:view_discovery_policies"
         }
       ]
+    },
+    {
+      "name": "System.WistGateway.CreateRolloutPlan",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.AdminCreateRolloutPlanFlow",
+      "entries": [
+        {
+          "name": "AdminCreateRolloutPlan",
+          "route": "POST /api/v1/admin/rollout-plans",
+          "handler": "wist-gateway:rollout_ops.rs:create_rollout_plan"
+        }
+      ],
+      "gaps": ["work_expiry 把工作推 expired/timed_out 时不会回填计划条目"]
+    },
+    {
+      "name": "System.WistGateway.ListRolloutPlans",
+      "status": "Complete",
+      "progress": 100,
+      "entries": [
+        {
+          "name": "AdminListRolloutPlans",
+          "route": "GET /api/v1/admin/rollout-plans",
+          "handler": "wist-gateway:rollout_ops.rs:list_rollout_plans"
+        }
+      ]
+    },
+    {
+      "name": "System.WistGateway.ApproveRolloutPlan",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.AdminApproveRolloutPlanFlow",
+      "entries": [
+        {
+          "name": "AdminApproveRolloutPlan",
+          "route": "POST /api/v1/admin/rollout-plans/approve",
+          "handler": "wist-gateway:rollout_ops.rs:approve_rollout_plan"
+        }
+      ]
+    },
+    {
+      "name": "System.WistGateway.AdvanceRolloutPlan",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.AdminAdvanceRolloutPlanFlow",
+      "entries": [
+        {
+          "name": "AdminAdvanceRolloutPlan",
+          "route": "POST /api/v1/admin/rollout-plans/advance",
+          "handler": "wist-gateway:rollout_ops.rs:advance_rollout_plan"
+        }
+      ]
+    },
+    {
+      "name": "System.WistGateway.ViewRolloutPlan",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.AdminViewRolloutPlanFlow",
+      "entries": [
+        {
+          "name": "AdminViewRolloutPlan",
+          "route": "GET /api/v1/admin/rollout-plans/{plan_id}",
+          "handler": "wist-gateway:rollout_ops.rs:view_rollout_plan"
+        }
+      ]
     }
   ]
 }

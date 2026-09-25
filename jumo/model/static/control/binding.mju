@@ -148,6 +148,43 @@ bind WistGatewayManagementInterface {
     actor_identity AdminOperator.id from jwt.sub
     status DiscoveryPolicyView 200
   }
+
+  // 灰度发布计划（网关 → agentd）：把一个动作（action + spec）按阶段（灰度）铺到机队，
+  // 批准后按阶段展开成一件件一次性工作（交付走 PollWork，结果走 ReportWorkResult 回填）。
+  entry AdminCreateRolloutPlan {
+    route POST "/api/v1/admin/rollout-plans"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status RolloutPlan 201
+  }
+
+  entry AdminListRolloutPlans {
+    route GET "/api/v1/admin/rollout-plans"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status List<RolloutPlan> 200
+  }
+
+  entry AdminApproveRolloutPlan {
+    route POST "/api/v1/admin/rollout-plans/approve"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status RolloutPlan 200
+  }
+
+  entry AdminAdvanceRolloutPlan {
+    route POST "/api/v1/admin/rollout-plans/advance"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status RolloutPlan 200
+  }
+
+  entry AdminViewRolloutPlan {
+    route GET "/api/v1/admin/rollout-plans/{plan_id}"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status RolloutPlanView 200
+  }
 }
 
 bind WistAgentdOnlineRegistrationInterface {

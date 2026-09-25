@@ -1,0 +1,21 @@
+// Control.Rollout 有界上下文：把一个动作按阶段（灰度）铺到一组目标上的计划体系。
+//
+// 与 Control.Agent.Work 分离：
+//   - Work 是「每台的一次性/常驻工作」（OneShotWork / StandingWork），授权的原子单位；
+//   - Rollout 是「机队/目标级的灰度发布计划」（RolloutPlan / RolloutPhase / RolloutPlanEntry），
+//     是编排层 —— 批准/推进时才物化出执行单元。
+// 物化方向单向：Rollout → Work（计划生成工作），Work 不反过来依赖 Rollout。
+//
+// 目标是**通用标识**（target_id）：网关用它铺自己的机队（target = agent），
+// 中心也可用它铺网关（target = gateway）；计划本身不关心目标是什么，物化时才落到具体执行单元。
+
+module<entity> Rollout {
+  meta {
+    label zh "灰度发布计划"
+    label en "Rollout"
+    summary zh "把一个动作按阶段（灰度）铺到一组目标（target）的计划体系；与 Work 分离，物化时才落到一次性工作。"
+    tags "control", "rollout", "plan", "gray-release"
+  }
+
+  layer Domain
+}

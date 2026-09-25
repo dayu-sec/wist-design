@@ -363,3 +363,77 @@ usecase AcceptWorkResult {
   outcome Control.WorkResultAccepted
   flow Control.ReportWorkResultFlow
 }
+
+// 创建灰度发布计划
+usecase CreateRolloutPlan {
+  meta {
+    label zh "创建灰度发布计划"
+    label en "Create Rollout Plan"
+    summary zh "管理员创建一份把一个动作按阶段（灰度）铺到一组目标（target）的计划：动作与参数、分阶段范围与阶段内并发，先落成 draft。"
+    tags "agent-work", "rollout", "plan", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminCreateRolloutPlan
+  outcome Control.RolloutPlan
+  flow Control.AdminCreateRolloutPlanFlow
+}
+
+// 列出灰度发布计划
+usecase ListRolloutPlans {
+  meta {
+    label zh "列出灰度发布计划"
+    label en "List Rollout Plans"
+    summary zh "管理员查看网关下的灰度发布计划列表。"
+    tags "agent-work", "rollout", "plan", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminListRolloutPlans
+  outcome Control.RolloutPlan
+}
+
+// 批准灰度发布计划（批准后进入第一阶段，按阶段展开成一次性工作）
+usecase ApproveRolloutPlan {
+  meta {
+    label zh "批准灰度发布计划"
+    label en "Approve Rollout Plan"
+    summary zh "管理员批准一份灰度发布计划：批准后进入第一阶段，为阶段内每个目标（target）生成一件 action 对应的一次性工作，并跟踪逐目标进度。"
+    tags "agent-work", "rollout", "plan", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminApproveRolloutPlan
+  outcome Control.RolloutPlan
+  flow Control.AdminApproveRolloutPlanFlow
+}
+
+// 推进灰度发布计划到下一阶段
+usecase AdvanceRolloutPlan {
+  meta {
+    label zh "推进灰度发布计划"
+    label en "Advance Rollout Plan"
+    summary zh "管理员把一份灰度发布计划推进到下一灰度阶段（advance_rule = manual）：上一阶段确认无问题后，为下一阶段范围的 Agent 生成一次性工作。"
+    tags "agent-work", "rollout", "plan", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminAdvanceRolloutPlan
+  outcome Control.RolloutPlan
+  flow Control.AdminAdvanceRolloutPlanFlow
+}
+
+// 查看灰度发布计划进度
+usecase ViewRolloutPlan {
+  meta {
+    label zh "查看灰度发布计划进度"
+    label en "View Rollout Plan"
+    summary zh "管理员查看一份灰度发布计划及其逐台进度（计划 + 条目）。"
+    tags "agent-work", "rollout", "plan", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.AdminViewRolloutPlan
+  outcome Control.RolloutPlanView
+  flow Control.AdminViewRolloutPlanFlow
+}

@@ -1,0 +1,190 @@
+// WistGateway rollout (gray-release) page layout regions
+//
+// 灰度发布计划是**编排层**：把升级（今天唯一的动作）按阶段铺到机队。页面分两处：
+// 列表页承载「看计划 + 建草稿」，详情页承载「逐台进度 + 两处人工闸门」。
+
+region RolloutPlanListPanel {
+  meta {
+    label zh "灰度发布计划列表"
+    label en "Rollout Plan List"
+    summary zh "列出机队级的灰度发布计划：计划标识、动作、状态、进行到第几阶段、目标数与创建信息；一行一份，点进详情。"
+    tags "admin", "rollout", "plan", "list"
+  }
+
+  orientation vertical
+}
+
+region RolloutPlanCreateCard {
+  meta {
+    label zh "新建灰度发布计划"
+    label en "Create Rollout Plan Card"
+    summary zh "创建一份草稿：动作（upgrade）+ 参数（目标版本、可选包地址/摘要）、分阶段范围与阶段内并发。创建后不派发任何工作，批准才展开。"
+    tags "admin", "rollout", "plan", "form"
+  }
+
+  orientation vertical
+  contains RolloutPlanActionAndSpecFields
+  contains RolloutPlanPhaseEditor
+  contains SubmitCreateRolloutPlanAction { slot_command: AdminCreateRolloutPlan }
+}
+
+region RolloutPlanActionAndSpecFields {
+  meta {
+    label zh "动作与参数"
+    label en "Action & Spec Fields"
+    summary zh "动作面（今天只有 upgrade）与它的参数：目标版本必填，包地址与摘要可选（留空即用网关默认来源）。这些参数在各阶段共用一份。"
+    tags "admin", "rollout", "form", "spec"
+  }
+
+  orientation vertical
+  contains RolloutPlanTargetVersionInput { slot_field: target_version }
+  contains RolloutPlanPackageUrlInput { slot_field: package_url }
+  contains RolloutPlanPackageSha256Input { slot_field: package_sha256 }
+}
+
+region RolloutPlanPhaseEditor {
+  meta {
+    label zh "灰度阶段编辑"
+    label en "Rollout Phase Editor"
+    summary zh "逐阶段编辑灰度范围：每阶段一段目标清单（agent_id）与一个推进闸门（manual / all_succeeded / success_rate:<NN>）；同一目标只能属于一个阶段。"
+    tags "admin", "rollout", "plan", "phase"
+  }
+
+  orientation vertical
+  contains RolloutPlanPhaseTargetsInput { slot_field: target_ids }
+  contains RolloutPlanPhaseAdvanceRuleInput { slot_field: advance_rule }
+}
+
+region RolloutPlanTargetVersionInput {
+  meta {
+    label zh "目标版本输入"
+    label en "Target Version Input"
+    tags "admin", "rollout", "input"
+  }
+
+  orientation vertical
+}
+
+region RolloutPlanPackageUrlInput {
+  meta {
+    label zh "包地址输入"
+    label en "Package URL Input"
+    summary zh "可选：升级取的制品地址（https 链接或主机绝对路径）；留空即由 Agent 用网关默认的安装包来源。"
+    tags "admin", "rollout", "input"
+  }
+
+  orientation vertical
+}
+
+region RolloutPlanPackageSha256Input {
+  meta {
+    label zh "包摘要输入"
+    label en "Package Sha256 Input"
+    summary zh "可选：期望的制品摘要（64 位十六进制）；填写时升级器先按此值校验。"
+    tags "admin", "rollout", "input"
+  }
+
+  orientation vertical
+}
+
+region RolloutPlanPhaseTargetsInput {
+  meta {
+    label zh "阶段目标输入"
+    label en "Phase Targets Input"
+    summary zh "本阶段的目标清单（每行一个 agent_id）；目标必须是已注册的 Agent，跨阶段不得重复。"
+    tags "admin", "rollout", "input", "target"
+  }
+
+  orientation vertical
+}
+
+region RolloutPlanPhaseAdvanceRuleInput {
+  meta {
+    label zh "推进闸门输入"
+    label en "Advance Rule Input"
+    summary zh "本阶段的推进闸门：manual（人工确认后推进，当前唯一强制生效的取值）/ all_succeeded（全部成功自动推进）/ success_rate:<NN>（成功率达标自动推进）。"
+    tags "admin", "rollout", "input", "advance-rule"
+  }
+
+  orientation vertical
+}
+
+region SubmitCreateRolloutPlanAction {
+  meta {
+    label zh "创建计划"
+    label en "Submit Create Rollout Plan"
+    tags "admin", "rollout", "action"
+  }
+
+  orientation horizontal
+}
+
+region RolloutPlanDetailPanel {
+  meta {
+    label zh "计划与逐台进度"
+    label en "Plan & Per-target Progress"
+    summary zh "一份计划的摘要、内容（动作/参数/截止/并发/审批信息）、灰度阶段与逐台进度：计划是目录，逐目标条目才是事实（哪个 Agent 成没成、失败原因是什么）。"
+    tags "admin", "rollout", "plan", "detail"
+  }
+
+  orientation vertical
+  contains RolloutPlanSummary
+  contains RolloutPlanMetaList
+  contains RolloutPlanPhaseList
+  contains RolloutPlanEntryTable
+}
+
+region RolloutPlanSummary {
+  meta {
+    label zh "计划摘要"
+    label en "Rollout Plan Summary"
+    summary zh "目标总数与成功 / 失败 / 执行中 / 待派发的逐台计数，以及进行到第几阶段；计数由逐目标条目派生。"
+    tags "admin", "rollout", "summary"
+  }
+
+  orientation grid
+}
+
+region RolloutPlanMetaList {
+  meta {
+    label zh "计划内容"
+    label en "Rollout Plan Meta"
+    summary zh "计划本身：动作、目标版本、包地址与摘要、截止时间、执行预算、阶段内并发，以及创建 / 批准留痕。"
+    tags "admin", "rollout", "meta"
+  }
+
+  orientation vertical
+}
+
+region RolloutPlanPhaseList {
+  meta {
+    label zh "灰度阶段列表"
+    label en "Rollout Phase List"
+    summary zh "逐阶段展示范围、推进闸门与了结情况；进行中的阶段被点亮。"
+    tags "admin", "rollout", "phase"
+  }
+
+  orientation vertical
+}
+
+region RolloutPlanEntryTable {
+  meta {
+    label zh "逐台进度表"
+    label en "Rollout Entry Table"
+    summary zh "一个目标一行：目标、条目状态、物化出的一次性工作标识、结果说明（失败/回滚原因）与更新时间。"
+    tags "admin", "rollout", "entry", "table"
+  }
+
+  orientation vertical
+}
+
+region RolloutPlanGates {
+  meta {
+    label zh "人工闸门"
+    label en "Rollout Gates"
+    summary zh "灰度发布的两处人工确认：批准（草稿 → 进入第一阶段）与推进（当前阶段确认无问题 → 下一阶段）。这是灰度发布「确认无问题再推下一批」的落点。"
+    tags "admin", "rollout", "gate", "action"
+  }
+
+  orientation horizontal
+}

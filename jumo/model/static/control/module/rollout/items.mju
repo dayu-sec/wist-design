@@ -1,0 +1,103 @@
+// 灰度发布计划（RolloutPlan）：把一个「动作」按阶段（灰度）铺到一组目标（target）上。
+//
+// 这是一个**通用模式**，不是「升级专用」，也不是「agent 专用」：
+//   - action + spec 决定「做什么」——今天只有 upgrade，spec 就是 agentd 侧 UpgradeSpec 的
+//     {"target_version","package_url","package_sha256"}，物化时原样放进执行单元；
+//     将来新增动作（改配置 / 下发策略 / 重启……）只需加 action，不用再建一套计划。
+//   - phases 决定「分几批、每批什么范围、何时推进」——灰度发布的过程控制（金丝雀 → 扩大 → 全量）。
+//   - target 是通用标识：网关用它铺自己的机队（target = agent），中心也可用它铺网关
+//     （target = gateway）。计划本身不关心目标是什么，物化时才落到具体执行单元
+//     （网关 → agent 时落到 OneShotWork，交付走 ServeWorkGrant / PollWork，
+//     结果经 ReportWorkResult 回填到 RolloutPlanEntry）。
+//
+// 与中心侧 InsightCenter.PlatformRelease 的 UpgradePlan 不同：那个是**升级网关**这一具体
+// 动作的专用建模；这里是通用的「分阶段灰度发布」结构，upgrade 只是它的第一个 action。
+
+// 灰度发布的一个阶段：一段目标范围 + 推进到下一阶段的闸门。
+struct RolloutPhase {
+  meta {
+    label zh "灰度发布阶段"
+    label en "Rollout Phase"
+    summary zh "灰度发布计划的一个阶段：一段目标（target）范围，加上推进到下一阶段的闸门。"
+    tags "rollout", "plan", "gray-release"
+  }
+
+  // 从 1 开始。
+  phase_index: Int
+  // 本阶段的目标范围：显式清单（金丝雀阶段通常是一两台，后续阶段逐步扩大）。
+  target_ids: List<String>
+  // 本阶段的推进闸门（灰度发布的过程控制）：
+  //   manual —— 人工确认后推进（默认，金丝雀阶段最稳）；
+  //   all_succeeded —— 本阶段全部成功才自动推进；
+  //   success_rate:<NN> —— 本阶段成功率 >= NN% 才自动推进。
+  advance_rule: String
+  // pending | rolling | completed
+  status: String
+}
+
+// 计划里的一行：某个目标（target）的执行进度。进入某阶段后为阶段内每个目标生成一个执行单元，
+// 之后靠结果回报把结果回填到这一行。
+struct RolloutPlanEntry {
+  meta {
+    label zh "灰度发布计划条目"
+    label en "Rollout Plan Entry"
+    summary zh "灰度发布计划里的一个目标（target）：对应一个执行单元，跟踪其派发与结果。"
+    tags "rollout", "plan"
+  }
+
+  plan_id: String
+  // 目标标识：网关铺机队时是 agent_id，中心铺网关时是 gateway_id。
+  target_id: String
+  // 物化出的执行单元标识（网关 → agent 时就是一次性工作的 work_id；进入该阶段派发时回填）。
+  work_id: String?
+  // pending | dispatched | succeeded | failed | rolled_back
+  status: String
+  detail: String?
+  updated_at: DateTime
+}
+
+// 灰度发布计划：把一个动作按阶段（灰度）铺到一组目标（动作由 action + spec 决定）。
+struct RolloutPlan {
+  meta {
+    label zh "灰度发布计划"
+    label en "Rollout Plan"
+    summary zh "把一个动作按阶段（灰度）铺到一组目标：分阶段展开成一个个执行单元，逐阶段推进。"
+    tags "rollout", "plan"
+  }
+
+  unique plan_id: String
+  // 要执行的动作：与 OneShotWork.action 同一目录，今天只有 upgrade。
+  action: String
+  // 动作参数（JSON）：upgrade 时是 {"target_version","package_url","package_sha256"}，
+  // 与 agentd 侧 UpgradeSpec 同形；物化时原样放进每个执行单元。
+  spec: String
+  // 物化到每件一次性工作的执行约束（灰度发布各阶段共用一份）。
+  deadline_at: DateTime
+  timeout_seconds: Int
+  // 灰度阶段（范围按阶段切分）。
+  phases: List<RolloutPhase>
+  // 每个阶段内同时执行的台数（0 = 不节流、全量同时；N >= 1 = 最多 N 台在飞，逐台 = 1）。
+  // 这是「节流」，不是「阶段」。
+  batch_size: Int
+  // 当前进行到第几阶段（0 = 尚未开始；对应 phases[i].phase_index）。
+  current_phase: Int
+  // draft | approved | rolling | completed | failed | canceled
+  status: String
+  created_by: String
+  created_at: DateTime
+  approved_by: String?
+  approved_at: DateTime?
+}
+
+// 管理面看一份计划及其逐目标进度（读投影：计划 + 条目；成功/失败/回滚/待派等汇总计数由实现层派生）。
+struct RolloutPlanView {
+  meta {
+    label zh "灰度发布计划视图"
+    label en "Rollout Plan View"
+    summary zh "管理面查看一份灰度发布计划：计划本身（含分阶段）加逐目标条目的进度，汇总计数由实现层派生。"
+    tags "rollout", "plan", "view"
+  }
+
+  plan: RolloutPlan
+  entries: List<RolloutPlanEntry>
+}

@@ -149,6 +149,38 @@ message<command> AdminResumeWork = OperatorRequest {
   reason_code: String
 }
 
+// 创建灰度发布计划：动作 + 参数 + 分阶段范围 + 阶段内并发，先落成 draft。
+// action 决定做什么（今天只有 upgrade），spec 是动作参数；phases 是灰度发布的分阶段范围
+// （每阶段一段 target_ids + 一个推进闸门）。
+message<command> AdminCreateRolloutPlan = OperatorRequest {
+  action: String
+  spec: String
+  phases: List<RolloutPhase>
+  deadline_at: String
+  timeout_seconds: Int
+  batch_size: Int
+}
+
+// 列出灰度发布计划（读投影）。
+message<command> AdminListRolloutPlans = OperatorRequest {
+}
+
+// 批准灰度发布计划：批准后进入第一阶段，为阶段内每台生成一件 action 对应的一次性工作。
+message<command> AdminApproveRolloutPlan = OperatorRequest {
+  plan_id: String
+  approved_by: String
+}
+
+// 人工推进到下一阶段（advance_rule = manual 的阶段；金丝雀确认无问题后点这个）。
+message<command> AdminAdvanceRolloutPlan = OperatorRequest {
+  plan_id: String
+}
+
+// 查看某份灰度发布计划及其逐台进度。
+message<command> AdminViewRolloutPlan = OperatorRequest {
+  plan_id: String
+}
+
 interface WistGatewayPublicInstallInterface {
   meta {
     label zh "WistGateway 运维安装接口"
@@ -294,6 +326,31 @@ interface WistGatewayManagementInterface {
   entry AdminViewDiscoveryPolicies {
     actor AdminOperator
     output DiscoveryPolicyView
+  }
+
+  entry AdminCreateRolloutPlan {
+    actor AdminOperator
+    output RolloutPlan
+  }
+
+  entry AdminListRolloutPlans {
+    actor AdminOperator
+    output List<RolloutPlan>
+  }
+
+  entry AdminApproveRolloutPlan {
+    actor AdminOperator
+    output RolloutPlan
+  }
+
+  entry AdminAdvanceRolloutPlan {
+    actor AdminOperator
+    output RolloutPlan
+  }
+
+  entry AdminViewRolloutPlan {
+    actor AdminOperator
+    output RolloutPlanView
   }
 }
 
@@ -489,6 +546,54 @@ flow AdminResumeWorkFlow {
 
   actor AdminOperator
   trigger AdminResumeWork
+}
+
+flow AdminCreateRolloutPlanFlow {
+  meta {
+    label zh "创建灰度发布计划"
+    label en "Create Rollout Plan Flow"
+    summary zh "管理员创建一份把一个动作按阶段（灰度）铺到一组目标（target）的计划：动作与参数、分阶段范围与阶段内并发，先落成 draft。"
+    tags "admin", "agent-work", "rollout", "plan"
+  }
+
+  actor AdminOperator
+  trigger AdminCreateRolloutPlan
+}
+
+flow AdminApproveRolloutPlanFlow {
+  meta {
+    label zh "批准灰度发布计划"
+    label en "Approve Rollout Plan Flow"
+    summary zh "管理员批准一份灰度发布计划：批准后进入第一阶段，为阶段内每个目标（target）生成一件 action 对应的一次性工作并建立 RolloutPlanEntry 跟踪；交付走既有 ServeWorkGrant，结果经 ReportWorkResult 回填。"
+    tags "admin", "agent-work", "rollout", "plan"
+  }
+
+  actor AdminOperator
+  trigger AdminApproveRolloutPlan
+}
+
+flow AdminAdvanceRolloutPlanFlow {
+  meta {
+    label zh "推进灰度发布计划到下一阶段"
+    label en "Advance Rollout Plan Flow"
+    summary zh "管理员把一份灰度发布计划推进到下一灰度阶段（advance_rule = manual）：上一阶段确认无问题后，为下一阶段范围内的 Agent 生成一次性工作。"
+    tags "admin", "agent-work", "rollout", "plan"
+  }
+
+  actor AdminOperator
+  trigger AdminAdvanceRolloutPlan
+}
+
+flow AdminViewRolloutPlanFlow {
+  meta {
+    label zh "查看灰度发布计划进度"
+    label en "View Rollout Plan Flow"
+    summary zh "管理员查看一份灰度发布计划及其逐台进度（计划 + 条目）。"
+    tags "admin", "agent-work", "rollout", "plan"
+  }
+
+  actor AdminOperator
+  trigger AdminViewRolloutPlan
 }
 
 flow AdminClassifyAgentFlow {
