@@ -19,7 +19,7 @@ region AgentUpgradeCreateCard {
   meta {
     label zh "新建升级计划"
     label en "Create Agent Upgrade Plan Card"
-    summary zh "创建一份升级草稿：升级参数（目标版本、包地址、制品摘要 —— 都必填）、升级节奏（截止/超时/阶段内并发）与灰度阶段（只选阶段数，agent 自动分配）。任务类型固定为 Agent 升级，**不在此选择**。创建后是草稿，批准才动手。"
+    summary zh "创建一份升级草稿：升级参数（从**已录入的安装包里选一个**；目标版本可留空；可选「允许降级」）、升级节奏（截止/超时/阶段内并发）与灰度阶段（只选阶段数，agent 自动分配）。任务类型固定为 Agent 升级，**不在此选择**。创建后是草稿，批准才动手。"
     tags "admin", "upgrade", "rollout", "plan", "form"
   }
 
@@ -34,14 +34,14 @@ region AgentUpgradeParamsFields {
   meta {
     label zh "升级参数"
     label en "Upgrade Params"
-    summary zh "从哪取包（包地址：https 链接或目标 Agent 主机上的绝对路径）与制品摘要（64 位 hex）两项必填；**目标版本可留空**（版本就是那份包里的版本，由升级器解包后从包内 agentd 自报取得）—— 但**旧 agentd 要求这个键存在**，升级还没跟上的旧 Agent 时要填。这些参数各阶段共用一份。"
+    summary zh "升级到哪个包：从**网关已录入的安装包**里选一个（在「Gateway 初始化」页录入的安装包来源会进这份历史）；提交用的包地址与摘要由所选条目带出，**不手输**。另有「允许降级」开关（默认关：只允许更新）。目标版本可留空（版本就是那份包里的版本，由升级器解包后从包内 agentd 自报取得）—— 但**旧 agentd 要求这个键存在**，升级还没跟上的旧 Agent 时要填。这些参数各阶段共用一份。"
     tags "admin", "upgrade", "params"
   }
 
   orientation vertical
+  contains AgentUpgradePackageSelect { slot_field: package_url }
+  contains AgentUpgradeAllowDowngradeToggle { slot_field: allow_downgrade }
   contains AgentUpgradeTargetVersionInput { slot_field: target_version }
-  contains AgentUpgradePackageUrlInput { slot_field: package_url }
-  contains AgentUpgradePackageSha256Input { slot_field: package_sha256 }
 }
 
 region AgentUpgradeTargetVersionInput {
@@ -101,26 +101,26 @@ region AgentUpgradeAssignmentPreview {
   orientation vertical
 }
 
-region AgentUpgradePackageUrlInput {
+region AgentUpgradePackageSelect {
   meta {
-    label zh "安装包地址输入"
-    label en "Package URL Input"
-    summary zh "升级取的制品地址：https 链接，或**目标 Agent 主机上的绝对路径**（离线/联调把制品预置到目标机，升级器直接读本机文件）。必填。"
-    tags "admin", "upgrade", "input"
+    label zh "安装包选择"
+    label en "Package Select"
+    summary zh "从网关已录入的**安装包历史**里选一个：每项显示版本 · 架构 · 来源。选中后提交用的包地址是**网关派生的下载地址**（`<网关对外地址>/api/v1/agent/packages/<包 id>`）与该项的摘要 —— 前端不自己拼地址，因此填本地路径也不会漂到别的机器。历史为空时给「去 Gateway 初始化页录入安装包来源」的指引。"
+    tags "admin", "upgrade", "input", "package"
   }
 
   orientation vertical
 }
 
-region AgentUpgradePackageSha256Input {
+region AgentUpgradeAllowDowngradeToggle {
   meta {
-    label zh "安装包摘要输入"
-    label en "Package Sha256 Input"
-    summary zh "制品摘要（64 位十六进制，可带 sha256: 前缀）：升级器按它校验制品，不符不换件。必填。"
+    label zh "允许降级"
+    label en "Allow Downgrade"
+    summary zh "默认关：只允许升到**更新**的版本（同版本/降级会被升级器拒绝，报 `not_newer`）。打开后放行同版本与降级 —— 要显式声明才降级，避免一次误填把机器降回旧版。"
     tags "admin", "upgrade", "input"
   }
 
-  orientation vertical
+  orientation horizontal
 }
 
 region SubmitCreateAgentUpgradeAction {
@@ -163,7 +163,7 @@ region AgentUpgradeMetaList {
   meta {
     label zh "升级参数"
     label en "Upgrade Meta"
-    summary zh "计划本身：任务类型（Agent 升级）、目标版本、安装包地址与摘要、截止时间、单个 Agent 超时、阶段内并发，以及创建 / 批准留痕。"
+    summary zh "计划本身：任务类型（Agent 升级）、目标版本、安装包地址与摘要、**是否允许降级**、截止时间、单个 Agent 超时、阶段内并发，以及创建 / 批准留痕。"
     tags "admin", "upgrade", "meta"
   }
 
