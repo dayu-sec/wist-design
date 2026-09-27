@@ -73,6 +73,7 @@ detail = package_unavailable: read /Users/…/wist-agentd/target/package/wist-ag
 - **失败不写历史**：来源读不到（路径不存在 / URL 拉不到 / 摘要不符）时**不留**历史行、不动已有设置（沿用原有语义）。
 - `/current` 放宽到「bootstrap token 或 agent 凭据」：安装包不是秘密（`install.sh` 里就带地址与摘要），而取包的机器都已被网关认证过。若日后要收紧，改动隔离在 `download_agent_package` 一处。
 - **降级默认拒绝**：显式声明才降 —— 免一次误填把机器降回旧版；降级同样没有额外回滚保护（机器上原本怎么升的，就怎么降）。
+- **凭据只在 state，升级器要自己注入**：`bearer_token` **从不写进 `agentd.toml`**（见默认模板注释），只落在 `state/agent_runtime.json`；daemon 启动时经 `ensure_enrolled_*` 注入。而**升级器是独立进程**，只 `load_from_path` 会拿不到凭据 ⇒ https 取包发不出 `Authorization`（网关 401）。所以 `wist-upgrader` 加载配置后补调 `enrollment::restore_runtime_identity` 从 state 注入一次。
 
 ## 6. 代码对应
 
@@ -82,7 +83,7 @@ detail = package_unavailable: read /Users/…/wist-agentd/target/package/wist-ag
 | 存储 | `src/infra/store.rs`（`StoredAgentInstallPackage` + 三个方法）、`src/infra/sqlite_store.rs`、`src/infra/config.rs`（`install_package_history_path` / `agent_package_url_by_id_at`） |
 | 网关取包/存档 | `src/api/install_package.rs`（`fetch_into_package_cache`、`package_id_for_sha256`、`read_package_identity`） |
 | 网关端点 | `src/api/admin_ops.rs`（`set_agent_install_package` 顺带记历史、`list_agent_install_packages`）、`src/api/install.rs`（`authorize_package_download`、`download_agent_package_by_id`）、`src/api/agent_ops.rs`（`authenticate_agent_credential_token`）、`src/api/mod.rs`（路由） |
-| agentd | `src/upgrade.rs`（`UpgradeSpec.allow_downgrade`、`fetch_package` 带凭据）、`src/runtime/daemon.rs::dispatch_upgrade`、`src/bin/wist-upgrader.rs`（`--allow-downgrade`） |
+| agentd | `src/upgrade.rs`（`UpgradeSpec.allow_downgrade`、`fetch_package` 带凭据）、`src/runtime/daemon.rs::dispatch_upgrade`、`src/bin/wist-upgrader.rs`（`--allow-downgrade`；加载配置后经 `enrollment::restore_runtime_identity` 从 state 注入凭据）、`src/control/enrollment.rs`（`restore_runtime_identity`） |
 | web | `src/api/admin.ts`（`InstallPackageView` / `fetchInstallPackages` / `jsonUpgradeSpec.allowDowngrade`）、`src/hooks/index.ts`（`useInstallPackages`）、`src/components/SubsystemAgentUpgradePage.tsx` |
 | 模型 | `runtime/subsystem/WistGateway/layout.agent-upgrade.mju`（`AgentUpgradeParamsFields` → `AgentUpgradePackageSelect` + `AgentUpgradeAllowDowngradeToggle`） |
 
