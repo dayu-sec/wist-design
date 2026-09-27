@@ -160,6 +160,7 @@ actor PlatformMaintenanceEngineer {
   can AdminApproveUpgradePlan
   can SetAgentInstallPackageAddress
   can AdminSetAgentInstallPackageAddress
+  can AdminListAgentInstallPackages
 }
 
 actor PublicInstallClient {

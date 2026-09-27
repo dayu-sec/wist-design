@@ -101,6 +101,13 @@ bind WistGatewayManagementInterface {
     status AgentInstallPackageAddress 200
   }
 
+  entry AdminListAgentInstallPackages {
+    route GET "/api/v1/admin/agent/install-packages"
+    auth bearer
+    actor_identity PlatformMaintenanceEngineer.id from jwt.sub
+    status Projection<List<AgentInstallPackageHistoryEntry>> 200
+  }
+
   entry AdminViewAgentPurpose {
     route GET "/api/v1/admin/agents/{agent_id}/purpose"
     auth bearer

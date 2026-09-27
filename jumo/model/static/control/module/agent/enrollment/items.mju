@@ -210,6 +210,31 @@ struct AgentInstallPackageAddress {
   package_url: String
   package_sha256: String?
   updated_by: String
-  // 未设置过（当前使用网关内置默认分发地址）时为 null。
+  // 未设置过（当前使用网关内置分发地址）时为 null。
   updated_at: DateTime?
+}
+
+// 已录入的安装包历史的一条：网关把每次录入的来源读进**自己的包目录**后留档。
+// 升级计划从这里**选一个**（见 layout.agent-upgrade.mju 的 AgentUpgradePackageSelect）；
+// 下发给 agent 的是网关派生的下载地址，而不是当初录入的那个来源。
+struct AgentInstallPackageHistoryEntry {
+  meta {
+    label zh "已录入的安装包"
+    label en "Recorded Install Package"
+    summary zh "网关已存档的一个 wist-agentd 安装包：来源（当初录入的地址/路径）、制品摘要、从包内读到的版本与架构，以及可直接下发给 agent 的网关下载地址。内容寻址：同一个包重复录入落在同一条。"
+    tags "agent-install", "package", "install-code", "upgrade"
+  }
+
+  // 内容寻址：pkg-<sha256 前 16>。同一个包重复录入是同一条。
+  unique package_id: String
+  // 当初录入的来源（本机绝对路径或 https）；只作留痕，**不**作为取包地址。
+  source: String
+  package_sha256: String
+  // 从包内目录名读到的版本 / 目标三元组；读不出为空串（裸二进制等）。
+  version: String
+  arch: String
+  // 可直接下发给 agent 的下载地址（网关派生）。
+  agent_package_url: String
+  created_by: String
+  created_at: DateTime
 }

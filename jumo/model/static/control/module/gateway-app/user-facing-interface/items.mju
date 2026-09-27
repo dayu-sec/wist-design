@@ -47,6 +47,10 @@ message<command> AdminSetAgentInstallPackageAddress = OperatorRequest {
 message<command> AdminViewAgentInstallPackageAddress = OperatorRequest {
 }
 
+// 列出网关已存档的安装包（升级计划从这里选一个）。
+message<command> AdminListAgentInstallPackages = OperatorRequest {
+}
+
 // 查看当前生效的发现方向策略表（管理面）。
 // 表是平台策展数据：运维要能看到“现在生效的是哪一版、各方向周期是多少”。
 message<command> AdminViewDiscoveryPolicies = OperatorRequest {
@@ -266,6 +270,11 @@ interface WistGatewayManagementInterface {
   entry AdminViewAgentInstallPackageAddress {
     actor OperationsEngineer
     output AgentInstallPackageAddress
+  }
+
+  entry AdminListAgentInstallPackages {
+    actor PlatformMaintenanceEngineer
+    output Projection<List<AgentInstallPackageHistoryEntry>>
   }
 
   entry AdminGrantWork {
