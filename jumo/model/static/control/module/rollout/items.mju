@@ -31,6 +31,8 @@ struct RolloutPhase {
   //   manual —— 人工确认后推进（默认，金丝雀阶段最稳）；
   //   all_succeeded —— 本阶段全部成功才自动推进；
   //   success_rate:<NN> —— 本阶段成功率 >= NN% 才自动推进。
+  // 闸门管的是「进入**下一阶段**」（新一批目标开始动手）。**末阶段没有下一段**：
+  // 推进它不派任何新活，只是把计划收尾 —— 所以它全部了结后**不看闸门**、自动收敛为 completed。
   advance_rule: String
   // pending | rolling | completed
   status: String

@@ -350,6 +350,31 @@
       "gaps": ["wait_ms 未实现长轮询：现在一律立即返回"]
     },
     {
+      "name": "System.WistGateway.ServeAgentUplinkGrant",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.PollAgentUplinkFlow",
+      "entries": [
+        {
+          "name": "PollAgentUplink",
+          "route": "POST /api/v1/agent/uplink:poll",
+          "handler": "wist-gateway:agent_ops.rs:poll_agent_uplink",
+          "covers": ["AgentUplinkGrant"]
+        },
+        {
+          "name": "AdminSetAgentUplink",
+          "route": "POST /api/v1/admin/agent/uplink（手加端点：模型还没有承载这条设置）",
+          "handler": "wist-gateway:admin_ops.rs:set_agent_uplink"
+        },
+        {
+          "name": "AdminViewAgentUplink",
+          "route": "GET /api/v1/admin/agent/uplink（手加端点：模型还没有承载这条设置）",
+          "handler": "wist-gateway:admin_ops.rs:view_agent_uplink"
+        }
+      ],
+      "gaps": ["上送地址全租户一条，未按 environment_id 解析；无按 Agent 粒度的覆盖"]
+    },
+    {
       "name": "System.WistGateway.AcceptWorkAcknowledgement",
       "status": "Complete",
       "progress": 100,
@@ -448,6 +473,27 @@
           "handler": "wist-agentd:control/work.rs:metrics_interval"
         }
       ]
+    },
+    {
+      "name": "System.WistAgentd.ApplyUplinkGrant",
+      "status": "Complete",
+      "progress": 100,
+      "flow": "Control.PollAgentUplinkFlow",
+      "entries": [
+        {
+          "name": "PollAgentUplink",
+          "route": "daemon 主循环：每 30s 拉取 /api/v1/agent/uplink:poll；拉不到保留上次，401/403 强制待命",
+          "handler": "wist-agentd:control/uplink.rs:fetch_uplink_grant",
+          "covers": ["AgentUplinkGrant"]
+        },
+        {
+          "name": "ResolveEffectiveOutput",
+          "route": "生效输出：未下发→本机；enabled=false→静默；enabled=true+目标→强制 tcp(host,port) 覆盖本机 kind",
+          "handler": "wist-agentd:runtime/daemon_telemetry_support.rs:effective_output",
+          "covers": ["LogsOutputSection"]
+        }
+      ],
+      "gaps": ["一次性（one-shot）路径不拉 grant：按「未下发」处理，输出由本机配置决定"]
     },
     {
       "name": "System.WistGateway.ServeDiscoveryPolicies",

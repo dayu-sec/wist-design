@@ -240,6 +240,31 @@ bind WistAgentdOnlineRegistrationInterface {
   // 现在写一条 `auth none` 的 entry 会把「目标形态」记成「无鉴权」，反而是假的。
   // 详见 doc/design/center/agent-work-delivery-plan.md §4.1。
 
+  // 工作授权的拉取与确认：本接口最早的条目，但**一直没有 `bind`**。
+  // 后果：模型不记录它们的 route/auth/status，codegen 也无从生成，三条 agent 路由
+  // （含下面的 uplink:poll）只能手加 —— 任何一次“重新生成控制面代码”都会丢掉它们。
+  entry PollWork {
+    route POST "/api/v1/agent/work:poll"
+    auth bearer
+    actor_identity Agentd.id from credential.agent_id
+    status WorkGrant 200
+  }
+
+  entry AckWork {
+    route POST "/api/v1/agent/work:ack"
+    auth bearer
+    actor_identity Agentd.id from credential.agent_id
+    status WorkAccepted 200
+  }
+
+  // 数据面上送授权：与 work:poll 同类（幂等、可重复拉取），刻意走**独立端点**。
+  entry PollAgentUplink {
+    route POST "/api/v1/agent/uplink:poll"
+    auth bearer
+    actor_identity Agentd.id from credential.agent_id
+    status AgentUplinkGrant 200
+  }
+
   // 拉取发现方向策略表：网关未配表时回 503（“未发布”与“没配”必须能区分），
   // agentd 遇到 503 就继续用自己的内建周期，不是错误。
   entry PollDiscoveryPolicies {

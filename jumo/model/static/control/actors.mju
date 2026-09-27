@@ -15,6 +15,7 @@ actor<system> Agentd {
   can PollControlCommands
   can PollWork
   can AckWork
+  can PollAgentUplink
   can ReportWorkResult
   can AgentUpstreamMessage
   can Reporting.AgentStatusReport

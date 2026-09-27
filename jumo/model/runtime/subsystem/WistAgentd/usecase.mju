@@ -72,3 +72,18 @@ usecase PullGrantedWork {
   outcome Control.WorkGrant
   flow Control.PollWorkFlow
 }
+
+// 拉取并应用网关下发的数据面上送授权
+usecase ApplyUplinkGrant {
+  meta {
+    label zh "拉取并应用数据面上送授权"
+    label en "Apply Agent Uplink Grant"
+    summary zh "agentd 定期拉取数据面上送授权并在内存生效：未下发时回落本机配置；enabled=false 完全静默（不读源、不写文件、不上送）；enabled=true 且给目标时强制以该目标上送（覆盖本机 kind）。拉不到保留上次；凭据被拒（401/403）强制回落待命。重启不恢复（回本机配置），避免一次断网让已撑回的授权继续生效。"
+    tags "agent-uplink", "wp-agent", "polling"
+  }
+
+  actor Control.Agentd
+  trigger Control.PollAgentUplink
+  outcome Control.AgentUplinkGrant
+  flow Control.PollAgentUplinkFlow
+}

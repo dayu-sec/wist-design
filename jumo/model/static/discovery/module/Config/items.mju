@@ -55,6 +55,11 @@ struct LogsSection {
 }
 
 struct LogsOutputSection {
+  // 采集输出总闸：false = 完全不产出（不写本地文件、不上送 TCP、也不发事实帧）。
+  // 与 kind 正交：kind 回答“写到哪”，enabled 回答“要不要写”。待命态由签发方
+  // （网关初始配置）显式写 false 表达，不再借 kind = "file" 表达（那样会把正常待命
+  // 报成事实帧上行失败）。
+  enabled
   kind
   file
   tcp

@@ -15,6 +15,75 @@ message<command> AgentStatusReport {
   // 为什么由 agent 上报：网关知道自己**发布**了哪一版，但不知道哪台机器**拉到并应用**了哪一版
   // —— 拉取可能失败、可能还没到轮询节拍。运维要回答的正是「我改了策略，哪些机器还没生效」。
   discovery_policy_version: Int?
+  // 本机**工作内容视图**（`state/work.json` 的同形子集）：我手里有哪些工作、各自在采哪些文件、
+  // 一次性工作做到哪一步。网关知道自己**授权**了什么，但「真的在采哪些文件」只有 agent 知道
+  // （本机手工加的输入、暂停、某条来源今天接不接得了）。空 = 这台 agent 还没报过。
+  local_work: AgentLocalWork?
+  // 本机**实际生效**的采集输出状态。网关知道自己**下发**了什么（AgentUplinkGrant），
+  // 但不知道 agent **生效**成什么 —— grant 可能还没拉到、可能被本机总闸拦住、可能目标连不上。
+  // 与 discovery_policy_version 同一类事实（「我发布了哪一版」≠「它生效了哪一版」）。
+  // 空 = 旧版本 agent，还没报过。
+  uplink_state: AgentUplinkState?
+}
+
+// Agent 实际生效的采集输出状态：与 Control.Agent.Work 的 AgentUplinkGrant 是一对
+// （grant 说「控制面要它怎样」，这里说「它实际成了怎样」）。
+struct AgentUplinkState {
+  // 生效输出的总闸：false = 待命（不读源、不写本地采集输出、不上送日志/指标）。
+  // 注意：**事实摘要不受此开关管** —— 待命期仍上报进程列表等推断元数据（仅 tcp 能承载）。
+  enabled: Boolean
+  // 生效输出类型：file | tcp（grant 覆盖本机 kind 之后的**结果**）。
+  kind: String
+  // 生效目标（tcp 且有目标时）。空 = 本地文件输出，或 tcp 但没有目标。
+  target: String?
+  // 这份生效状态的来源：grant（控制面下发）| local（未下发，用本机配置）。
+  // 有了它，平台才能区分「控制面没启用」与「启用了但 agent 没听从」（后者才是故障）。
+  source: String
+  // 最近的出口写失败是否**尚未恢复**（细节在 agent 日志里：目标与原因）。
+  output_write_failing: Boolean
+}
+
+// agentd 上报的**本机工作视图**（`state/work.json` 的子集：不带工作内容 —— 那是网关自己的事实）。
+struct AgentLocalWork {
+  recorded_at: String
+  gateway_sequence: Int
+  standing: List<AgentLocalStandingWork>
+  one_shot: List<AgentLocalOneShotWork>
+  // 本机配置里手工加的日志输入（运维逃生舱）：不来自任何采集面。
+  local_inputs: List<AgentLocalTask>
+  metrics_interval_seconds: Int?
+}
+
+// 一份常驻工作在本机的样子。
+struct AgentLocalStandingWork {
+  work_id: String
+  family: String
+  // active | paused（被撤回/被取代的不算「我手里的工作」）。
+  status: String
+  plan_version: Int
+  // 我回报过的版本；空 = 还没回报（网关那边看到的就是漂移）。
+  acknowledged_version: Int?
+  effective_from: String
+  tasks: List<AgentLocalTask>
+}
+
+// 本机一条采集任务：一个任务 id 盯一个路径。
+struct AgentLocalTask {
+  input_id: String
+  path: String
+  // head | tail：起读位置。授权采集一律 tail（不重放历史）。
+  startup_position: String
+}
+
+// 一件一次性工作在本机的样子：status 是网关侧派发状态，execution 是本机执行状态。
+struct AgentLocalOneShotWork {
+  work_id: String
+  action: String
+  status: String
+  execution: String
+  scheduled_at: String
+  deadline_at: String
+  timeout_seconds: Int
 }
 
 message<response> AgentStatusAccepted {

@@ -34,6 +34,18 @@ message<command> PollWork {
   requested_at: DateTime
 }
 
+// 拉取**数据面上送授权**（是否启用 + 启用时要覆盖的本机目标）。
+//
+// 为什么不并进 PollWork 的响应：`WorkGrant` 是 deny_unknown_fields 的字节，往里加字段会让
+// “新网关 + 旧 agentd” 解析失败（旧 agentd 连工作授权都收不到，舰队级停摆）。独立路由
+// 两个方向都安全：旧 agentd 从不调它；新 agentd 遇旧网关得 404，按“未下发”回落本机配置。
+// 与 PollWork 同类：幂等、可重复拉取；期望状态由「该 Agent 有没有生效工作」现算。
+message<command> PollAgentUplink {
+  agent_id: String
+  instance_id: String
+  requested_at: DateTime
+}
+
 // 确认收到某份工作：常驻工作在 plan_version 变化后也必须确认（网关据此判漂移）。
 message<command> AckWork {
   agent_id: String
@@ -97,6 +109,14 @@ interface WistAgentdOnlineRegistrationInterface {
     output WorkGrant
   }
 
+  // 拉取**数据面上送授权**（是否启用 + 启用时要覆盖的本机目标）。
+  // 与 PollWork 同类：幂等、可重复拉取；期望状态由「该 Agent 有没有生效工作」现算。
+  // 刻意**不**与 PollWork 合并：那个响应是 `deny_unknown_fields` 的字节，加字段会让旧 agentd 解析失败。
+  entry PollAgentUplink {
+    actor Agentd
+    output AgentUplinkGrant
+  }
+
   entry AckWork {
     actor Agentd
     output WorkAccepted
@@ -158,6 +178,18 @@ flow PollWorkFlow {
 
   actor Agentd
   trigger PollWork
+}
+
+flow PollAgentUplinkFlow {
+  meta {
+    label zh "拉取数据面上送授权"
+    label en "Poll Agent Uplink Flow"
+    summary zh "Agentd 拉取网关下发的数据面上送期望状态（是否启用、启用时覆盖的本机目标）；由工作授权现算，幂等。凭据被拒（401/403）强制回落待命。"
+    tags "agentd", "uplink", "polling"
+  }
+
+  actor Agentd
+  trigger PollAgentUplink
 }
 
 flow AckWorkFlow {

@@ -22,10 +22,31 @@ struct FileInputProcessor {
   state
 }
 
+// 一轮采集处理的产出：读/封口/上送三步的计数与结论。
+//
+// 为什么带 `sink_error`：`DeliveryOutcome` 过去把 sink 的错误吞在“转入 spool”里，
+// 导致**第一次**出口失败完全不可见（只有下一轮回放失败才会报）。目标现由控制面下发，
+// 填错常见，不能等到 spool 涨到上限才 `pause` 才看得见 —— 于是这一层把失败原文带出来。
 struct ProcessOutcome {
-  kind
-  batch
-  delivery
+  kind: ProcessOutcomeKind
+  records_processed: Int
+  emitted_directly: Int
+  spooled: Int
+  // **上送**这一步的失败原因（已含目标地址）；记录已安全进 spool。空 = 没失败过。
+  sink_error: String?
+  checkpoint_offset: Int
+  replayed_spool: Int
+  truncated: Boolean
+  // 本次因超长被截断提交的行数（每行已作为一条记录提交）。
+  truncated_lines: Int
+  // 本次因**内容不全**被挡下的记录（`Withheld`：records/bytes 两个计数）。
+  // 它只是 agentd 本机的诊断聚合，平台侧看不到，故不作为独立类型建模。
+  withheld
+  rotated: Boolean
+  // 是否因 spool 超限而暂停采集。
+  paused: Boolean
+  // 暂停时的 spool 字节数。
+  spool_bytes: Int
 }
 
 struct ProcessOutcomeKind {
@@ -195,7 +216,11 @@ struct CollectedReadBatch {
   eof
 }
 
+// 直发（不经 spool）这一步的产出：三条计数 + 失败原文。
 struct DeliveryOutcome {
-  success
-  records
+  records_processed: Int
+  emitted_directly: Int
+  spooled: Int
+  // 直发这一步失败的原因（已含目标地址）；记录已转入 spool。
+  sink_error: String?
 }

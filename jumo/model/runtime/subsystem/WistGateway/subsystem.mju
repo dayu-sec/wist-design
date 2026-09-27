@@ -11,6 +11,10 @@ subsystem WistGateway {
   uses module Control.GatewayApp.UserFacingInterface, Control.AgentApp.FacingInterface
   uses module Control.Agent.Enrollment, Control.Agent.Registration, Control.Agent.Identity, Control.Agent.Credential, Control.Agent.Status
   uses module Control.Agent.Command
+  // 网关**服务**工作授权（`WorkGrant` / `AckWork` / `AgentUplinkGrant` 都是这里下发的），
+  // 所以工作域属于本子系统 —— 之前漏了这行，导致 `Control.Agent.Work` 整体不在任何 scope 里，
+  // `jumo-code diff` 从不检查它（包括 `AgentUplinkGrant` 这个跨端线格式）。
+  uses module Control.Agent.Work
   uses module Control.Rollout
   uses module Control.Protocol, Control.Agent.Registry, Control.Agent.Status
   uses module Control.Gateway.Management, Control.Gateway.Management

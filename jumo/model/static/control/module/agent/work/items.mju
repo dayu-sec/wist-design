@@ -131,6 +131,36 @@ struct WorkGrant {
   granted_at: DateTime
 }
 
+// 数据面上送的**当前期望状态**：由“该 Agent 有没有生效工作” + 管理面已设的上送地址
+// 现算出来，不是存下来的配置。幂等、可重复拉取（与 WorkGrant 同类）。
+//
+// 为什么不并进 WorkGrant：那一份是 deny_unknown_fields 的字节，加字段会让
+// “新网关 + 旧 agentd” 解析失败，旧 agentd 连工作授权都收不到。所以走独立路由
+// （见 Control.AgentApp.FacingInterface 的 PollAgentUplink）。
+//
+// 授权优先于本机：enabled=false 是待命（不采、不上送日志/指标）；enabled=true 且给出目标时，
+// 目标覆盖 Agent 本机 `[telemetry.logs.output]` 的 kind/addr —— 托管模式下目标由控制面说了算，
+// 本机配置只作 standalone 的兜底。
+//
+// 注意：**事实摘要不受此开关管** —— 待命期仍上报进程列表等推断元数据（否则新装机器在网关侧
+// 一片空白，连「该派什么活」都定不下来）。
+struct AgentUplinkGrant {
+  meta {
+    label zh "数据面上送授权"
+    label en "Agent Uplink Grant"
+    summary zh "网关下发某 Agent 的数据面上送期望状态：是否启用，以及启用时要覆盖的本机目标；由工作授权现算，幂等。"
+    tags "agentd", "work", "uplink"
+  }
+
+  // 与代码 `bool` 对齐。注：全库 `Bool` / `Boolean` 两种拼法混用，这里统一成 `Boolean`。
+  enabled: Boolean
+  // 数据面地址；enabled=true 时给出即覆盖 Agent 本机的 `telemetry.logs.output.tcp`。
+  host: String?
+  // 1..=65535（代码是 `u16` —— 模型只有 `Int`，窄化与无符号性靠这句说明）。
+  port: Int?
+  granted_at: DateTime
+}
+
 struct WorkReceipt {
   meta {
     label zh "工作回执"
