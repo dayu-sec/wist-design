@@ -1,0 +1,16 @@
+// Module: Agent.Certificate — Agent 客户端证书（mTLS）与独立 agent CA
+//
+// 身份/证书实体事实：独立 agent CA（信任锚）、签发策略、已签发客户端证书与拒绝名单。
+// 签发命令与流程由 Agent.Credential 承载（逻辑）。
+// 设计见 wist-gateway 的 docs/design/agent-identity-mtls.md。
+
+module<entity> Agent.Certificate {
+  meta {
+    label zh "Agent 客户端证书"
+    label en "Agent Client Certificate"
+    summary zh "负责 agent 客户端证书（mTLS）的独立 CA、签发策略、已签发证书与拒绝名单实体。签发命令与流程由 Agent.Credential 承载。"
+    tags "control", "agentd", "certificate", "mtls"
+  }
+
+  layer Domain
+}

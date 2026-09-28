@@ -128,13 +128,17 @@ Agent 首次启动时提交：
 - 证书 SAN 包含 Agent 实际访问的内网 DNS 或 IP。
 - Agent 不使用 `-k` 或跳过证书校验。
 
-推荐关系：
+推荐关系（已定：**两把 CA 分开**）：
 
 ```text
-Internal CA
-  -> signs WistGateway server certificate
-  -> optionally signs Agent client certificate after enrollment
+Server CA
+  -> signs WistGateway server certificate（其根下发为 agent 的 trust_bundle）
+
+Agent CA（独立）
+  -> signs Agent client certificate after enrollment（其根只留服务端，不下发给 agent）
 ```
+
+Agent CA 与 Server CA 分开，理由是「验 client 的根不出服务端」与「两套密钥/轮换策略要分家」。代价是每客户两把 CA。
 
 注册阶段只要求 Agent 能校验管理端证书。mTLS 客户端证书不是注册前置条件，因为注册前 Agent 还没有已签发身份。
 
@@ -151,13 +155,23 @@ Internal CA
 - 简化阶段：HTTPS 加 Agent credential token。
 - 强安全阶段：HTTPS 加 mTLS 客户端证书。
 
-## 暂不固化的内容
+## 已固化的内容（原「暂不固化」）
 
-以下属于部署或后续实现选择，当前不进入核心模型：
+以下曾经属于「部署或后续实现选择」，现已在模型中固化。详细设计与取舍见 wist-gateway 的
+`docs/design/agent-identity-mtls.md`（§4.1 独立 agent CA、§4.2 承载/有效期/刷新、§5.6 吊销）。
 
-- 具体 CA 后端：openssl、step-ca、Vault PKI、cert-manager、企业 CA。
-- 证书轮换协议细节。
-- 全量 mTLS 强制策略。
-- 证书吊销列表或 OCSP 细节。
+- **独立 agent CA**：`Agent.Certificate.AgentCertificateAuthority`。专签 agent 客户端证书，
+  根只留服务端作 client 验证信任库，不下发给 agent；私钥外置（KMS/HSM 或受保护文件引用）。
+- **客户端证书承载 = URI SAN**：`spiffe://<tenant_id>/<environment_id>/agent/<agent_id>`，
+  `CN` 仅人类可读。**CSR 只贡献公钥，主体由网关填** —— agent 无法伪造他人身份。
+- **签发口径**：`Agent.Certificate.AgentCertificatePolicy`。有效期 **37 天** = 保底 **30 天** +
+  提前 **7 天**续期（触发 = 剩余 ≤ 30 天），故不变式为「任何时刻剩余 ≥ 30 天」；
+  `notBefore` 回拨 5 分钟容忍时钟偏差。**无宽限**：过期即带 token 重装。
+- **已签发证书事实**：`Agent.Certificate.AgentClientCertificate`（序列号、指纹、URI SAN、起止）。
+- **吊销**：`Agent.Certificate.AgentCertificateDenylistEntry` —— 按 **`agent_id`** 拒绝，
+  续签/重签都还是同一个 `agent_id`，故跨证书持续生效；条目保留到被盗证书自然过期即 GC。
+  **不用 CRL/OCSP**：验签方只有网关自己，客户内网/离线场景拉不到 CA。
+- **签发流程**：`Agent.Credential.IssueAgentClientCertificateFlow`（注册与续期共用一条路径）。
 
-当确定生产 PKI 后端或要求所有 Agent API 强制 mTLS 时，再进一步细化证书签发、轮换、吊销和 mTLS 强制策略。
+仍然属于部署选择的（不进模型）：具体 PKI/HSM 产品、证书轮换协议的传输细节、
+网关页面前端证书的签发方式。

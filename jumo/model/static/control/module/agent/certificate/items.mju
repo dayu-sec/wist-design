@@ -1,0 +1,102 @@
+// Module: Agent.Certificate — Agent 客户端证书（mTLS）与独立 agent CA
+// 实体事实；签发命令与流程由 Agent.Credential 承载（见该模块 items.mju）。
+
+struct AgentCertificateAuthority {
+  meta {
+    label zh "Agent 证书颁发机构"
+    label en "Agent Certificate Authority"
+    summary zh "签发 agent 客户端证书的**独立** CA：与签服务端叶证书的客户 CA 分开。其根只留服务端作 client 验证信任库，**不下发**给 agent；私钥外置（KMS/HSM 或持久 PEM 引用），丢即全队重装。"
+    tags "agentd", "certificate", "ca", "mtls"
+  }
+
+  unique ca_id: String
+  ca_certificate_pem: String
+  /// 私钥**引用**（KMS/HSM 或受保护文件路径）；明文私钥不入模型。
+  private_key_ref: String
+  subject: String
+  not_before: DateTime
+  not_after: DateTime
+  created_at: DateTime
+  status: AgentCertificateAuthorityStatus
+}
+
+variant AgentCertificateAuthorityStatus {
+  meta {
+    label zh "Agent CA 状态"
+    label en "Agent Certificate Authority Status"
+    tags "agentd", "certificate", "ca"
+  }
+
+  Active
+  Retiring
+  Retired
+}
+
+struct AgentCertificatePolicy {
+  meta {
+    label zh "Agent 证书签发策略"
+    label en "Agent Certificate Policy"
+    summary zh "客户端证书的签发与续期口径：有效期 37 天 = 保底 30 天 + 提前 7 天续期，故任何时刻剩余 ≥ 30 天；**无宽限**，过期即带 token 重装。身份承载为 URI SAN：spiffe://<tenant_id>/<environment_id>/agent/<agent_id>，CN 仅人类可读。"
+    tags "agentd", "certificate", "policy"
+  }
+
+  unique policy_id: String
+  /// 身份承载方式：当前为 URI SAN（而非 DN 或自定义扩展）。
+  identity_carrier: String
+  identity_uri_prefix: String
+  client_cert_ttl_seconds: Int
+  offline_floor_seconds: Int
+  renewal_lead_seconds: Int
+  renewal_grace_seconds: Int
+  not_before_skew_seconds: Int
+}
+
+struct AgentClientCertificate {
+  meta {
+    label zh "Agent 客户端证书"
+    label en "Agent Client Certificate"
+    summary zh "已签发给某个 agent 的客户端证书事实。身份在 URI SAN；CSR 只贡献公钥，主体由网关按稳定哈希 agent_id 填。签发与续期共用同一签发路径。"
+    tags "agentd", "certificate", "mtls"
+  }
+
+  unique certificate_id: String
+  agent_id: String
+  ca_id: String
+  serial: String
+  fingerprint_sha256: String
+  subject_uri: String
+  not_before: DateTime
+  not_after: DateTime
+  issued_at: DateTime
+  last_renewed_at: DateTime?
+  status: AgentClientCertificateStatus
+}
+
+variant AgentClientCertificateStatus {
+  meta {
+    label zh "Agent 客户端证书状态"
+    label en "Agent Client Certificate Status"
+    tags "agentd", "certificate", "status"
+  }
+
+  Active
+  Expired
+  Revoked
+}
+
+struct AgentCertificateDenylistEntry {
+  meta {
+    label zh "Agent 证书拒绝名单条目"
+    label en "Agent Certificate Denylist Entry"
+    summary zh "按 agent_id 拒绝的条目：续签与重签都还是同一个 agent_id，故对持钥者跨证书持续生效 —— 这是「停止续签」挡不住私钥泄露的补口。条目只需保留到被盗证书自然过期（retain_until）即可 GC，列表不会无限增长。"
+    tags "agentd", "certificate", "revocation", "denylist"
+  }
+
+  unique entry_id: String
+  agent_id: String
+  reason_code: String
+  denied_by: String
+  denied_at: DateTime
+  /// 保留到该 agent 被盗证书的自然过期时刻；过期即清。
+  retain_until: DateTime
+}

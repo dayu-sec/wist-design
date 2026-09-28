@@ -10,6 +10,7 @@ subsystem WistGateway {
   uses module Control.GatewayApp.WebFrontend
   uses module Control.GatewayApp.UserFacingInterface, Control.AgentApp.FacingInterface
   uses module Control.Agent.Enrollment, Control.Agent.Registration, Control.Agent.Identity, Control.Agent.Credential, Control.Agent.Status
+  uses module Control.Agent.Certificate
   uses module Control.Agent.Command
   // 网关**服务**工作授权（`WorkGrant` / `AckWork` / `AgentUplinkGrant` 都是这里下发的），
   // 所以工作域属于本子系统 —— 之前漏了这行，导致 `Control.Agent.Work` 整体不在任何 scope 里，
