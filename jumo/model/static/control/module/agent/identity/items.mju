@@ -113,6 +113,21 @@ struct AgentCredentialRevocationResult {
   revoked_at: DateTime
 }
 
+// 删除结果：管理面删除一台**离线** Agent 后的回执。
+// 只允许离线：在线机器还在上报，删了它下一刻会用旧凭据重连、可能又注册回来。
+// 删除不可恢复，且连同该 Agent 的实例、凭据与**所有**派生态数据一起清掉。
+struct AgentDeletionResult {
+  meta {
+    label zh "Agent 删除结果"
+    label en "Agent Deletion Result"
+    summary zh "管理面删除一台离线 Agent 后的回执；不可恢复，会连同该 Agent 的实例、凭据与所有派生态数据一起清掉。"
+    tags "agentd", "deletion", "identity"
+  }
+
+  agent_id: String
+  deleted_at: DateTime
+}
+
 variant AgentCredentialVerificationStatus {
   Verified
   UnknownAgent

@@ -100,3 +100,17 @@ struct AgentCertificateDenylistEntry {
   /// 保留到该 agent 被盗证书的自然过期时刻；过期即清。
   retain_until: DateTime
 }
+
+// 解除吊销的结果：管理面把某个 agent_id 从拒绝名单移除后的回执。
+// 解除后它下次请求即可重新接入（不再被 401 certificate_revoked 拦住）。
+struct AgentRevocationLiftedResult {
+  meta {
+    label zh "Agent 吊销解除结果"
+    label en "Agent Revocation Lifted Result"
+    summary zh "管理面把某个 agent_id 从拒绝名单移除后的回执；解除后它下次请求即可重新接入。"
+    tags "agentd", "certificate", "revocation", "denylist"
+  }
+
+  agent_id: String
+  status: String
+}

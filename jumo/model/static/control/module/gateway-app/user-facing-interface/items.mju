@@ -51,6 +51,30 @@ message<command> AdminViewAgentInstallPackageAddress = OperatorRequest {
 message<command> AdminListAgentInstallPackages = OperatorRequest {
 }
 
+// 删除一台**离线** Agent（连同实例、凭据与所有派生态数据）——不可恢复。
+// 在线会被拒（409）：在线机器还在上报，删了下一刻可能又注册回来。
+message<command> AdminDeleteAgent = OperatorRequest {
+  agent_id: String
+}
+
+// 把一台 Agent 的 agent_id 加入**拒绝名单**（吊销，§5.6）。
+// 与 AdminRevokeAgentCredential 不同：那个吊销一份凭据（可换凭据 / 证书自续绕开），
+// 这个拒的是 agent_id 本身 —— 续签、重签同 id 仍被拒。
+message<command> AdminRevokeAgent = OperatorRequest {
+  agent_id: String
+  reason_code: String?
+  requested_by: String?
+}
+
+// 从拒绝名单移除（解除吊销）。
+message<command> AdminLiftAgentRevocation = OperatorRequest {
+  agent_id: String
+}
+
+// 列出拒绝名单（仅仍在生效的条目）。
+message<command> AdminListAgentRevocations = OperatorRequest {
+}
+
 // 查看当前生效的发现方向策略表（管理面）。
 // 表是平台策展数据：运维要能看到“现在生效的是哪一版、各方向周期是多少”。
 message<command> AdminViewDiscoveryPolicies = OperatorRequest {
@@ -275,6 +299,26 @@ interface WistGatewayManagementInterface {
   entry AdminListAgentInstallPackages {
     actor PlatformMaintenanceEngineer
     output Projection<List<AgentInstallPackageHistoryEntry>>
+  }
+
+  entry AdminDeleteAgent {
+    actor AdminOperator
+    output AgentDeletionResult
+  }
+
+  entry AdminRevokeAgent {
+    actor AdminOperator
+    output AgentCertificateDenylistEntry
+  }
+
+  entry AdminLiftAgentRevocation {
+    actor AdminOperator
+    output AgentRevocationLiftedResult
+  }
+
+  entry AdminListAgentRevocations {
+    actor AdminOperator
+    output Projection<List<AgentCertificateDenylistEntry>>
   }
 
   entry AdminGrantWork {

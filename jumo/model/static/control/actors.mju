@@ -53,6 +53,10 @@ actor AdminOperator {
   can AdminQueryAgentCapabilityIndex
   can AdminListAgents
   can AdminRevokeAgentCredential
+  can AdminDeleteAgent
+  can AdminRevokeAgent
+  can AdminLiftAgentRevocation
+  can AdminListAgentRevocations
   can AdminGrantWork
   can AdminRevokeWork
   can AdminProposeWork

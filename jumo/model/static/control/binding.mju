@@ -108,6 +108,37 @@ bind WistGatewayManagementInterface {
     status Projection<List<AgentInstallPackageHistoryEntry>> 200
   }
 
+  // 删除一台**离线** Agent（不可恢复）。在线 → 409（判据与列表/运行态同一处）。
+  entry AdminDeleteAgent {
+    route DELETE "/api/v1/admin/agents/{agent_id}"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status AgentDeletionResult 200
+  }
+
+  // 按 agent_id 的拒绝名单（吊销，§5.6）：与 AdminRevokeAgentCredential 不同 ——
+  // 那个吊销一份凭据（可换凭据 / 证书自续绕开），这个拒的是 agent_id 本身。
+  entry AdminRevokeAgent {
+    route POST "/api/v1/admin/agents/{agent_id}/revocation"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status AgentCertificateDenylistEntry 200
+  }
+
+  entry AdminLiftAgentRevocation {
+    route DELETE "/api/v1/admin/agents/{agent_id}/revocation"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status AgentRevocationLiftedResult 200
+  }
+
+  entry AdminListAgentRevocations {
+    route GET "/api/v1/admin/agent-revocations"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status Projection<List<AgentCertificateDenylistEntry>> 200
+  }
+
   entry AdminViewAgentPurpose {
     route GET "/api/v1/admin/agents/{agent_id}/purpose"
     auth bearer

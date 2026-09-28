@@ -3,7 +3,7 @@
 `doc/design` 目录按主题拆分为以下子目录：
 
 - `foundation/`
-  总体目标、总体架构、术语、路线图、实现 backlog、非功能目标、安全模型、错误处理体系、参考资料、jumo 可检规约（验证与形式化）
+  总体目标、总体架构、术语、路线图、实现 backlog、非功能目标、安全模型、错误处理体系、参考资料、jumo 可检规约（验证与形式化）、跨仓 issue 清单
 - `execution/`
   动作 DSL、`ActionPlan IR`、执行 schema、opcode schema、`run.gxl` 相关文档
 - `edge/`
