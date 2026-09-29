@@ -418,8 +418,8 @@ flow AdminGetAgentInstallCodeFlow {
   actor OperationsEngineer
   trigger AdminGetAgentInstallCode
 
-  // 取包来源来自管理面设置；分发地址恒为网关自身端点，制品由网关先拉到本地缓存
-  // （未设置来源时用网关内置包）。
+  // 取包来源来自管理面录入；分发地址恒为网关自身端点，制品由网关先拉到本地缓存
+  // （未录入过就是没有可用包，不会回落到别的来源）。
   depends AgentInstallPackageAddress
 
   creates AgentBootstrapBundle
@@ -448,7 +448,7 @@ flow AdminGetAgentInstallCodeFlow {
       install_script_url = "https://warp-gateway/api/v1/agent/install/x86/install.sh?token=install-token-001"
       // 分发地址恒为网关自身端点：目标主机不直连来源，只从网关取包；
       // 摘要与网关本地那份制品同源（来源由 AgentInstallPackageAddress 给出，
-      // 未设置时是配置内置包）。具体取值由实现层派生。
+      // 未录入过时没有可用包）。具体取值由实现层派生。
       agent_package_url = "https://warp-gateway/api/v1/agent/packages/current"
       agent_package_sha256 = "sha256:package-digest"
       control_endpoint = "https://warp-gateway"

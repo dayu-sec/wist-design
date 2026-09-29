@@ -98,13 +98,19 @@ POST /api/v1/agent/uplink:poll        （agent 凭据，与 work:poll 同一套�
 网关**每次被问到时现算**，不落库、不加表、不引入状态机：
 
 ```
-enabled = （该 Agent 有生效工作）且（管理面已设「数据面上送地址」）
-host/port = 管理面的「数据面上送地址」
+enabled  = （该 Agent 有生效工作）且（有上送目标）
+上送目标 = 管理面设置  →  部署配置派生（同一域名 + 数据面端口）
 ```
 
 * 「有生效工作」复用 `build_work_grant` 已在用的两个 helper：
   `effective_standing(list_standing_work)` / `outstanding_one_shot(list_one_shot_work)`。
-* 没有目标（未设地址）→ 只能待命。
+* **上送目标默认不必人工录入**：没在管理面设过时按部署配置派生 —— 与 Agent 拿到的控制面地址
+  （`install.rs::effective_advertise_base`，即网关对外地址）**同域**，端口取数据面约定的入口端口
+  （9000，与 wparse `topology/sources/tcp_1` 一致）。于是“一台机器、一个域名”的部署
+  **装完 + 派活即可上送**，不存在“地址还没录”这一步。
+* 管理面的那条设置**优先**于派生：它留给“要指到别处”的场景（另一台机器的数据面、非约定端口）。
+  派生值的 `updated_at` 为空 —— 管理面据此把“来自部署配置”与“管理面设置过”分开显示。
+* 派生也取不出主机名（对外基址里没有主机名）→ 没有目标可指 → 只能待命（**不猜**目标）。
 * 控制面**不推送**：Agent 每 30s 拉一次（与 work / discovery-policies 同一档）。
 
 兼容性（两个方向都安全）：
@@ -119,7 +125,7 @@ host/port = 管理面的「数据面上送地址」
 ## 5. 端到端时序
 
 ```
-安装     网关签发初始配置：enabled = false, kind = "tcp", tcp.addr/port = 上送地址
+安装     网关签发初始配置：enabled = false, kind = "tcp", tcp.addr/port = 上送目标（派生值）
          → Agent 待命（可上报状态；**仍推进程列表等事实摘要**，但不采集、不上送日志/指标）
 派活     管理面授权一份常驻工作
 ≤30s     Agent poll work:poll    → 拿到工作，开始采集
@@ -153,8 +159,11 @@ host/port = 管理面的「数据面上送地址」
   是派活与指标快照的输入，不是数据面外发。
 * **待命不落本地采集输出**：`enabled = false` 时不写 `wist-records.ndjson`。
   本地状态簿记（如指标快照）仍继续，它与「产出/上送」正交。
-* **地址来源单一**：`host/port` 只来自管理面的那一条「数据面上送地址」设置，
-  按 Agent 不区分（全租户一套）—— 多环境/多数据面需要时再引入按环境解析。
+* **地址来源两级**：`host/port` 先取管理面的「数据面上送地址」，没设过则按部署配置派生
+  （与网关对外地址同域 + 数据面端口 9000）；两者都取不出（基址里没有主机名）才是“没有目标”。
+  派生**随基址走**：换域名（改 `server.public_base_url`）就换目标；派生端口固定 9000 ——
+  数据面在宿主上不是 9000 时，用管理面那条设置覆盖。
+  两种来源都按 Agent 不区分（全租户一套）—— 多环境/多数据面需要时再引入按环境解析。
 
 ## 7. 代码对应
 
@@ -162,19 +171,22 @@ host/port = 管理面的「数据面上送地址」
 |---|---|
 | 契约 | `wist-contracts/src/agent_config.rs`（`LogsOutputSection.enabled`，默认 `true`）；`wist-contracts/src/agent_uplink.rs`（`PollAgentUplink` / `AgentUplinkGrant` / `AgentUplinkState`） |
 | agentd | `runtime/daemon_telemetry_support.rs::effective_output`（生效解析）；`runtime/daemon.rs::run_once_with_failure_cache`（关闸短路 + 事实帧按 `carries_fact_frames` 决定）；`runtime/daemon.rs::refresh_uplink_grant`；`control/uplink.rs`（拉取 + `AppliedUplink`） |
-| gateway | `api/mod.rs`（路由）；`api/agent_ops.rs::poll_agent_uplink` / `build_agent_uplink_grant`；`api/admin_ops.rs::set_agent_uplink` / `view_agent_uplink`（上送地址的来源 —— 现算 `enabled` 时的目标就是它）；`api/install.rs::agent_initial_config_toml`（初始配置：`enabled = false`）；`api/admin_ops.rs::get_agent_runtime_status`（暴露 `AgentUplinkState`）；迁移 `migrations/sqlite/0015_agent_uplink_state.sql`（`agent_instances.uplink_state` 列） |
+| gateway | `api/mod.rs`（路由）；`api/agent_ops.rs::poll_agent_uplink` / `build_agent_uplink_grant`；`api/install.rs::effective_agent_uplink` / `derived_agent_uplink`（上送目标的生效解析：管理面设置 → 部署配置派生 —— 现算 `enabled` 时的目标就是它）；`api/admin_ops.rs::set_agent_uplink` / `view_agent_uplink`（管理面那条设置：设了优先，没设则回派生的生效值）；`api/install.rs::agent_initial_config_toml`（初始配置：`enabled = false` + 上送目标）；`api/admin_ops.rs::get_agent_runtime_status`（暴露 `AgentUplinkState`）；迁移 `migrations/sqlite/0015_agent_uplink_state.sql`（`agent_instances.uplink_state` 列） |
 | agentd 出口可观测 | `telemetry/warp_parse.rs::TcpRecordSink::tag_target`（出口错误挂目标地址）；`telemetry/logs/files/delivery_support.rs` + `state_support.rs`（`sink_error` 把直发失败带出来）；`runtime/daemon_telemetry.rs`（`TelemetryFailureKind::UplinkFailed`） |
 | web | `SubsystemGatewayInitializePage.tsx`（「数据面上送地址」卡文案）；`SubsystemAgentUplinkStatusPanel.tsx` + `SubsystemAgentWorkPage.tsx`（工作页顶部渲染 `uplink_state`）；`api/admin.ts`（`fetchAgentRuntimeStatus` / `AgentUplinkStateView`） |
 | 模型 | `static/control/module/agent/work/items.mju`（`AgentUplinkGrant`）；`static/control/module/agent-app/facing-interface/items.mju`（`PollAgentUplink`）；`static/reporting/module/Protocol/items.mju`（`AgentUplinkState` + `AgentStatusReport.uplink_state`）；`static/discovery/module/Config/items.mju`（`LogsOutputSection.enabled`） |
 
 ## 8. 验收清单
 
-1. 未设「数据面上送地址」时，新装 Agent 待命：**无** `fact summary uplink failed`、无 TCP 连接、无本地采集输出。
-1a. **设了**「数据面上送地址」时，新装 Agent 在待命期**会**把进程列表等事实摘要推上去
-    （`OBSFACT`，仅 tcp）—— 网关据此能出用途建议；但它**仍不发**日志/指标。
-2. 设地址 + 派活 → ≤30s 内 Agent 开始上送：数据面 `pick_stat tcp_1 > 0`，网关「采集日志」出现记录。
+1. 未设「数据面上送地址」时，新装 Agent 仍**待命**（不采集日志/指标、不写本地采集输出），
+   但上送目标是**派生**的（同域 + 9000），所以待命期**会**把进程列表等事实摘要推上去（`OBSFACT`）；
+   并且不出现 `fact summary uplink failed`。
+1a. 管理面设了「数据面上送地址」时，生效目标以它为准（覆盖派生值）—— 用于“数据面不在网关本机”的部署。
+2. 派活 → ≤30s 内 Agent 开始上送：数据面 `pick_stat tcp_1 > 0`，网关「采集日志」出现记录。
+   （**不需要**先有人录地址：目标已由部署配置派生。）
 3. 撤回工作 → ≤30s 内回到待命（数据面计数停止增长，且无失败日志）。
-4. 重装 Agent：`agentd.toml` 的 `enabled` 为 `false`，但派活后仍自动启用（**不依赖**任何人工改配置）。
+4. 重装 Agent：`agentd.toml` 的 `enabled` 为 `false`、`tcp.addr/port` 为派生的上送目标，
+   但派活后仍自动启用（**不依赖**任何人工改配置）。
 5. 旧网关 + 新 agentd：`uplink:poll` 得 404，Agent 按本机配置跑，不报错。
 6. **不刷屏**：已入网的 Agent 连续 poll 时**不**每 30s 打一行 —— 状态没变（含仅 `granted_at` 变化）不打，
    同一故障签名只打一次（`event=UplinkGrantApplied` 只出现在真变化时）。

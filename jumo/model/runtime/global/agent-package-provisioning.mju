@@ -52,7 +52,7 @@ flow AgentPackageProvisioningFlow {
   }
 
   // ⑤ 落库来源地址与摘要。摘要是网关按实际内容算出的，不再采信手填值；
-  // 未设置过时来源地址为空串，表示分发的是网关内置安装包。
+  // 未录入过时来源地址为空串 —— 此时**没有可用包**（不存在别的退路），分发端点 503。
   step PersistPackageSource in WistGateway {
     create AgentInstallPackageAddress {
       address_id = "default"

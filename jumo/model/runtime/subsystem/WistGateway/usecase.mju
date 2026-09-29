@@ -339,7 +339,7 @@ usecase ServeAgentUplinkGrant {
   meta {
     label zh "下发数据面上送授权"
     label en "Serve Agent Uplink Grant"
-    summary zh "网关按「该 Agent 有没有生效工作」加上管理面已设的「数据面上送地址」现算数据面上送期望状态并下发。幂等、可重复拉取：派活即启用、撑回即待命，不需要管理面多一个动作，也不需要重装 Agent。"
+    summary zh "网关按「该 Agent 有没有生效工作」加上上送目标（管理面设过的优先，否则按部署配置派生：与网关对外地址同域 + 数据面端口）现算数据面上送期望状态并下发。幂等、可重复拉取：派活即启用、撑回即待命，不需要管理面多一个动作，也不需要重装 Agent。"
     tags "agent-uplink", "grant", "agentd", "serve"
   }
 
