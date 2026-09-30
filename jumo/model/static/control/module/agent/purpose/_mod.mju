@@ -11,7 +11,7 @@
 // 为什么不放 agentd：agentd 只报事实；规则表是“策展知识”，与采集目录同类，
 // 由网关集中管理与更新；进程路径/参数里可能带用户名与敏感参数，不该为分类而外送。
 //
-// 规则表是数据（jumo/model/content/purpose-rules.toml），本模块只定义形状。
+// 规则表是数据（wist-knowledge/purpose-rules.toml），本模块只定义形状。
 
 module<entity> Agent.Purpose {
   meta {

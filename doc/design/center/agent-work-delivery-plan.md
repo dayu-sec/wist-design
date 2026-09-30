@@ -12,8 +12,8 @@
 | PauseAgent / UpgradeAgent 全线移除（模型 + 网关 + 前端 + `wist-control`） | `jumo verify` 10 passed；网关 `cargo test --lib` 110；`wist-control` 5；前端 build + 4 个契约测试 |
 | 帧协议：`RAW:` → `LOGRAW:`，包 `macos_agent` → `agent_uplink`，tag → `agent.log` / `agent.metrics` | `wpl-check sample` 6 字段 / 0 residue；`wpadm check` 4/4；agentd `cargo test` 307+2+45 |
 | 模型三块：`Agent.Work`（工作）/ `Agent.Content`（内容）/ `Agent.Purpose`（用途） | `Content owns 9`、`Purpose owns 5` |
-| 三份策展数据 | `content/catalog.toml`（27 单元 / 18 面）、`content/templates.toml`（4 模板）、`content/purpose-rules.toml`（43 规则） |
-| 发现方向与周期策略 | `Discovery.Probe` 类型 + `content/aspect-policies.toml` 策展值；网关装载校验（七方向 / `[min,default,max]` / 基线不可关 / 平台闭集）并下发，agentd 应用后盖过内建默认周期。验证：`jumo verify` 0 error；`impl-check` 14 用例 0 warning；契约 24 / 网关 173 / agentd 338+2+45 全绿 |
+| 三份策展数据 | `wist-knowledge/catalog.toml`（27 单元 / 18 面）、`wist-knowledge/templates.toml`（4 模板）、`wist-knowledge/purpose-rules.toml`（43 规则） |
+| 发现方向与周期策略 | `Discovery.Probe` 类型 + `wist-knowledge/aspect-policies.toml` 策展值；网关装载校验（七方向 / `[min,default,max]` / 基线不可关 / 平台闭集）并下发，agentd 应用后盖过内建默认周期。验证：`jumo verify` 0 error；`impl-check` 14 用例 0 warning；契约 24 / 网关 173 / agentd 338+2+45 全绿 |
 | 用途规则真机验证 | 用本机 906 个真实进程跑出 `MacDev`，置信度 90，依据可列（Xcode/mise/OrbStack） |
 | 事实摘要统一走数据面 + 落库 + 用途推断 | 摘要以 `OBSFACT:` 帧上报、网关订阅（内部明文端点 `POST /api/v1/ingest/agent-facts`）；控制面直报 `POST /api/v1/agent/facts` 已删；`agent_fact_summary` 覆盖式入库（网关自算 `content_digest` 幂等）；管理面 `GET /api/v1/admin/agents/{id}/purpose`。验证：`jumo verify` 10 passed（`AgentFactSummaryIngested`）；重启后数据面 `parse_stat`/`sink_stat` 全 success、库 revision 刷新 |
 | L1a 机械资产清单（`Control.Agent.Inventory`） | `agent_software_inventory` 表 + `DeriveSoftwareInventory` 派生步 + 两个查询端点（`GET /api/v1/admin/software`、`GET /api/v1/admin/agents/{id}/software`）；`jumo verify` 10 passed；`impl-check` 16 用例 0 warning；网关 `cargo test software` 6 passed |
@@ -64,7 +64,7 @@
 | 交付物 | 仓 | 要点 |
 |---|---|---|
 | agentd 聚合 + `OBSFACT:` 帧 | `wist-agentd` | 去重进程名/路径 + 包清单（Linux）+ 监听端口；正文 `{content_digest, mode, snapshot}`；**不进 spool**（可重算，尽力而为） |
-| 发现方向与周期调度 | `wist-agentd` | **已落地**：运行时按各探针周期调度（只刷到期的，未到期的**沿用上次输出** —— 快照是从各探针输出重拼的，少交一个就等于把它的资源删掉）。周期优先取**平台下发的策略表**（`content/aspect-policies.toml` → 网关装载校验 → agentd 拉取），拿不到表才回退探针里的**内建默认值**（与策展值同值） |
+| 发现方向与周期调度 | `wist-agentd` | **已落地**：运行时按各探针周期调度（只刷到期的，未到期的**沿用上次输出** —— 快照是从各探针输出重拼的，少交一个就等于把它的资源删掉）。周期优先取**平台下发的策略表**（`wist-knowledge/aspect-policies.toml` → 网关装载校验 → agentd 拉取），拿不到表才回退探针里的**内建默认值**（与策展值同值） |
 | 周期值由策略表**下发** | `wist-gateway` + `wist-agentd` | **已落地**：`POST /api/v1/agent/discovery-policies:poll` + 装载期校验 + 应用时按策略自带的 `[min,max]` 夹取（调整进日志）；生效版本由 agent 随状态上报带回（`discovery_policy_version`），管理面逐台可看。剩余：策略表还**不接管探针开关**（开不开仍由本地 `[discovery] *_enabled`），且 `Package`/`K8s` 还没有接入运行的探针，它们的周期值暂无人消费 |
 | 数据面 receiver + sink | `wist-gateway-stack` | `obs_fact` rule（`symbol(OBSFACT:)`）+ OML（整块 JSON 透传，不做字段建模）+ sink group（`http_sink` → 网关、`kafka_sink` → 中心） |
 | 网关订阅端点 + 落库 | `wist-gateway` | 数据面 → 网关的**内部信任边界**；`(agent_id, revision)` / `content_digest` 幂等；派生**摘要视图**（不上送） |
@@ -161,14 +161,14 @@ mac 机器选 `LinuxCompute` 被拒。**依赖批次 2。**
 | 1 | 事实帧的上送触发器 | **已被 #6 取代**：不再靠 `content_digest` 驱动“变了才报”（那要求 agent 侧判重），改为 agentd 无条件周期全量上送，判重归网关（模式与逐方向取值见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md)） |
 | 2 | `cmdline` 是否上送 | **默认不上送**；开启后只送"程序名 + 参数名 + 位置参数"，不送值（事实会流到中心，参数最易夹带口令/路径） |
 | 3 | 起点 | 先做批次 0（需一次重启）还是直接批次 1（不动运行态） |
-| 4 | 发现方向周期取值 | 观测频率值已落在 `jumo/model/content/aspect-policies.toml`（模型只留类型与字段语义）；**待确认**：`Container`/`K8s` 默认关、`Host` 15min 是否太滞后（自识别底座可以更快） **上报模式（范围 × 触发、上报周期、TOP N）已从模型移出** —— 它是策略表格不是类型，见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) |
+| 4 | 发现方向周期取值 | 观测频率值已落在 `wist-knowledge/aspect-policies.toml`（模型只留类型与字段语义）；**待确认**：`Container`/`K8s` 默认关、`Host` 15min 是否太滞后（自识别底座可以更快） **上报模式（范围 × 触发、上报周期、TOP N）已从模型移出** —— 它是策略表格不是类型，见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) |
 | 5 | 探针的平台覆盖与策略声明不一致 | `Endpoint` 在 macOS 是空实现 → 策略已改为 `platforms = linux`；`Network` 在 macOS 只拿到地址、无路由（`/proc/net/route` 仅 linux）→ 待定：补 mac 实现，还是接受“部分产出” |
 | 6 | 事实上报的触发与判重归属 | **已落地**（方案 2 + A）：agentd **无条件周期全量上送**（只按 5min 下限节流），判重挪到**网关**，且**网关自己从收到的内容算 digest**（agent 的声明只当版本金丝雀，不一致记 `FactDigestMismatch` 告警、不拒收）。为何必须自算：若仍用 agent 的 digest 判重，agent 侧算法一退化就会让网关把所有上报当 `duplicate` —— 静默漏报，和原来的故障一模一样只换个地方。实现：`wist-contracts::fact_summary`（共享规范化+sha256，两侧同一实现），`wist-contracts` 暂用本地 path 依赖待发布 |
 | 7 | 「内容没变」与「最近听到」要分开 | **已落地**：`duplicate` 分支只刷**留痕**（`revision`/`observed_at`/`process_count`/`received_at`），不动内容与幂等键（`SqliteStore::touch_agent_fact_summary_marks`）。否则页面的「去重前 906」会停在几天前而看起来像实时值 |
 | 8 | 快速信号的噪声归哪 | **规则层**（`min_support`）。不放 agent（要轻，且阈值是推断质量的调优）；不放网关（1000 台 ≈ 50 万行窗口计数、每次上报几百次写，会把控制面拖慢）。**已建模 + 已实现**（不足则 confidence 打折） |
 | 9 | TOP 的排序键 | 理想是“窗口内出现频次”，但那要 agent 侧窗口 → 与「agent 要轻」相冲，已否决。当下只能按**采样时的资源占用**排序，而它会把“在跑重活”当特征 → 所以定下一条硬规则：**有推断判据依赖的方向一律不得用 Top**。目前用 Top 的只有 `Container`/`K8s`（无判据）。规则与取值已从模型移到 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) §3 R3 / §4 |
 | 10 | `revision` 每轮 +1 | 即使**没有任何探针到期**，也会重拼快照并推进 revision（连带重写缓存/派生视图）。待收敛为“真有观测才前进”（这也正是「不能拿 revision 当幂等键」的根源） |
-| 11 | 发现方向的**观测频率**怎么到 agentd | **已落地**：策展值放 `jumo/model/content/aspect-policies.toml`（与用途规则表同约定，模型只留结构），网关启动装载并校验（七方向各一条 / `[min,default,max]` 自洽 / 基线面不可关 / 平台闭集），`POST /api/v1/agent/discovery-policies:poll` 下发，agentd 拉到就盖过内建默认值、拉不到（含 503）就用默认值继续采集。本期只下发**周期**，不接管探针开关。细节见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) §6 |
+| 11 | 发现方向的**观测频率**怎么到 agentd | **已落地**：策展值放 `wist-knowledge/aspect-policies.toml`（与用途规则表同约定，模型只留结构），网关启动装载并校验（七方向各一条 / `[min,default,max]` 自洽 / 基线面不可关 / 平台闭集），`POST /api/v1/agent/discovery-policies:poll` 下发，agentd 拉到就盖过内建默认值、拉不到（含 503）就用默认值继续采集。本期只下发**周期**，不接管探针开关。细节见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) §6 |
 | 12 | **事件数据的落点选型**（日志 / 发现原文） | 现状实测：只有**指标**落地（VictoriaMetrics）；日志**半通**（sink 只配了文件）；发现原文**无落点**。候选与判据见 §8.1。建议：日志先落 **VictoriaLogs**（与已有 VM 同栈、最轻），要宽表归并与漏洞关联时再上 ClickHouse；原文快照 + 资产目录 → 中心的 **PG 或 ClickHouse**；指标保持 VM 不动 |
 | 13 | **事实摘要为什么不留历史** | **已定**：摘要是**状态**，覆盖式一台一条（`agent-purpose-inference.md:45`），因为推断判据是存在性（R1）。需要历史的那几件事各有归属 —— 见 §8.1 的表。**缺的那一件是「事实变更检测」**（“这台机器上新出现了什么”，如新监听端口）：现在 digest 变了但没任何地方记录，模型里也没这个类型。**建议暂不做**（消费方还没有；它更像中心资产目录的输入） |
 | 14 | **资产清单从哪里算** | **按层归属**（2026-09-22 订正）：**L1a 机械归并 → 网关**（**已落地**，不接中心也有清单）；**L1b 识别（名/版本/vendor）→ 采集侧 agentd**（**网关读不到目标机器的文件**）；**L2 归一化 + 漏洞 → 中心**（KB 高频变，分发成本）；**L3 历史/明细 → 中心，不在网关库**。详见 §8.2 |

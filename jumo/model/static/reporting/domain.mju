@@ -94,7 +94,7 @@ flow IngestAgentFactSummaryFlow {
   actor Control.Agentd
   trigger ReportAgentFactSummary
 
-  // 推断要读该机器平台的规则表（数据在 content/purpose-rules.toml）。
+  // 推断要读该机器平台的规则表（数据在 wist-knowledge/purpose-rules.toml）。
   depends Control.PurposeRuleSet
 
   creates Control.AgentFactSummary

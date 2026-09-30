@@ -120,17 +120,17 @@ Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkl
 
 模型只给**类型与词表**（`Control.Agent.Content`），内容值落在三个 TOML：
 
-- `jumo/model/content/catalog.toml`：采集目录 v1（27 个单元、18 个面，字段与 `CollectionUnit` 一一对应）
-- `jumo/model/content/packs.toml`：内容包（平台基线 + 特性包，字段与 `ContentPack` 一一对应）
-- `jumo/model/content/templates.toml`：4 个模板（只带 `pack_refs`，字段与 `WorkTemplate` 一一对应）
+- `wist-knowledge/catalog.toml`：采集目录 v1（27 个单元、18 个面，字段与 `CollectionUnit` 一一对应）
+- `wist-knowledge/packs.toml`：内容包（平台基线 + 特性包，字段与 `ContentPack` 一一对应）
+- `wist-knowledge/templates.toml`：4 个模板（只带 `pack_refs`，字段与 `WorkTemplate` 一一对应）
 
 单元的**采集来源**是结构化的 `sources: [{kind, target}]`（`FileGlob` / `Exporter` /
 `UnifiedLogPredicate` / `MetricInterval`），不再是自由文本 `spec_fragment` —— 一个来源一条，
 `glob:A|B` 这种一串多路径已拆并。loader 仍未实现（把 sources 编译成数据面输入）；`rule_ref`
 为空 = 解析规则未就绪，该单元 `status` 必为 `draft`。
 
-发现方向的**观测周期**是一份独立的策展数据：`jumo/model/content/aspect-policies.toml`
-（与用途规则表同一约定 —— 模型只留类型与字段语义，值留 `content/`），
+发现方向的**观测周期**是一份独立的策展数据：`wist-knowledge/aspect-policies.toml`
+（与用途规则表同一约定 —— 模型只留类型与字段语义，值留 `wist-knowledge/`），
 由网关装载校验后下发给 agentd（Host 900s / Process 300s / Package 1800s，含 `[min,max]` 与基线开关；
 链路见 [`discovery-reporting-modes.md`](./discovery-reporting-modes.md) §6）。
 

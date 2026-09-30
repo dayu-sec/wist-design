@@ -1,7 +1,7 @@
 # 发现上报的模式与规则
 
 > 本文档是「观测怎么变成一条上报」的**规则权威来源**。
-> 观测侧的权威来源是 `jumo/model/content/aspect-policies.toml`（各方向的观测频率区间、是否基线、平台、产出）；
+> 观测侧的权威来源是 `wist-knowledge/aspect-policies.toml`（各方向的观测频率区间、是否基线、平台、产出）；
 > 类型与字段语义在 `jumo/model/static/discovery/module/Probe/items.mju`。
 
 ## 1. 为什么这份知识不放进 jumo 模型
@@ -16,7 +16,7 @@
 
 | 内容 | 放哪 | 理由 |
 |---|---|---|
-| 有哪些方向、每方向的观测频率区间、是否基线、平台、产出 | **值**在 `content/aspect-policies.toml`；**类型**在模型 `Discovery.Probe` | 值是策展数据（与用途规则表同约定）；结构参与代码生成 |
+| 有哪些方向、每方向的观测频率区间、是否基线、平台、产出 | **值**在 `wist-knowledge/aspect-policies.toml`；**类型**在模型 `Discovery.Probe` | 值是策展数据（与用途规则表同约定）；结构参与代码生成 |
 | 上报**范围** × **触发**、逐方向取值、判定规则 | 本文档 | 策略表格 + 依据，改动频繁，靠网关装载时校验 |
 
 ## 2. 两个正交维度
@@ -77,7 +77,7 @@ TOP 的排序键当下只能是「采样瞬间的资源占用」，而这个键�
 | 环节 | 位置 | 说明 |
 |---|---|---|
 | 类型 | 模型 `Discovery.Probe.DiscoveryAspectPolicy` / `DiscoveryAspectPolicySet` | 只留结构与字段语义（jumo 装不下常量，见 §1） |
-| 值 | `jumo/model/content/aspect-policies.toml` | 与用途规则表同约定；**改内容必须同时 bump `policy_version`** |
+| 值 | `wist-knowledge/aspect-policies.toml` | 与用途规则表同约定；**改内容必须同时 bump `policy_version`** |
 | 装载与校验 | 网关启动（`[discovery] policies_file`） | 校验：七个方向各一条；`min ≥ 1` 且 `min ≤ default ≤ max`；`baseline` 的方向必须 `enabled_by_default`；`platforms` 只含 macos/linux。**校验不过起不来**（不会带病下发） |
 | 下发 | `POST /api/v1/agent/discovery-policies:poll` | agent 凭据认证；**未配表回 503**，不发空表 —— 空表会让「平台没发布策略」与「这台网关从未配置」无法区分 |
 | 查看 | `GET /api/v1/admin/discovery-policies` | 运维看当前生效的是哪一版；**逐台**列出各 Agent 实际生效的版本（回答「我改了策略，哪些机器还没生效」——从未上报过的机器也在列，不静默消失）；未配置时回 `configured: false`，不编一份默认表冒充 |

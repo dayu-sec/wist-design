@@ -65,7 +65,7 @@ agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
   省带宽，也大幅缩小敏感面（命令行参数可能含用户名、路径、口令）。
 - 聚合在 agentd 侧做（它本来就要遍历 `/proc` 或 `ps`），网关拿到的就是可直接匹配的信号集合。
 
-## 5. 规则表与计分（`jumo/model/content/purpose-rules.toml`）
+## 5. 规则表与计分（`wist-knowledge/purpose-rules.toml`）
 
 规则表是**策展数据**，与采集目录、模板同类：改规则 = 改“怎么判用途”，要走审定，不放进 agentd。
 

@@ -25,8 +25,8 @@ variant DiscoveryAspect {
 //
 // 值**不在模型里**：jumo 装不下常量（字段默认值解析通过但不落实例；同一类型的多条记录
 // 无法逐条 verify），硬塞进 flow + create 只会把「为什么这么定」压成注释、改策略还要动模型。
-// 值放 `content/aspect-policies.toml` —— 与用途规则表（`Control.Agent.Purpose.PurposeRuleSet`）
-// **同一约定**：模型留结构与字段语义，值留 content/；由网关装载校验（区间、基线不可关、平台）
+// 值放 `wist-knowledge/aspect-policies.toml` —— 与用途规则表（`Control.Agent.Purpose.PurposeRuleSet`）
+// **同一约定**：模型留结构与字段语义，值留 wist-knowledge/；由网关装载校验（区间、基线不可关、平台）
 // 后下发给 agentd。
 //
 // 载本表**刻意不建模**「上报范围 × 上报触发」（全量/TOP × 变化/周期）：那是一张
