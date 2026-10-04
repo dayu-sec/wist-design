@@ -123,29 +123,62 @@ struct GatewayCredentialBundle {
   meta {
     label zh "网关通讯凭据"
     label en "Gateway Credential Bundle"
-    summary zh "WistGateway 注册成功后签发的 bearer 凭据，用于后续访问 WistCenter 网关接口的认证。"
+    summary zh "WistGateway 注册成功后签发的**长期身份**：不再是对称 bearer，而是网关专属的客户端证书（mTLS）——私钥永不出网关、每网关一张、可单点吊销。"
     tags "gateway", "credential"
   }
 
   unique credential_id: String
   gateway_id: String
-  instance_id: String
+  instance_id: String?
+  /// "certificate"（不再有 bearer）。
   auth_scheme: String
-  bearer_token: String
+  client_certificate: GatewayClientCertificate
   issued_at: DateTime
   expires_at: DateTime
+}
+
+struct GatewayClientCertificate {
+  meta {
+    label zh "网关客户端证书"
+    label en "Gateway Client Certificate"
+    summary zh "由网关专属 CA（CA-G，与中心服务器证书的 CA 单开）签发、每台网关一张的客户端证书：绑定 gateway_id，用于对中心做 mTLS；私钥在网关侧生成、永不出网关；可轮换、可单点吊销。"
+    tags "gateway", "certificate", "mtls", "identity"
+  }
+
+  unique certificate_id: String
+  gateway_id: String
+  serial: String
+  subject: String
+  issuer: String
+  certificate_pem: String
+  issued_at: DateTime
+  expires_at: DateTime
+  status: GatewayClientCertificateStatus
+}
+
+variant GatewayClientCertificateStatus {
+  meta {
+    label zh "网关客户端证书状态"
+    label en "Gateway Client Certificate Status"
+    summary zh "描述网关客户端证书的可用、已过期或已吊销状态。"
+    tags "gateway", "certificate", "status"
+  }
+
+  Active
+  Expired
+  Revoked
 }
 
 struct GatewayCredentialVerificationResult {
   meta {
     label zh "网关凭据校验结果"
     label en "Gateway Credential Verification Result"
-    summary zh "WistGateway 后续调用时凭据校验的结果记录。"
+    summary zh "WistGateway 后续调用时客户端证书的校验结果记录。"
     tags "gateway", "credential", "verify"
   }
 
   gateway_id: String
-  credential_id: String
+  certificate_serial: String
   status: String
   verified_at: DateTime
 }

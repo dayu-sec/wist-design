@@ -229,26 +229,28 @@ message<response> GatewayImageDownloadReceipt {
 message<command> RegisterGateway {
   enrollment_token: String
   instance_id: String
+  /// 网关侧生成的证书签名请求（CSR，PEM）：公钥在其中，私钥永不出网关。
+  csr_pem: String
   requested_at: DateTime
 }
 
 message<command> VerifyGatewayCredential {
   gateway_id: String
-  instance_id: String
-  credential_id: String
+  certificate_serial: String
 }
 
 message<command> RenewGatewayCredential {
   gateway_id: String
-  instance_id: String
-  current_credential_id: String
+  current_certificate_serial: String
+  /// 网关为新证书生成的 CSR（轮换：用旧证书证明身份）。
+  csr_pem: String
 }
 
 flow RegisterGatewayFlow {
   meta {
     label zh "网关注册管理中心"
     label en "Gateway Registration Flow"
-    summary zh "WistGateway 持 REGIST_TOKEN 注册：消费注册凭据、防重复、签发独立运行期凭据（RUNTIME_TOKEN），返回注册回执。"
+    summary zh "WistGateway 持 REGIST_TOKEN 注册：消费注册凭据、防重复、用 CSR 签发网关专属客户端证书（mTLS 长期身份），返回注册回执。"
     tags "gateway", "registration", "enrollment", "secure"
   }
 
@@ -258,6 +260,7 @@ flow RegisterGatewayFlow {
 
   creates GatewayEnrollmentTokenValidation
   creates GatewayIdentity
+  creates GatewayClientCertificate
   creates GatewayCredentialBundle
   creates GatewayEnrollmentResult
 
@@ -290,17 +293,30 @@ flow RegisterGatewayFlow {
       status = "Active"
       issued_at = RegisterGateway.requested_at
     }
-    next IssueGatewayCredential
+    next IssueClientCertificate
   }
 
-  step IssueGatewayCredential in WistCenter {
+  // 用 CA-G 签一张网关专属客户端证书（subject = gateway_id），再把证书包进长期凭据。
+  step IssueClientCertificate in WistCenter {
+    create GatewayClientCertificate {
+      certificate_id = "cert-issued"
+      gateway_id = "gateway-issued"
+      serial = "cert-serial-issued"
+      subject = "gateway-issued"
+      issuer = "CA-G"
+      certificate_pem = "gateway-client-certificate-pem"
+      issued_at = RegisterGateway.requested_at
+      expires_at = "2026-11-16T00:00:00Z"
+      status = "Active"
+    }
     create GatewayCredentialBundle {
       credential_id = "credential-issued"
       gateway_id = "gateway-issued"
       instance_id = RegisterGateway.instance_id
-      auth_scheme = "bearer"
-      bearer_token = "gateway-credential-secret"
+      auth_scheme = "certificate"
+      client_certificate = GatewayClientCertificate
       issued_at = RegisterGateway.requested_at
+      expires_at = "2026-11-16T00:00:00Z"
     }
     next AcceptRegistration
   }
@@ -320,7 +336,7 @@ flow VerifyGatewayCredentialFlow {
   meta {
     label zh "校验网关通讯凭据"
     label en "Verify Gateway Credential Flow"
-    summary zh "WistGateway 访问网关接口前校验 bearer 凭据的有效性。"
+    summary zh "WistGateway 访问网关接口前校验客户端证书的有效性（mTLS）。"
     tags "gateway", "credential", "verify"
   }
 
@@ -332,7 +348,7 @@ flow VerifyGatewayCredentialFlow {
   step<stop> VerifyCredential {
     create GatewayCredentialVerificationResult {
       gateway_id = VerifyGatewayCredential.gateway_id
-      credential_id = VerifyGatewayCredential.credential_id
+      certificate_serial = VerifyGatewayCredential.certificate_serial
       status = "valid"
       verified_at = "now"
     }
@@ -341,33 +357,44 @@ flow VerifyGatewayCredentialFlow {
 
 flow RenewGatewayCredentialFlow {
   meta {
-    label zh "续期网关通讯凭据"
-    label en "Renew Gateway Credential Flow"
-    summary zh "WistGateway 用当前凭据申请新的 bearer 凭据，实现凭据定期轮换；旧凭据立即失效。"
-    tags "gateway", "credential", "renewal"
+    label zh "轮换网关客户端证书"
+    label en "Rotate Gateway Client Certificate"
+    summary zh "WistGateway 以当前客户端证书证明身份、提交新 CSR，换发一张新客户端证书（到期前轮换）；旧证书作废。"
+    tags "gateway", "credential", "renewal", "certificate"
   }
 
   actor WistGateway
 
   lane WistCenter for Control.InsightCenterApp.WistCenter
 
+  creates GatewayClientCertificate
   creates GatewayCredentialBundle
 
-  // 入口：WistGateway 持当前 RUNTIME_TOKEN 申请续期（by 声明 trigger）。
+  // 入口：WistGateway 持当前证书（mTLS）申请轮换（by 声明 trigger）。
   step RequestRenewal in WistGateway by RenewGatewayCredential {
-    next IssueRenewedCredential
+    next IssueRenewedCertificate
   }
 
-  // 中心以当前凭据鉴权后签发新运行期凭据（短 TTL），旧凭据立即失效。
-  step<stop> IssueRenewedCredential in WistCenter {
+  // 中心以当前证书鉴权后，用 CA-G 按新 CSR 签一张新证书；旧证书作废。
+  step<stop> IssueRenewedCertificate in WistCenter {
+    create GatewayClientCertificate {
+      certificate_id = "cert-renewed"
+      gateway_id = RenewGatewayCredential.gateway_id
+      serial = "cert-serial-renewed"
+      subject = RenewGatewayCredential.gateway_id
+      issuer = "CA-G"
+      certificate_pem = "gateway-client-certificate-renewed-pem"
+      issued_at = "now"
+      expires_at = "2026-12-16T00:00:00Z"
+      status = "Active"
+    }
     create GatewayCredentialBundle {
       credential_id = "credential-renewed"
       gateway_id = RenewGatewayCredential.gateway_id
-      instance_id = RenewGatewayCredential.instance_id
-      auth_scheme = "bearer"
-      bearer_token = "gateway-credential-renewed"
+      auth_scheme = "certificate"
+      client_certificate = GatewayClientCertificate
       issued_at = "now"
-      expires_at = "2026-08-16T00:00:00Z"
+      expires_at = "2026-12-16T00:00:00Z"
     }
   }
 }
@@ -385,6 +412,8 @@ verify GatewayRegistrationVerified for flow RegisterGatewayFlow {
   expect {
     GatewayEnrollmentTokenValidation.status == "valid"
     GatewayCredentialBundle.credential_id == "credential-issued"
+    GatewayCredentialBundle.auth_scheme == "certificate"
+    GatewayClientCertificate.subject == "gateway-issued"
     GatewayEnrollmentResult.status == "accepted"
     // R1：注册身份绑定到请求方实例，防重复/冒名注册。
     GatewayIdentity.instance_id == "gateway-issued"
