@@ -1,5 +1,11 @@
 # WarpGateway 接入 WarpInsightCenter 完整流程（下载 / 安装 / init / 注册 / 运行期）
 
+> ⚠️ **部分被取代**：**运行期凭据**部分（`RUNTIME_TOKEN` bearer、`credentials:renew`、bearer 鉴权）
+> 已由 [`gateway-secure-registration.md`](gateway-secure-registration.md) 推翻 —— 改为**客户端证书 mTLS**（`CA-G` 单开、
+> 每网关一张证书、删除运行期 bearer）。本文的**入场链路**（create → link-upstream → register）仍然有效，
+> 但路径/前缀以当前代码为准（`link-upstream`、`ident_`/`rt_`）。另见 CR-003（宿主常驻 `wist-gwlinkd`）。
+
+
 > 本文档描述 **网关（WarpGateway）** 从中心侧创建、下载、安装、初始化（init）、注册到运行期上报的端到端流程。
 > 与 agent（warp-insightd）的 enrollment 协议（`identity-enrollment-protocol.md`）不同，网关使用
 > **四 token 凭据链**：`BOOTSTRAP_TOKEN → IDENTITY_TOKEN → REGIST_TOKEN → RUNTIME_TOKEN`，注册后不依赖 mTLS。
@@ -46,7 +52,7 @@ sequenceDiagram
 
     rect rgb(240,252,240)
     note over GW,Center: ④ init（置备）
-    GW->>Center: GET /gateway/initial-config?instance_id=gw-001<br/>Bearer boot_* + X-Gateway-Identity-Token: gid_*
+    GW->>Center: GET /gateway/initial-config?gateway_id=gw-001<br/>Bearer boot_* + X-Gateway-Identity-Token: gid_*
     Center->>Center: 验 bootstrap(sha256) → 派生 REGIST_TOKEN=HMAC(center_secret, gw, identity)<br/>落 enrollment(sha256, max_uses=1) → 成功后才消费 bootstrap<br/>Provisioned → Initializing
     Center-->>GW: 200 application/toml：config.toml（[enrollment] token = reg_*）
     end
@@ -82,7 +88,7 @@ Authorization: Bearer <admin_token>
 
 - center 生成 `BOOTSTRAP_TOKEN`（`boot_` 前缀；不传 `token` 则由中心 `new_secret_token` 生成），**只存 sha256**。
 - 响应 `install`：
-  - `init_url` = `GET {center}/api/v1/gateway/initial-config?instance_id=gw-001`（**不含 token**）
+  - `init_url` = `GET {center}/api/v1/gateway/initial-config?gateway_id=gw-001`（**不含 token**）
   - `setup_token` = 明文引导 token（仅此一次交付给管理员，admin 页面展示）
   - `install_command` / `init_curl`：便捷命令
 
@@ -97,7 +103,7 @@ Authorization: Bearer <admin_token>
 
 ```
 docker run -d --name warp-gateway-gw-001 \
-  -e WARP_GATEWAY_INIT_URL=http://center:3100/api/v1/gateway/initial-config?instance_id=gw-001 \
+  -e WARP_GATEWAY_INIT_URL=http://center:3100/api/v1/gateway/initial-config?gateway_id=gw-001 \
   -e WARP_GATEWAY_BOOTSTRAP_TOKEN=boot_xxx \
   {gateway_image}
 ```
@@ -107,7 +113,7 @@ docker run -d --name warp-gateway-gw-001 \
 ### ④ init（置备，ProvisionGatewayFlow）
 
 ```
-GET /api/v1/gateway/initial-config?instance_id=gw-001
+GET /api/v1/gateway/initial-config?gateway_id=gw-001
 Authorization: Bearer <bootstrap_token>
 X-Gateway-Identity-Token: <identity_token>
 ```
@@ -192,7 +198,7 @@ POST /api/v1/gateway/register
 |---|---|---|---|
 | `/api/v1/admin/gateways/instances` | POST | admin bearer | 创建实例 + 签发 bootstrap |
 | `/api/v1/admin/gateways/{id}/bootstrap-tokens/rotate` | POST | admin bearer | 初始化前重发引导 token |
-| `/api/v1/gateway/initial-config?instance_id=` | GET | 置备：`bootstrap + identity`；已初始化：`runtime` | 置备 + 出 config.toml |
+| `/api/v1/gateway/initial-config?gateway_id=` | GET | 置备：`bootstrap + identity`；已初始化：`runtime` | 置备 + 出 config.toml |
 | `/api/v1/gateway/register` | POST | `enrollment_token = regist` | 注册 + 签发运行期凭据 |
 | `/api/v1/gateway/status` | POST | `Bearer runtime` | 状态上报 |
 | `/api/v1/gateway/credentials:renew` | POST | `Bearer runtime` | 凭据轮换 |
