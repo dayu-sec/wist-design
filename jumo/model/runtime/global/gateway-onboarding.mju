@@ -115,11 +115,9 @@ flow GatewayOnboardingFlow {
       certificate_id = "cert-issued"
       gateway_id = AdminCreateGatewayInstance.gateway_name
       serial = "cert-serial-issued"
-      subject = AdminCreateGatewayInstance.gateway_name
-      issuer = "CA-G"
-      certificate_pem = "gateway-client-certificate-pem"
+      certificate = "gateway-client-certificate-pem"
       issued_at = "now"
-      expires_at = "2026-11-16T00:00:00Z"
+      not_after = "2026-11-16T00:00:00Z"
       status = "Active"
     }
     next InstallClientCertificate

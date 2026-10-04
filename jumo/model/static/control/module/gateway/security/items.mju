@@ -123,18 +123,19 @@ struct GatewayCredentialBundle {
   meta {
     label zh "网关通讯凭据"
     label en "Gateway Credential Bundle"
-    summary zh "WistGateway 注册成功后签发的**长期身份**：不再是对称 bearer，而是网关专属的客户端证书（mTLS）——私钥永不出网关、每网关一张、可单点吊销。"
+    summary zh "WistGateway 注册成功后签发的长期身份：不再是对称 bearer，而是网关专属的客户端证书（mTLS）——每网关一张、私钥永不出网关、可单点吊销。"
     tags "gateway", "credential"
   }
 
   unique credential_id: String
   gateway_id: String
   instance_id: String?
-  /// "certificate"（不再有 bearer）。
-  auth_scheme: String
-  client_certificate: GatewayClientCertificate
+  /// 客户端证书（PEM）。mTLS 是唯一凭据路径（bearer / auth_scheme 已删），必填。
+  certificate: String
+  ca_bundle: String?
   issued_at: DateTime
-  expires_at: DateTime
+  not_before: DateTime?
+  not_after: DateTime?
 }
 
 struct GatewayClientCertificate {
@@ -148,11 +149,12 @@ struct GatewayClientCertificate {
   unique certificate_id: String
   gateway_id: String
   serial: String
-  subject: String
-  issuer: String
-  certificate_pem: String
+  /// 客户端证书（PEM）。
+  certificate: String
+  ca_bundle: String?
   issued_at: DateTime
-  expires_at: DateTime
+  not_before: DateTime?
+  not_after: DateTime?
   status: GatewayClientCertificateStatus
 }
 

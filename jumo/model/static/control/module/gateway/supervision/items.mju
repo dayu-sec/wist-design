@@ -230,7 +230,7 @@ message<command> RegisterGateway {
   enrollment_token: String
   instance_id: String
   /// 网关侧生成的证书签名请求（CSR，PEM）：公钥在其中，私钥永不出网关。
-  csr_pem: String
+  certificate_signing_request: String
   requested_at: DateTime
 }
 
@@ -243,7 +243,7 @@ message<command> RenewGatewayCredential {
   gateway_id: String
   current_certificate_serial: String
   /// 网关为新证书生成的 CSR（轮换：用旧证书证明身份）。
-  csr_pem: String
+  certificate_signing_request: String
 }
 
 flow RegisterGatewayFlow {
@@ -302,21 +302,18 @@ flow RegisterGatewayFlow {
       certificate_id = "cert-issued"
       gateway_id = "gateway-issued"
       serial = "cert-serial-issued"
-      subject = "gateway-issued"
-      issuer = "CA-G"
-      certificate_pem = "gateway-client-certificate-pem"
+      certificate = "gateway-client-certificate-pem"
       issued_at = RegisterGateway.requested_at
-      expires_at = "2026-11-16T00:00:00Z"
+      not_after = "2026-11-16T00:00:00Z"
       status = "Active"
     }
     create GatewayCredentialBundle {
       credential_id = "credential-issued"
       gateway_id = "gateway-issued"
       instance_id = RegisterGateway.instance_id
-      auth_scheme = "certificate"
-      client_certificate = GatewayClientCertificate
+      certificate = "gateway-client-certificate-pem"
       issued_at = RegisterGateway.requested_at
-      expires_at = "2026-11-16T00:00:00Z"
+      not_after = "2026-11-16T00:00:00Z"
     }
     next AcceptRegistration
   }
@@ -381,20 +378,17 @@ flow RenewGatewayCredentialFlow {
       certificate_id = "cert-renewed"
       gateway_id = RenewGatewayCredential.gateway_id
       serial = "cert-serial-renewed"
-      subject = RenewGatewayCredential.gateway_id
-      issuer = "CA-G"
-      certificate_pem = "gateway-client-certificate-renewed-pem"
+      certificate = "gateway-client-certificate-renewed-pem"
       issued_at = "now"
-      expires_at = "2026-12-16T00:00:00Z"
+      not_after = "2026-12-16T00:00:00Z"
       status = "Active"
     }
     create GatewayCredentialBundle {
       credential_id = "credential-renewed"
       gateway_id = RenewGatewayCredential.gateway_id
-      auth_scheme = "certificate"
-      client_certificate = GatewayClientCertificate
+      certificate = "gateway-client-certificate-renewed-pem"
       issued_at = "now"
-      expires_at = "2026-12-16T00:00:00Z"
+      not_after = "2026-12-16T00:00:00Z"
     }
   }
 }
@@ -412,8 +406,7 @@ verify GatewayRegistrationVerified for flow RegisterGatewayFlow {
   expect {
     GatewayEnrollmentTokenValidation.status == "valid"
     GatewayCredentialBundle.credential_id == "credential-issued"
-    GatewayCredentialBundle.auth_scheme == "certificate"
-    GatewayClientCertificate.subject == "gateway-issued"
+    GatewayClientCertificate.gateway_id == "gateway-issued"
     GatewayEnrollmentResult.status == "accepted"
     // R1：注册身份绑定到请求方实例，防重复/冒名注册。
     GatewayIdentity.instance_id == "gateway-issued"
