@@ -116,7 +116,18 @@ Linux 主机（page size 通常 4 KiB，arm64 上可达 16/64 KiB）上 RSS 会�
 
 **涉及仓**：`wist/wist-center`（唯一边缘网关面客户端）、`wist/wist-gateway`（容器内自述面）、新增 host 侧常驻 `wist-gwlinkd`、`wist-design/jumo`（actor 承载）、`wist/wist-control`（契约/前缀）、`wist/wist-gateway-stack`（交付搬运）
 
-**状态**：**Open**（设计已定，待开工）
+**状态**：**Doing**（`wist-gwlinkd` 已落地并可发布；中心/模型侧部分见下）
+
+### 进展（2026-10-04）
+
+- `wist-gwlinkd` 已实现 R1–R5（link-upstream / register / status / renew / upgrade-plan / upgrade-result、
+  自述面消费、判死单来源、diagnose）。
+- **执行器调用契约（R4，锁定）**：`gops prj upgrade --to <版本|URL|路径> --on-failure <rollback-all|halt> --json [NAME]`。
+  - `--on-failure` 在 gops 2.2.x **现阶段必填**（默认未定）；本项目缺省 **`rollback-all`（全回滚）**，可配。
+  - `--json` 出机读结局（succeeded / failed / rolled_back），据此区分「失败」与「已回滚」。
+  - gops 从 **cwd** 解析工程（`ops-prj.yml`），故需配 `upgrade_project_dir`；从属（`-`）依赖 `gops` 的**工程交付锁**串行化。
+  - 本常驻**不实现制品**（下载/校验/切换归 gops），只驱动 + 记账 + 回执。
+- 自述面 wire 用 **snake_case**（网关 `self_state.rs` 刻意跟随契约侧；其余管理面 DTO 用 camelCase 属历史分歧）。
 
 ### 现象
 
