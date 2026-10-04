@@ -354,6 +354,20 @@ bind WistCenterGatewayInterface {
     actor_identity WistGateway.id from credential.gateway_id
     status GatewayInitializationStatus 200
   }
+
+  entry GetGatewayUpgradePlan {
+    route GET "/api/v1/gateway/upgrade-plan"
+    auth bearer
+    actor_identity WistGateway.id from credential.gateway_id
+    status GatewayUpgradePlan 200
+  }
+
+  entry ReportGatewayUpgradeResult {
+    route POST "/api/v1/gateway/upgrade-result"
+    auth bearer
+    actor_identity WistGateway.id from credential.gateway_id
+    status GatewayUpgradeResultAccepted 200
+  }
 }
 
 bind GatewayProvisioningInterface {

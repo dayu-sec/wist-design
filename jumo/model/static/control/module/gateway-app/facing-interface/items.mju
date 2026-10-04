@@ -79,6 +79,16 @@ interface WistCenterGatewayInterface {
     actor WistGateway
     output GatewayInitializationStatus
   }
+
+  entry GetGatewayUpgradePlan {
+    actor WistGateway
+    output GatewayUpgradePlan
+  }
+
+  entry ReportGatewayUpgradeResult {
+    actor WistGateway
+    output GatewayUpgradeResultAccepted
+  }
 }
 
 flow LinkUpstreamFlow {

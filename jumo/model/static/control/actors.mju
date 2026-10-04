@@ -91,6 +91,7 @@ actor<system> WistGateway {
   can LinkUpstream
   can ReportGatewayStatus
   can ReportAgentStatus
+  can ReportGatewayUpgradeResult
 }
 
 actor GatewayOperator {

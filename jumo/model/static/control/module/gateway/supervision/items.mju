@@ -127,6 +127,44 @@ message<command> LinkUpstream {
   requested_at: DateTime
 }
 
+// 取「该网关该升到哪一版」：有覆盖本网关的已批准升级计划 → 给目标；否则 has_plan=false。
+message<query> GetGatewayUpgradePlan {
+  gateway_id: String
+}
+
+struct GatewayUpgradePlan {
+  meta {
+    label zh "网关升级目标"
+    label en "Gateway Upgrade Plan"
+    summary zh "该网关当前应升到的目标（来自覆盖它的已批准升级计划）；无计划时 has_plan=false。"
+    tags "gateway", "upgrade", "plan"
+  }
+
+  gateway_id: String
+  has_plan: Bool
+  plan_id: String?
+  component: String?
+  to_version: String?
+}
+
+// 升级结果回执（字段对齐 agentd / gops 的 upgrade.json）。
+message<command> ReportGatewayUpgradeResult {
+  gateway_id: String
+  work_id: String
+  from_version: String
+  to_version: String
+  step: String
+  status: String
+  detail: String
+  reported_at: DateTime
+}
+
+message<response> GatewayUpgradeResultAccepted {
+  gateway_id: String
+  work_id: String
+  accepted_at: DateTime
+}
+
 message<command> InitializeGatewayViaUrl {
   init_url: String
   requested_at: DateTime
