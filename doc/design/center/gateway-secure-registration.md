@@ -1,6 +1,6 @@
 # Gateway 安全注册到 Center（客户端证书 mTLS）
 
-> **状态**：设计定稿（逻辑已闭环），**待落地**。
+> **状态**：**已落地**（2026-10-04）；实现索引见 §11。
 > **取代**：[`gateway-enrollment-flow.md`](gateway-enrollment-flow.md) 的**运行期凭据**部分（原 `RUNTIME_TOKEN` bearer `wic_` / `credentials:renew`）。
 > **背景**：见 CR-003（`../foundation/cross-repo-issues.md`）——网关独立运行、链路承载在宿主侧 `wist-gwlinkd`。
 
@@ -99,7 +99,25 @@ sequenceDiagram
 ## 9. 与模型（`wist-design/jumo`）的关系
 
 `GatewayOnboardingFlow` 里的 ④「工程师携带 → ⑤ 安装注入容器」在**本设计下不再适用**（发起方改为网关侧、凭据改为证书）。
-需在模型侧同步一条修订：⑤/⑦/⑧ 的**发起方从容器改为网关侧常驻**，并新增/调整 `ApplyInitialConfig → 换密钥` 一步；`GatewayBootstrapToken` 补 **TTL/状态**。见 §6。
+已同步修订（2026-10-04）：⑤/⑦/⑧ 的**发起方从容器改为网关侧常驻**，新增「生成密钥对 → CSR → 签证书」一步；
+`GatewayBootstrapToken` 补 TTL/状态；`GatewayCredentialBundle` 改为只带客户端证书、
+`RegisterGateway` 改要 `certificate_signing_request`、`RenewGatewayCredential` 改证书轮换，并新增
+`GatewayClientCertificate`。`jumo verify` 全绿。见 §6、§11。
+
+## 11. 落地情况（2026-10-04）
+
+- **契约**：网关↔中心的注册/凭据 wire 类型落在 `wist-contracts::gateway_control`（**手工维护**；`wist-control`
+  的生成因 `jumo-code generate` 阻塞，见 `wist-gateway/docs/design/agent-identity-mtls.md` §7）。
+  已发布 **`wist-contracts 0.2.0`**：`GatewayCredentialBundle` 只带 `certificate`；`RegisterGateway` 要 CSR；
+  `RenewGatewayCredential` 改证书轮换；新增 `GatewayClientCertificate(+Status)`。
+- **中心（`wist-center` `0.4.0-alpha`）**：CA-G 签发 / 轮换客户端证书；`status` / `upgrade-plan` /
+  `upgrade-result` / `agents/status` / 已置备的 `link-upstream` 改为**由客户端证书认人**；新增可选
+  **服务端 TLS/mTLS 监听（甲）**（`server.server_cert_path` / `_key_path` → HTTPS + 校 CA-G，
+  握手后把网关身份注入请求）。
+- **网关侧常驻（`wist-gwlinkd` `0.2.0-alpha`）**：注册 / 轮换时生成密钥对 + CSR，落盘证书+私钥（0600，
+  私钥不出本机）；其后所有网关面调用走 **mTLS**；首跑注册可重试（落盘 RegistToken，register 失败后免 bootstrap）。
+- **验证**：`wist-center-stack/dev`（`start-gwlinkd.sh`）端到端跑通：注册换证 → mTLS status →
+  证书轮换 → 升级拉取/驱动/回执。
 
 ## 10. 相关文档
 

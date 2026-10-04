@@ -59,7 +59,15 @@ Linux 主机（page size 通常 4 KiB，arm64 上可达 16/64 KiB）上 RSS 会�
 
 **涉及仓**：`wist/wist-center`（+ 模型 `wist-design/jumo`、契约 `wist-control`）、`wist/wist-gateway-stack`、`wist/wist-gateway`
 
-**状态**：**Open**（地基已就绪，待定方向后开工；主任务 =「网关远程升级」）
+**状态**：**Doing**（**C2 已落地并端到端验证**；C1 / channel 与 A2 目标集合待定；主任务 =「网关远程升级」）
+
+### 进展（2026-10-04）
+
+- **C2 落地**：网关面 `GET /api/v1/gateway/upgrade-plan`（取 desired）+ `POST /api/v1/gateway/upgrade-result`
+  （回执）已实现，鉴权走**客户端证书 mTLS**（见 CR-003）；`wist-gwlinkd` 拉取 → 幂等（游标）→ 驱动执行器 → 回执。
+  已端到端验证：中心建/批计划 → 边缘拉到 → 驱动 → 回执落中心（`event=GatewayUpgradeResult`）。
+- 仍待：**C1**（发布面 `channel` + `GET .../latest[?channel=]`）与 **A2**（计划显式保留目标网关集合——
+  当前靠 `steps[].gateway_ids` 覆盖）。
 
 ### 现象
 
@@ -130,6 +138,14 @@ Linux 主机（page size 通常 4 KiB，arm64 上可达 16/64 KiB）上 RSS 会�
   - **执行器回收**：常驻退出时收走执行器（`kill_on_drop` + Linux `PR_SET_PDEATHSIG=SIGTERM`），不留孤儿继续动现场。
   - **判死后自愈可配**：缺省「清游标重驱同一计划」（启动时一次；靠 gops 工程锁串行）；`upgrade_retry_on_dead=false` 则只交管理面重派。
 - 自述面 wire 用 **snake_case**（网关 `self_state.rs` 刻意跟随契约侧；其余管理面 DTO 用 camelCase 属历史分歧）。
+- **长期身份改为客户端证书（mTLS）**（本日报，取代对称 bearer `rt_`）：
+  - wire 类型落 `wist-contracts::gateway_control`（**0.2.0**，已发布）——`GatewayCredentialBundle` 只带
+    `certificate`；`RegisterGateway` 要 CSR；`RenewGatewayCredential` 改证书轮换；新增 `GatewayClientCertificate`。
+  - 中心（`wist-center` `0.4.0-alpha`）：CA-G 签发/轮换；`status`/`upgrade-plan`/`upgrade-result`/
+    `agents/status`/已置备 `link-upstream` 改由客户端证书认人；新增可选服务端 TLS/mTLS 监听（甲）。
+  - gwlinkd（`0.2.0-alpha`）：注册/轮换生成密钥对+CSR、私钥不出本机；其后全部走 mTLS；
+    首跑注册可重试（落盘 RegistToken）。
+  - **端到端已验**（`wist-center-stack/dev/start-gwlinkd.sh`）：注册换证 → mTLS status → 证书轮换 → 升级拉取/驱动/回执。
 
 ### 现象
 
@@ -175,14 +191,14 @@ Linux 主机（page size 通常 4 KiB，arm64 上可达 16/64 KiB）上 RSS 会�
 | 制品下载 / 校验 / 切换 | 升级器（`gops`） |
 | agentd 自身升级 | `wist-agentd` |
 
-**前缀**：`boot_ / ident_ / reg_ / rt_`（`ident_` 替 `gid_`，`rt_` 替 `wic_`；`wit_` 归位，不再与 `reg_` 同叫注册）。
+**前缀**：`boot_ / ident_ / reg_`（`ident_` 替 `gid_`；`wit_` 归位，不再与 `reg_` 同叫注册）。**`rt_` 已随 mTLS 废弃**（长期身份 = 客户端证书，仅余上面三个用于首跑置备）。
 
 **交付与升级**：多平台**静态**制品（`{x86_64,aarch64}-unknown-linux-musl` +
 `{x86_64,aarch64}-apple-darwin`）**打包进 Docker 镜像**当载体；栈的安装 / 升级阶段用脚本按宿主
 `uname -s`/`uname -m` **抽出**对应件、装 systemd。镜像永远是 Linux，但可**携带**任意平台文件
 （只 `docker cp`、从不 `docker run` 抽取物）。**版本随栈**。
 
-**身份来源**：`ident_` 源头在**边缘**（首跑生成，中心不存、只派生 `reg_`）；`rt_` 源头在**中心**（register 签发 / `renew` 轮换）。
+**身份来源**：`ident_` 源头在**边缘**（首跑生成，中心不存、只派生 `reg_`）；长期身份 = **客户端证书**（中心 CA-G 签发 / `renew` 轮换，私钥在边缘）。
 
 ### 待决 / 须补
 
