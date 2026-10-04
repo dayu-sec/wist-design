@@ -35,7 +35,7 @@
         },
         {
           "name": "GetInitialConfig",
-          "route": "GET /api/v1/gateway/initial-config",
+          "route": "GET /api/v1/gateway/link-upstream",
           "handler": "wist-center:gateway_ops.rs:get_gateway_initial_config"
         },
         {
@@ -61,7 +61,7 @@
       "entries": [
         {
           "name": "GetInitialConfig",
-          "route": "GET /api/v1/gateway/initial-config",
+          "route": "GET /api/v1/gateway/link-upstream",
           "handler": "wist-center:gateway_ops.rs:get_gateway_initial_config"
         },
         {
@@ -69,6 +69,27 @@
           "route": "GET /api/v1/admin/gateways/:gateway_id/config",
           "handler": "wist-center:admin_ops.rs:admin_get_gateway_initial_config"
         }
+      ]
+    },
+    {
+      "name": "System.WistCenter.GatewayUpgradeDelivery",
+      "status": "Partial",
+      "progress": 60,
+      "entries": [
+        {
+          "name": "GetGatewayUpgradePlan",
+          "route": "GET /api/v1/gateway/upgrade-plan",
+          "handler": "wist-center:gateway_ops.rs:get_gateway_upgrade_plan"
+        },
+        {
+          "name": "ReportGatewayUpgradeResult",
+          "route": "POST /api/v1/gateway/upgrade-result",
+          "handler": "wist-center:gateway_ops.rs:report_gateway_upgrade_result"
+        }
+      ],
+      "gaps": [
+        "升级结果仅落结构化事件日志，未持久化可查视图（CR-002 C2 follow-up）",
+        "upgrade-plan 只取计划首个 target（单组件），多组件计划需扩 GatewayUpgradePlan"
       ]
     },
     {
