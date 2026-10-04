@@ -30,6 +30,10 @@ name = "wist-gateway"
 path = "../../../wist/wist-gateway"
 
 [[workspaces]]
+name = "wist-gwlinkd"
+path = "../../../wist/wist-gwlinkd"
+
+[[workspaces]]
 name = "wist-metrics"
 path = "../../../wist/wist-metrics"
 
