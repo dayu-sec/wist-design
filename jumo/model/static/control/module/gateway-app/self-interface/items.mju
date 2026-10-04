@@ -19,10 +19,12 @@ struct GatewaySelfState {
   gateway_id: String
   version: String
   collected_at: DateTime
-  spool_backlog: Int
-  work_grants_active: Int
-  uplink_enabled: Bool
+  // 存储健康：能否查询（判据在网关侧）
   store_healthy: Bool
+  // 已登记 Agent 数（机队规模）
+  agent_count: Int
+  // 数据面上送是否启用（无目标 = 不采集、不上送）
+  uplink_enabled: Bool
   last_error: String?
 }
 
