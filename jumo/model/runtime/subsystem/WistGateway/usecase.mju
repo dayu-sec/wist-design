@@ -15,20 +15,20 @@ usecase InitializeGatewayViaUrl {
   flow Control.InitializeGatewayViaUrlFlow
 }
 
-// 通过 init-url 置备（GetGatewayInitialConfigFlow：bootstrap 鉴权 + 身份派生 REGIST → config.toml）
+// 通过 link-upstream 置备（LinkUpstreamFlow：bootstrap 鉴权 + 身份派生 REGIST → config.toml）
 usecase InitGatewayViaInitialConfig {
   meta {
-    label zh "通过 init-url 置备"
-    label en "Init Gateway via Initial Config"
-    summary zh "WistGateway 持一次性 BootstrapToken 调 initial-config：消费引导、上交 IdentityToken，center 派生 RegistToken 生成 config.toml，完成置备。"
+    label zh "通过 link-upstream 置备"
+    label en "Init Gateway via Link Upstream"
+    summary zh "WistGateway 持一次性 BootstrapToken 调 link-upstream：消费引导、上交 IdentityToken，center 派生 RegistToken 生成 config.toml，完成置备。"
     tags "gateway", "bootstrap", "provisioning", "config"
   }
 
   actor Control.WistGateway
-  trigger Control.GetGatewayInitialConfig
+  trigger Control.LinkUpstream
   outcome Control.GatewayInitialConfig
   outcome Control.GatewayEnrollmentToken
-  flow Control.GetGatewayInitialConfigFlow
+  flow Control.LinkUpstreamFlow
 }
 
 // 注册到 WistCenter（消费 RegistToken → 签发独立运行期凭据）
@@ -264,7 +264,7 @@ usecase GrantAgentWork {
   meta {
     label zh "授权 Agent 工作"
     label en "Grant Agent Work"
-    summary zh "管理员给某台 Agent 授权工作：常驻工作按采集面授权（一个面一份，spec 由采集目录按该机器事实展开或逐条校验），一次性工作按动作授权（带计划开始、绝对截止与执行预算）。授权闸门是面就绪度：规则未就绪的面不许授权；用途判定是前置，没有判定就没有机器类别、取不到模板。"
+    summary zh "管理员给某台 Agent 授权工作：常驻工作按采集面授权（一个面一份，spec 由采集目录按该机器事实展开或逐条校验），一次性工作按动作授权（带计划开始、绝对截止与执行预算）。授权闸门是面就绪度：采集未就绪的面不许授权；用途判定是前置，没有判定就没有机器类别、取不到模板。"
     tags "agent-work", "grant", "admin"
   }
 

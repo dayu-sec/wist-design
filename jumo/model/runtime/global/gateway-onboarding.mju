@@ -3,7 +3,7 @@
 
 
 // 客户服务工程师（CustomerServiceEngineer）在客户现场下载/安装；WistGateway 实例的动作由网关侧
-// 单入口 flow（GetGatewayInitialConfigFlow / RegisterGatewayFlow / ReportGatewayStatusFlow /
+// 单入口 flow（LinkUpstreamFlow / RegisterGatewayFlow / ReportGatewayStatusFlow /
 // RenewGatewayCredentialFlow）承载，此处以 WistGateway 泳道标注时间线。
 // 泳道：中心（WistCenter）与网关（WistGateway）两侧。
 // 业务管理员创建实例；客户服务工程师下载安装；中心签发引导、置备派生、签发运行期凭据；

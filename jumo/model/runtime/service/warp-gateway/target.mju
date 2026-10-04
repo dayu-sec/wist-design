@@ -2,6 +2,7 @@
 
 target<bin,http> warp-gateway {
   modules Control.GatewayApp.UserFacingInterface, Control.AgentApp.FacingInterface
+  modules Control.GatewayApp.SelfInterface
   modules Control.Agent.Enrollment, Control.Agent.Registration, Control.Agent.Identity, Control.Agent.Credential, Control.Agent.Status
   modules Control.Agent.Certificate
   modules Control.Agent.Command

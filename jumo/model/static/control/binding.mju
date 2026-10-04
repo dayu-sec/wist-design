@@ -320,8 +320,8 @@ bind WistCenterGatewayInterface {
     status GatewayEnrollmentResult 200
   }
 
-  entry GetGatewayInitialConfig {
-    route GET "/api/v1/gateway/initial-config"
+  entry LinkUpstream {
+    route GET "/api/v1/gateway/link-upstream"
     auth bearer
     actor_identity WistGateway.id from credential.gateway_id
     status GatewayInitialConfig 200
@@ -423,7 +423,7 @@ bind GatewayOpsInterface {
   }
 
   entry AdminGetGatewayInitialConfig {
-    route GET "/api/v1/admin/gateways/instances/{instance_id}/config"
+    route GET "/api/v1/admin/gateways/{gateway_id}/config"
     auth bearer
     actor_identity PlatformMaintenanceEngineer.id from jwt.sub
     status GatewayInitialConfig 200

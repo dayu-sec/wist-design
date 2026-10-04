@@ -1,0 +1,41 @@
+// Module: SelfInterface — 网关自述接口（环回；供 host 侧 wist-gwlinkd 拉取）
+//
+// 刻意**未 `bind`**：本端点只绑环回、面向本机常驻，其鉴权尚未定案；现在写 `auth none`
+// 会把「目标形态」记成「无鉴权」，反而是假的 —— 与网关 ingest 内部监听的既有处理同口径
+// （见 WistAgentdOnlineRegistrationInterface 内注释）。待鉴权定案后再补 bind，届时 codegen 可生成路由。
+
+message<query> QuerySelfState {
+  gateway_id: String
+}
+
+struct GatewaySelfState {
+  meta {
+    label zh "网关自述状态"
+    label en "Gateway Self State"
+    summary zh "网关进程内可算准的自身状态快照：供 host 侧 wist-gwlinkd 上报中心与判定生死。"
+    tags "gateway", "self", "status"
+  }
+
+  gateway_id: String
+  version: String
+  collected_at: DateTime
+  spool_backlog: Int
+  work_grants_active: Int
+  uplink_enabled: Bool
+  store_healthy: Bool
+  last_error: String?
+}
+
+interface GatewaySelfInterface {
+  meta {
+    label zh "网关自述接口"
+    label en "Gateway Self Interface"
+    summary zh "本机 host 侧常驻拉取网关进程内状态的环回接口。"
+    tags "gateway", "self", "probe", "http", "interface"
+  }
+
+  entry QuerySelfState {
+    actor WistGateway
+    output GatewaySelfState
+  }
+}

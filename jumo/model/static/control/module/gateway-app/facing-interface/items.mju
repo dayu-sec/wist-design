@@ -1,7 +1,7 @@
 // Module: GatewayFacingInterface — Gateway 侧服务接口
 //
 // WistCenter 面向各 WistGateway 实例暴露的接入入口。
-// 请求消息（GetGatewayInitialConfig / ReportGatewayStatus）与结果结构
+// 请求消息（LinkUpstream / ReportGatewayStatus）与结果结构
 // （GatewayInitialConfig / GatewayStatusAccepted）由 GatewaySupervision 建模，
 // 本接口引用它们作为 wire 契约，并定义响应消息与接入流程。
 
@@ -15,8 +15,9 @@ message<response> AgentStatusAcceptedReturned {
   agents_accepted: Int
 }
 
+// 查询键同样以 gateway_id 为准（instance_id 只用于置备域）。
 message<query> QueryGatewayInitializationStatus {
-  instance_id: String?
+  gateway_id: String
 }
 
 // 网关初始化状态查询结果：lifecycle_state 为网关实例当前生命周期
@@ -49,7 +50,7 @@ interface WistCenterGatewayInterface {
     output GatewayEnrollmentResult
   }
 
-  entry GetGatewayInitialConfig {
+  entry LinkUpstream {
     actor WistGateway
     output GatewayInitialConfig
   }
@@ -80,11 +81,11 @@ interface WistCenterGatewayInterface {
   }
 }
 
-flow GetGatewayInitialConfigFlow {
+flow LinkUpstreamFlow {
   meta {
-    label zh "置备 Gateway"
-    label en "Provision Gateway Flow"
-    summary zh "未初始化网关持一次性 BootstrapToken 调 initial-config：校验并消费引导 Token → 中心签发注册凭据（RegistToken）并落 enrollment → 构建 config.toml（携带信任包、引用注册 Token）。初始化后以运行期凭据重取同一配置。"
+    label zh "链接上级"
+    label en "Link Upstream Flow"
+    summary zh "未初始化网关持一次性 BootstrapToken 调 link-upstream：校验并消费引导 Token → 中心签发注册凭据（RegistToken）并落 enrollment → 构建 config.toml（携带信任包、引用注册 Token）。初始化后以运行期凭据重取同一配置。"
     tags "gateway", "bootstrap", "config", "provisioning"
   }
 
@@ -98,7 +99,7 @@ flow GetGatewayInitialConfigFlow {
   creates GatewayEnrollmentToken
 
   // 入口：WistGateway 持一次性 bootstrap 调 init-url（by 声明 trigger）。
-  step CallInitUrl in WistGateway by GetGatewayInitialConfig {
+  step CallInitUrl in WistGateway by LinkUpstream {
     next ValidateBootstrapToken
   }
 
@@ -120,7 +121,7 @@ flow GetGatewayInitialConfigFlow {
       max_uses = 1
       used_count = 0
       status = "Active"
-      issued_at = GetGatewayInitialConfig.requested_at
+      issued_at = LinkUpstream.requested_at
       expires_at = "2026-08-16T00:00:00Z"
     }
     next BuildInitialConfig
@@ -140,12 +141,12 @@ flow GetGatewayInitialConfigFlow {
   }
 }
 
-verify ProvisionIssuedVerified for flow GetGatewayInitialConfigFlow {
+verify ProvisionIssuedVerified for flow LinkUpstreamFlow {
   given {
-    GetGatewayInitialConfig.requested_at = "2026-07-04T00:00:00Z"
+    LinkUpstream.requested_at = "2026-07-04T00:00:00Z"
   }
 
-  when GetGatewayInitialConfig
+  when LinkUpstream
 
   expect {
     GatewayEnrollmentToken.token_id == "enroll-regist-001"
@@ -158,7 +159,7 @@ flow InitializeGatewayViaUrlFlow {
   meta {
     label zh "通过 URL 初始化"
     label en "Initialize Gateway Via Url Flow"
-    summary zh "客户服务工程师在 Gateway 管理页提交控制中心初始化 URL 与可选 Bearer：Gateway 先判断本地是否已初始化，已初始化则拒绝；未初始化才校验 URL、调用 initial-config 获取并校验 GatewayInitialConfig → Gateway 应用配置并持久化本地初始化状态。Bearer 仅通过 Authorization Header 传输。"
+    summary zh "客户服务工程师在 Gateway 管理页提交控制中心初始化 URL 与可选 Bearer：Gateway 先判断本地是否已初始化，已初始化则拒绝；未初始化才校验 URL、调用 link-upstream 获取并校验 GatewayInitialConfig → Gateway 应用配置并持久化本地初始化状态。Bearer 仅通过 Authorization Header 传输。"
     tags "gateway", "bootstrap", "initialize", "config"
   }
 
@@ -184,12 +185,12 @@ flow InitializeGatewayViaUrlFlow {
   step<exit> RejectAlreadyInitialized in WistGateway {
   }
 
-  // ④ 校验绝对 HTTP(S) URL 必须指向 initial-config；非法 URL 拒绝。
+  // ④ 校验绝对 HTTP(S) URL 必须指向 link-upstream；非法 URL 拒绝。
   //    URL 与可选 Bearer 已由 CustomerServiceEngineer 通过 InitializeGatewayViaUrl 提交，
   //    Bearer 属于协议层 Authorization Header，不写入消息字段，也不得拼入 init_url。
   step ValidateUrlAndParseInstanceId in WistGateway {
     match {
-      contains(InitializeGatewayViaUrl.init_url, "initial-config") -> RequestInitialConfig
+      contains(InitializeGatewayViaUrl.init_url, "link-upstream") -> RequestInitialConfig
       _ -> RejectInvalidUrl
     }
   }
@@ -198,11 +199,11 @@ flow InitializeGatewayViaUrlFlow {
   step<exit> RejectInvalidUrl in WistGateway {
   }
 
-  // ⑤ 未初始化时从既有 GetGatewayInitialConfigFlow 接收初始配置：可选 Bearer 只作为
+  // ⑤ 未初始化时从既有 LinkUpstreamFlow 接收初始配置：可选 Bearer 只作为
   //    Authorization Header 请求 init_url；Center 返回 application/json，
   //    本步骤按 GatewayInitialConfig 契约校验配置响应，不在 Gateway 侧伪造配置。
   step RequestInitialConfig in WistGateway {
-    receive GatewayInitialConfig from GetGatewayInitialConfigFlow
+    receive GatewayInitialConfig from LinkUpstreamFlow
     next ApplyConfigPersistStateAndReturnSuccess
   }
 

@@ -1,0 +1,11 @@
+module<interface> GatewayApp.SelfInterface {
+  meta {
+    label zh "网关自述接口"
+    label en "Gateway Self Interface"
+    summary zh "WistGateway 容器向**本机 host 侧常驻**（wist-gwlinkd）暴露的**环回**接口：供其拉取进程内算得出准的自身状态，作为上报中心与判定生死（沉默即死）的对侧。"
+    tags "gateway", "self", "probe", "status", "loopback", "http", "interface"
+  }
+
+  layer Application
+  provides GatewaySelfInterface by protocol<http>
+}

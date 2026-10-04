@@ -90,7 +90,7 @@ struct GatewayBootstrapToken {
   meta {
     label zh "网关置备引导 Token"
     label en "Gateway Bootstrap Token"
-    summary zh "WistCenter 创建实例时签发的一次性置备引导凭据：网关调用 initial-config 时以 Bearer 鉴权置备；初始化完成后不可再生成。明文仅 admin 页面一次性展示，不进 create API 响应。"
+    summary zh "WistCenter 创建实例时签发的一次性置备引导凭据：网关调用 link-upstream 时以 Bearer 鉴权置备；初始化完成后不可再生成。明文仅 admin 页面一次性展示，不进 create API 响应。"
     tags "gateway", "bootstrap", "token"
   }
 

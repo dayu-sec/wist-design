@@ -40,7 +40,7 @@
         },
         {
           "name": "AdminGetInitialConfig",
-          "route": "GET /api/v1/admin/gateways/instances/:instance_id/config",
+          "route": "GET /api/v1/admin/gateways/:gateway_id/config",
           "handler": "wist-center:admin_ops.rs:admin_get_gateway_initial_config"
         },
         {
@@ -57,7 +57,7 @@
       "name": "System.WistCenter.GetInitialConfig",
       "status": "Complete",
       "progress": 100,
-      "flow": "Control.GetGatewayInitialConfigFlow",
+      "flow": "Control.LinkUpstreamFlow",
       "entries": [
         {
           "name": "GetInitialConfig",
@@ -66,7 +66,7 @@
         },
         {
           "name": "AdminGetInitialConfig",
-          "route": "GET /api/v1/admin/gateways/instances/:instance_id/config",
+          "route": "GET /api/v1/admin/gateways/:gateway_id/config",
           "handler": "wist-center:admin_ops.rs:admin_get_gateway_initial_config"
         }
       ]

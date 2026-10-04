@@ -18,7 +18,7 @@ flow AdminCreateGatewayInstanceFlow {
   meta {
     label zh "创建网关实例"
     label en "Create Gateway Instance and Issue Bootstrap Token"
-    summary zh "创建 Gateway 管理实例并签发一次性置备引导 Token（含控制中心信任根）。初始配置内容由 GetGatewayInitialConfigFlow 在网关初始化时即时提供：网关以 BootstrapToken 鉴权，center 签发 RegistToken 生成 config.toml。"
+    summary zh "创建 Gateway 管理实例并签发一次性置备引导 Token（含控制中心信任根）。初始配置内容由 LinkUpstreamFlow 在网关初始化时即时提供：网关以 BootstrapToken 鉴权，center 签发 RegistToken 生成 config.toml。"
     tags "gateway", "provisioning", "config"
   }
 

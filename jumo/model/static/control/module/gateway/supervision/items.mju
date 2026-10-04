@@ -120,8 +120,10 @@ struct GlobalPolicyDispatch {
 
 // ── 网关接入（forGateway：WistGateway 实例 → WistCenter） ──
 
-message<command> GetGatewayInitialConfig {
-  instance_id: String
+// 网关面身份以 gateway_id 为准（见 binding 的 actor_identity ... from credential.gateway_id）：
+// 调用方在 init 时以 gateway_id 标识自己；instance_id 是**置备域**标签，不作网关面查询键。
+message<command> LinkUpstream {
+  gateway_id: String
   requested_at: DateTime
 }
 

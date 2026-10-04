@@ -1,0 +1,13 @@
+// warp-insight 生成与部署目标
+//
+// wist-gwlinkd：**host 侧**常驻，代表本机网关栈与 WistCenter 维持一条**独立于网关容器**的控制链路：
+// 注册 / 心跳上报 / 凭据续期（`rt_` 唯一持有者）/ 升级取指令与回执。
+// 与 wist-agentd 同构（常驻 + 诊断 + 判死 + 驱动升级）；升级执行器是瞬态进程（`gops prj upgrade`），
+// 不由它托管。判死与诊断共用同一判据（照 agentd `upgrade.rs` / `doctor.rs`）。见 CR-003。
+//
+// 为什么不并进 warp-gateway 容器：远程升级正是**重建该容器**，链路若在容器内，
+// 升级那一下恰好是盲区（没人能上报「升级成没成」）。
+target<bin> wist-gwlinkd {
+  modules Control.GatewayApp.FacingInterface, Control.GatewayApp.SelfInterface
+  modules Control.Gateway.Supervision, Control.Gateway.Identity, Control.Gateway.Security
+}

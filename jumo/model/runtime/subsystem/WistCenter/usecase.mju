@@ -8,7 +8,7 @@ usecase CreateGatewayInstance {
   meta {
     label zh "创建网关实例"
     label en "Create Gateway Instance and Issue Bootstrap Token"
-    summary zh "创建 Gateway 管理实例并签发一次性置备引导 Token（含控制中心信任根）；初始配置内容由网关调 initial-config 时即时生成（GetInitialConfig）。"
+    summary zh "创建 Gateway 管理实例并签发一次性置备引导 Token（含控制中心信任根）；初始配置内容由网关调 link-upstream 时即时生成（GetInitialConfig）。"
     tags "gateway", "provisioning", "config"
   }
 
@@ -93,9 +93,9 @@ usecase GetInitialConfig {
   }
 
   actor Control.WistGateway
-  trigger Control.GetGatewayInitialConfig
+  trigger Control.LinkUpstream
   outcome Control.GatewayInitialConfig
-  flow Control.GetGatewayInitialConfigFlow
+  flow Control.LinkUpstreamFlow
 }
 
 // 续期网关运行期凭据
