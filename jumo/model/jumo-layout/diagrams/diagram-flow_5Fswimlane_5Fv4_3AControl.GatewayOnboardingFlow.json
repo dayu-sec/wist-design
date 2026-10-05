@@ -28,11 +28,11 @@
       "x": 902.3242,
       "y": 1196.0
     },
-    "step:ValidateBootstrapToken": {
+    "step:ValidateLinkToken": {
       "x": 541.6367,
       "y": 844.0
     },
-    "step:IssueBootstrapToken": {
+    "step:IssueLinkToken": {
       "x": 541.6367,
       "y": 288.0
     },
@@ -40,7 +40,7 @@
       "x": 541.6367,
       "y": 186.0
     },
-    "step:RevealBootstrapToken": {
+    "step:RevealLinkToken": {
       "x": 541.6367,
       "y": 390.0
     },
@@ -76,7 +76,7 @@
       "x": 902.3242,
       "y": 742.0
     },
-    "input:0:Control.GatewayBootstrapToken": {
+    "input:0:Control.GatewayLinkToken": {
       "x": 560.0625,
       "y": 571.78906
     },
@@ -84,7 +84,7 @@
       "x": 541.6367,
       "y": 0.0
     },
-    "input:2:Control.GatewayBootstrapToken": {
+    "input:2:Control.GatewayLinkToken": {
       "x": 278.63672,
       "y": 969.0
     },

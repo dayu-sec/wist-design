@@ -28,7 +28,7 @@ struct GatewayInitializationStatus {
     label zh "网关初始化状态"
     label en "Gateway Initialization Status"
     summary zh "WistGateway 实例当前初始化状态查询结果：lifecycle_state 为中心侧实例生命周期，initialized 为派生布尔（非 Provisioned 即视为已初始化）。"
-    tags "gateway", "bootstrap", "initialization", "status"
+    tags "gateway", "link", "initialization", "status"
   }
 
   gateway_id: String
@@ -42,7 +42,7 @@ interface WistCenterGatewayInterface {
     label zh "WistCenter 网关接入接口"
     label en "WistCenter Gateway Access Interface"
     summary zh "WistGateway 实例安装后主动访问的接入入口，获取初始配置并定期上报状态，供 WistCenter 全局聚合与控制。"
-    tags "gateway", "gateway-facing", "bootstrap", "status", "http", "interface"
+    tags "gateway", "gateway-facing", "link", "status", "http", "interface"
   }
 
   entry RegisterGateway {
@@ -95,32 +95,32 @@ flow LinkUpstreamFlow {
   meta {
     label zh "链接上级"
     label en "Link Upstream Flow"
-    summary zh "未初始化网关持一次性 BootstrapToken 调 link-upstream：校验并消费引导 Token → 中心签发注册凭据（RegistToken）并落 enrollment → 构建 config.toml（携带信任包、引用注册 Token）。初始化后以运行期凭据重取同一配置。"
-    tags "gateway", "bootstrap", "config", "provisioning"
+    summary zh "未初始化网关持一次性 LinkToken 调 link-upstream：校验并消费接入券 → 中心签发注册凭据（RegistToken）并落 enrollment → 构建 config.toml（携带信任包、引用注册 Token）。初始化后以运行期凭据重取同一配置。"
+    tags "gateway", "link", "config", "provisioning"
   }
 
   actor WistGateway
 
   lane WistCenter for Control.InsightCenterApp.WistCenter
 
-  depends GatewayIdentity, GatewayBootstrapToken
+  depends GatewayIdentity, GatewayLinkToken
 
   creates GatewayInitialConfig
   creates GatewayEnrollmentToken
 
-  // 入口：WistGateway 持一次性 bootstrap 调 init-url（by 声明 trigger）。
+  // 入口：WistGateway 持一次性接入券 调 init-url（by 声明 trigger）。
   step CallInitUrl in WistGateway by LinkUpstream {
-    next ValidateBootstrapToken
+    next ValidateLinkToken
   }
 
-  // ① 中心校验并一次性消费引导 Token（Bearer bootstrap）：比对 token_hash、校验 gateway_id 与
+  // ① 中心校验并一次性消费接入券（Bearer 接入券）：比对 token_hash、校验 gateway_id 与
   // instance_id 绑定；消费后 status → Consumed、used_count+1；仅未初始化（Provisioned）实例可 init，
   // 防重放与重复置备。
-  step ValidateBootstrapToken in WistCenter {
+  step ValidateLinkToken in WistCenter {
     next DeriveRegistToken
   }
 
-  // ② 中心基于引导 Token 校验结果签发注册凭据 RegistToken，落 enrollment token（hash）供 /register 消费。
+  // ② 中心基于接入券 校验结果签发注册凭据 RegistToken，落 enrollment token（hash）供 /register 消费。
   // instance_id 用 fixture 值，与 AdminCreateGatewayInstanceFlow 创建实例的 instance_id 按约定对齐。
   step DeriveRegistToken in WistCenter {
     create GatewayEnrollmentToken {
@@ -170,7 +170,7 @@ flow InitializeGatewayViaUrlFlow {
     label zh "通过 URL 初始化"
     label en "Initialize Gateway Via Url Flow"
     summary zh "客户服务工程师在 Gateway 管理页提交控制中心初始化 URL 与可选 Bearer：Gateway 先判断本地是否已初始化，已初始化则拒绝；未初始化才校验 URL、调用 link-upstream 获取并校验 GatewayInitialConfig → Gateway 应用配置并持久化本地初始化状态。Bearer 仅通过 Authorization Header 传输。"
-    tags "gateway", "bootstrap", "initialize", "config"
+    tags "gateway", "link", "initialize", "config"
   }
 
   actor CustomerServiceEngineer

@@ -545,15 +545,15 @@
           "x": 917.28516,
           "y": 1195.457
         },
-        "step:IssueBootstrapToken": {
+        "step:IssueLinkToken": {
           "x": 542.8828,
           "y": 288.0
         },
-        "step:ValidateBootstrapToken": {
+        "step:ValidateLinkToken": {
           "x": 541.8906,
           "y": 752.22656
         },
-        "input:7:Control.GatewayBootstrapToken": {
+        "input:7:Control.GatewayLinkToken": {
           "x": 279.8828,
           "y": 969.0
         },
@@ -585,7 +585,7 @@
           "x": 542.8828,
           "y": 0.0
         },
-        "input:0:Control.GatewayBootstrapToken": {
+        "input:0:Control.GatewayLinkToken": {
           "x": 926.21875,
           "y": 583.4297
         },
@@ -601,11 +601,11 @@
           "x": 1263.3047,
           "y": 743.9922
         },
-        "input:2:Control.GatewayBootstrapToken": {
+        "input:2:Control.GatewayLinkToken": {
           "x": 278.80078,
           "y": 969.0
         },
-        "input:1:Control.GatewayBootstrapToken": {
+        "input:1:Control.GatewayLinkToken": {
           "x": 279.8828,
           "y": 288.0
         },
@@ -621,7 +621,7 @@
           "x": 1619.3477,
           "y": 0.0
         },
-        "step:RevealBootstrapToken": {
+        "step:RevealLinkToken": {
           "x": 542.8828,
           "y": 390.0
         },
@@ -1119,7 +1119,7 @@
           "x": 485.98438,
           "y": 1039.3438
         },
-        "step:IssueBootstrapToken": {
+        "step:IssueLinkToken": {
           "x": 570.3926,
           "y": 345.89062
         },
@@ -1135,11 +1135,11 @@
           "x": 1260.0,
           "y": 625.28516
         },
-        "input:2:Control.GatewayBootstrapToken": {
+        "input:2:Control.GatewayLinkToken": {
           "x": 1627.1582,
           "y": 659.84766
         },
-        "input:0:Control.GatewayBootstrapToken": {
+        "input:0:Control.GatewayLinkToken": {
           "x": 982.28125,
           "y": 454.78125
         },
@@ -1147,7 +1147,7 @@
           "x": 1604.877,
           "y": 1252.0
         },
-        "input:3:Control.GatewayBootstrapToken": {
+        "input:3:Control.GatewayLinkToken": {
           "x": 972.1543,
           "y": 807.34375
         },
@@ -1175,7 +1175,7 @@
           "x": 1341.877,
           "y": 569.4531
         },
-        "input:1:Control.GatewayBootstrapToken": {
+        "input:1:Control.GatewayLinkToken": {
           "x": 923.0781,
           "y": 667.64453
         },
@@ -1183,11 +1183,11 @@
           "x": 569.49023,
           "y": 0.0
         },
-        "step:ValidateBootstrapToken": {
+        "step:ValidateLinkToken": {
           "x": 574.9512,
           "y": 660.16406
         },
-        "create:1:Control.GatewayBootstrapToken": {
+        "create:1:Control.GatewayLinkToken": {
           "x": 673.3613,
           "y": 423.27734
         },
@@ -1203,7 +1203,7 @@
           "x": 466.91406,
           "y": 1122.6992
         },
-        "step:RevealBootstrapToken": {
+        "step:RevealLinkToken": {
           "x": 569.8965,
           "y": 532.625
         },

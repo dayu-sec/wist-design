@@ -11,17 +11,12 @@
           "name": "AdminCreateGatewayInstance",
           "route": "POST /api/v1/admin/gateways/instances",
           "handler": "wist-center:admin_ops.rs:admin_create_gateway_instance",
-          "covers": ["CreateInstance", "IssueBootstrapToken"]
+          "covers": ["CreateInstance"]
         },
         {
-          "name": "RevealBootstrapToken",
-          "route": "GET /api/v1/admin/gateways/:gateway_id/bootstrap-token",
-          "handler": "wist-center:admin_ops.rs:admin_reveal_bootstrap_token"
-        },
-        {
-          "name": "RotateBootstrapToken",
-          "route": "POST /api/v1/admin/gateways/:gateway_id/bootstrap-tokens/rotate",
-          "handler": "wist-center:admin_ops.rs:admin_rotate_bootstrap_token"
+          "name": "RotateLinkToken",
+          "route": "POST /api/v1/admin/gateways/:gateway_id/link-token",
+          "handler": "wist-center:admin_ops.rs:admin_rotate_gateway_link_token"
         },
         {
           "name": "AdminListGatewayInstances",

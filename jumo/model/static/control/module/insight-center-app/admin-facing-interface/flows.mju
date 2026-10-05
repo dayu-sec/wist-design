@@ -17,15 +17,15 @@ flow AdminCreateGatewayInstanceFlow {
 
   meta {
     label zh "创建网关实例"
-    label en "Create Gateway Instance and Issue Bootstrap Token"
-    summary zh "创建 Gateway 管理实例并签发一次性置备引导 Token（含控制中心信任根）。初始配置内容由 LinkUpstreamFlow 在网关初始化时即时提供：网关以 BootstrapToken 鉴权，center 签发 RegistToken 生成 config.toml。"
+    label en "Create Gateway Instance and Issue Link Token"
+    summary zh "创建 Gateway 管理实例并签发一次性接入券（含控制中心信任根）。初始配置内容由 LinkUpstreamFlow 在网关初始化时即时提供：网关以 LinkToken 鉴权，center 签发 RegistToken 生成 config.toml。"
     tags "gateway", "provisioning", "config"
   }
 
   actor BusinessAdministrator
 
   creates GatewayInstance
-  creates GatewayBootstrapToken
+  creates GatewayLinkToken
   creates ControlCenterTrustBundle
 
   // 入口：业务管理员经中心管理台创建实例（by 声明 trigger，省略 flow-level trigger）。
@@ -51,16 +51,16 @@ flow AdminCreateGatewayInstanceFlow {
       issued_at = "now"
       expires_at = "2027-08-12T00:00:00Z"
     }
-    next IssueBootstrapToken
+    next IssueLinkToken
   }
 
-  // 签发一次性置备引导 Token（短 TTL）：仅 create 时签发一次，初始化完成后不可再生成。
-  step<stop> IssueBootstrapToken in Center {
-    create GatewayBootstrapToken {
+  // 签发一次性接入券（短 TTL）：仅 create 时签发一次，初始化完成后不可再生成。
+  step<stop> IssueLinkToken in Center {
+    create GatewayLinkToken {
       token_id = "gw-boot-001"
       gateway_id = AdminCreateGatewayInstance.gateway_name
       instance_id = AdminCreateGatewayInstance.instance_id
-      token_hash = "sha256:bootstrap-token-hash"
+      token_hash = "sha256:link-token-hash"
       max_uses = 1
       used_count = 0
       status = "Active"

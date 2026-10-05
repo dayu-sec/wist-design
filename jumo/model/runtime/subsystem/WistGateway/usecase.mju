@@ -6,7 +6,7 @@ usecase InitializeGatewayViaUrl {
     label zh "通过 URL 初始化"
     label en "Initialize Gateway via URL"
     summary zh "WistGateway 实例安装后由客户服务工程师输入控制中心初始化 URL 与可选 Bearer，Gateway 先检查本地初始化状态，再由 Center 校验 GatewayInstance；任一侧已初始化即拒绝，未初始化时通过 Authorization Header 携带凭证获取并应用初始配置。"
-    tags "gateway", "bootstrap", "initialize", "config"
+    tags "gateway", "link", "initialize", "config"
   }
 
   actor Control.CustomerServiceEngineer
@@ -15,13 +15,13 @@ usecase InitializeGatewayViaUrl {
   flow Control.InitializeGatewayViaUrlFlow
 }
 
-// 通过 link-upstream 置备（LinkUpstreamFlow：bootstrap 鉴权 + 身份派生 REGIST → config.toml）
+// 通过 link-upstream 置备（LinkUpstreamFlow：接入券鉴权 + 身份派生 REGIST → config.toml）
 usecase InitGatewayViaInitialConfig {
   meta {
     label zh "通过 link-upstream 置备"
     label en "Init Gateway via Link Upstream"
-    summary zh "WistGateway 持一次性 BootstrapToken 调 link-upstream：消费引导、上交 IdentityToken，center 派生 RegistToken 生成 config.toml，完成置备。"
-    tags "gateway", "bootstrap", "provisioning", "config"
+    summary zh "WistGateway 持一次性 LinkToken 调 link-upstream：消费接入券、上交 IdentityToken，center 派生 RegistToken 生成 config.toml，完成置备。"
+    tags "gateway", "link", "provisioning", "config"
   }
 
   actor Control.WistGateway

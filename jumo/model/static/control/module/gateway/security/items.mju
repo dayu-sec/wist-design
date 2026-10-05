@@ -1,5 +1,5 @@
 // Module: GatewaySecurity — 网关安全凭据与信任材料（实体）
-// 承载 WistGateway 接入安全机制的凭据/信任实体：置备引导 Token、注册 Token、
+// 承载 WistGateway 接入安全机制的凭据/信任实体：接入券、注册 Token、
 // 运行期凭据、控制中心信任包与校验记录。flows 由 GatewaySupervision 等承载。
 
 struct ControlCenterTrustBundle {
@@ -86,31 +86,31 @@ struct GatewayEnrollmentTokenValidation {
   validated_at: DateTime
 }
 
-struct GatewayBootstrapToken {
+struct GatewayLinkToken {
   meta {
-    label zh "网关置备引导 Token"
-    label en "Gateway Bootstrap Token"
-    summary zh "WistCenter 创建实例时签发的一次性置备引导凭据：网关调用 link-upstream 时以 Bearer 鉴权置备；初始化完成后不可再生成。明文仅 admin 页面一次性展示，不进 create API 响应。"
-    tags "gateway", "bootstrap", "token"
+    label zh "网关接入券"
+    label en "Gateway Link Token"
+    summary zh "WistCenter「生成/轮换」端点签发的一次性接入券：网关首跑调 link-upstream 时以 Bearer 出示；中心只存 sha256 + 短 TTL（默认 15 分钟），明文仅「连接 Gateway」页一次性展示、不进 create 响应；过期或再取即轮换（旧券作废）。"
+    tags "gateway", "link", "token"
   }
 
   unique token_id: String
   gateway_id: String
   instance_id: String?
   token_hash: String
-  status: GatewayBootstrapTokenStatus
+  status: GatewayLinkTokenStatus
   issued_at: DateTime
   expires_at: DateTime
   max_uses: Int
   used_count: Int
 }
 
-variant GatewayBootstrapTokenStatus {
+variant GatewayLinkTokenStatus {
   meta {
-    label zh "置备引导 Token 状态"
-    label en "Gateway Bootstrap Token Status"
-    summary zh "描述网关置备引导 token 的可用、已消费、过期或禁用状态。"
-    tags "gateway", "bootstrap", "status"
+    label zh "接入券状态"
+    label en "Gateway Link Token Status"
+    summary zh "描述网关接入券的可用、已消费、过期或禁用状态。"
+    tags "gateway", "link", "status"
   }
 
   Active

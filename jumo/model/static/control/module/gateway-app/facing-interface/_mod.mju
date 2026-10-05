@@ -3,7 +3,7 @@ module<interface> GatewayApp.FacingInterface {
     label zh "Gateway 侧服务接口"
     label en "Gateway Facing Service Interface"
     summary zh "WistCenter 面向各 WistGateway 实例暴露的 HTTP 接口，承载初始配置获取与状态上报。"
-    tags "gateway-facing", "gateway", "bootstrap", "status", "backend", "http", "interface"
+    tags "gateway-facing", "gateway", "link", "status", "backend", "http", "interface"
   }
 
   layer Application

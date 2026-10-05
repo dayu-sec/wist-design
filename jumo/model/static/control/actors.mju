@@ -109,7 +109,7 @@ actor BusinessAdministrator {
   meta {
     label zh "业务管理员"
     label en "Business Administrator"
-    summary zh "负责网关开通的中心侧业务管理员：创建网关实例、获取置备引导 Token。"
+    summary zh "负责网关开通的中心侧业务管理员：创建网关实例、获取接入券。"
     tags "gateway", "provisioning", "business-admin"
   }
 

@@ -5,13 +5,13 @@
 // 不再假设「中心下发容器 + 安装时注入 bootstrap，容器自做 init」。集成动作由**网关侧**（宿主常驻）发起。
 // 长期身份是**网关专属客户端证书**（mTLS），不再是可复制的运行期 bearer。
 // 泳道：中心（WistCenter）与网关（WistGateway）两侧。
-// 业务管理员创建实例；客户服务工程师带外携带引导 Token 到现场；网关侧 link-upstream、注册、周期 mTLS 上报。
+// 业务管理员创建实例；客户服务工程师带外携带接入券到现场；网关侧 link-upstream、注册、周期 mTLS 上报。
 domain Control
 flow GatewayOnboardingFlow {
   meta {
     label zh "Gateway 接入整体流程"
     label en "Gateway Onboarding Flow"
-    summary zh "WistGateway 从中心创建、带外交付引导 Token、link-upstream 置备、注册（CSR → 客户端证书）到 mTLS 上报的端到端编排；业务管理员（BusinessAdministrator）中心侧创建、客户服务工程师（CustomerServiceEngineer）现场带外交付；泳道：中心（WistCenter）/ 网关（WistGateway）。"
+    summary zh "WistGateway 从中心创建、带外交付接入券、link-upstream 置备、注册（CSR → 客户端证书）到 mTLS 上报的端到端编排；业务管理员（BusinessAdministrator）中心侧创建、客户服务工程师（CustomerServiceEngineer）现场带外交付；泳道：中心（WistCenter）/ 网关（WistGateway）。"
     tags "gateway", "onboarding", "enrollment", "mtls"
   }
 
@@ -21,7 +21,7 @@ flow GatewayOnboardingFlow {
   lane WistCenter for Control.InsightCenterApp.WistCenter
   lane WistGateway for Control.GatewayApp.Application
 
-  depends GatewayBootstrapToken, ControlCenterTrustBundle
+  depends GatewayLinkToken, ControlCenterTrustBundle
 
   creates GatewayEnrollmentToken
   creates GatewayInitialConfig
@@ -31,38 +31,38 @@ flow GatewayOnboardingFlow {
   // ① 业务管理员经中心管理台创建实例——由 AdminCreateGatewayInstanceFlow.CreateInstance 承载；
   // 本步骤是时间线标记（创建动作不在本 flow 重复），不消费实例。
   step CreateGatewayInstance in WistCenter by AdminCreateGatewayInstance {
-    next IssueBootstrapToken
+    next IssueLinkToken
   }
 
-  // ② 中心签发一次性置备引导 Token（BOOTSTRAP_TOKEN，只存 sha256，短 TTL，绑定实例）——由
-  // AdminCreateGatewayInstanceFlow.IssueBootstrapToken 承载；本步骤是时间线标记，不消费 token。
-  step IssueBootstrapToken in WistCenter {
-    next RevealBootstrapToken
+  // ② 中心签发一次性接入券（LINK_TOKEN，只存 sha256，短 TTL，绑定实例）——由
+  // AdminCreateGatewayInstanceFlow.IssueLinkToken 承载；本步骤是时间线标记，不消费 token。
+  step IssueLinkToken in WistCenter {
+    next RevealLinkToken
   }
 
-  // ③ 中心「连接 Gateway」页一次性展示引导 Token 明文（只存 sha256；明文仅此一次展示、不入 create API 响应；
+  // ③ 中心「连接 Gateway」页一次性展示接入券 明文（只存 sha256；明文仅此一次展示、不入 create API 响应；
   // 刷新即丢，再取即轮换）。展示即读取系统内记录，无需外部输入；工程师线下携带、现场交给网关侧。
-  step RevealBootstrapToken in WistCenter {
-    next ReceiveBootstrapToken
+  step RevealLinkToken in WistCenter {
+    next ReceiveLinkToken
   }
 
   // ④ 网关侧（宿主常驻）带外取得入场券与中心信任锚——**信任起点不经网络**。网关默认独立运行，
   // 只有需要集成时才走到这里。
-  step ReceiveBootstrapToken in WistGateway {
-    receive GatewayBootstrapToken from input
+  step ReceiveLinkToken in WistGateway {
+    receive GatewayLinkToken from input
     receive ControlCenterTrustBundle from input
     next LinkUpstream
   }
 
-  // ⑤ 网关侧先校中心 HTTPS 证书（对照 ④ 注入的 ControlCenterTrustBundle），通过后才上送 bootstrap，防 MITM。
-  // 随后调 link-upstream（Bearer 一次性 bootstrap）。
+  // ⑤ 网关侧先校中心 HTTPS 证书（对照 ④ 注入的 ControlCenterTrustBundle），通过后才上送接入券，防 MITM。
+  // 随后调 link-upstream（Bearer 一次性接入券）。
   step LinkUpstream in WistGateway by LinkUpstream {
-    next ValidateBootstrapToken
+    next ValidateLinkToken
   }
 
-  // ⑥ 中心校验并一次性消费引导 Token：比对 token_hash、校验 gateway_id 绑定、未超期（超期 → Expired）；
+  // ⑥ 中心校验并一次性消费接入券：比对 token_hash、校验 gateway_id 绑定、未超期（超期 → Expired）；
   // 消费后 status → Consumed；仅 lifecycle_state = Provisioned 的实例可 init，防重放与重复置备。
-  step ValidateBootstrapToken in WistCenter {
+  step ValidateLinkToken in WistCenter {
     next DeriveRegistToken
   }
 
