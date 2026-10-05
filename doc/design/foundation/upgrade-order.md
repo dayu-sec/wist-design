@@ -33,6 +33,9 @@ flowchart TD
   validate --> contracts
   metrics --> contracts
   control --> shared
+  api[wist-api] --> contracts
+  agentd --> api
+  gateway --> api
 ```
 
 要点：
@@ -41,6 +44,8 @@ flowchart TD
 - **共同底座只有 `wist-contracts`**（agentd / gateway / center / gwlinkd 全依赖）。
 - `agentd` 另有私有底座 `wist-validate` / `wist-metrics`（二者都只依赖 `wist-contracts`）。
 - `gateway` / `center` 另有共同底座 `wist-control` + `wist-error`（agentd 不碰）。
+- `wist-api` 是**跨进程 seam 报文**的 crate（目前 `agent/enroll`）：`agentd` 与 `gateway` 共依赖，只依赖
+  `wist-contracts`。它**不挂 `wist-control`**——否则 agentd 会反向依赖整个 Control 域。
 - 前端 `wist-center-web` / `wist-gateway-web` 不在本图内（见 §7）。
 
 ## 3. 发布序（叶子先）
@@ -48,6 +53,7 @@ flowchart TD
 规则：**被依赖者先发到 crates.io**，消费方才可能编译通过。
 
 - `wist-contracts` → { `wist-validate`, `wist-metrics` } → `wist-agentd`
+- `wist-contracts` → `wist-api` → { `wist-gateway`, `wist-agentd` }
 - `wist-contracts` → { `wist-gateway`, `wist-center`, `wist-gwlinkd` }
 - `wist-shared` → `wist-control` → { `wist-gateway`, `wist-center`, `wist-gwlinkd` }
 - `wist-error` → { `wist-gateway`, `wist-center` }
@@ -59,6 +65,7 @@ flowchart TD
 | `wist-shared` | control、gateway、center、gwlinkd、agentd |
 | `wist-error` | gateway、center |
 | `wist-control` | gateway、center、gwlinkd |
+| `wist-api` | gateway、agentd（seam 迁 center/gwlinkd 后再加） |
 | `wist-validate` / `wist-metrics` | agentd |
 
 > 多 crate 联调期：用本地 `path` 把**整条链一起切**（否则图上会同时出现同名 crate 的两个版本、
