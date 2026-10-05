@@ -3,7 +3,7 @@
 `doc/design` 目录按主题拆分为以下子目录：
 
 - `foundation/`
-  总体目标、总体架构、术语、路线图、实现 backlog、非功能目标、安全模型、错误处理体系、参考资料、jumo 可检规约（验证与形式化）、跨仓 issue 清单、发布序与升级序（依赖图 / 滚动升级顺序）
+  总体目标、总体架构、术语、路线图、实现 backlog、非功能目标、安全模型、错误处理体系、参考资料、jumo 可检规约（验证与形式化）、跨仓 issue 清单、发布序与升级序（依赖图 / 滚动升级顺序）、API seam 清单与缺口
 - `execution/`
   动作 DSL、`ActionPlan IR`、执行 schema、opcode schema、`run.gxl` 相关文档
 - `edge/`
@@ -54,3 +54,4 @@
 31. [center/asset-discovery-data-flow.md](./center/asset-discovery-data-flow.md)
 32. [center/agent-content-and-work-overview.md](./center/agent-content-and-work-overview.md)
 33. [foundation/upgrade-order.md](./foundation/upgrade-order.md)
+34. [foundation/api-seam-inventory.md](./foundation/api-seam-inventory.md)

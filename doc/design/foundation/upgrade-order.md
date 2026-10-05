@@ -113,5 +113,6 @@ flowchart TD
 ## 9. 相关
 
 - [architecture.md](./architecture.md) §9 协议与通信面
+- [api-seam-inventory.md](./api-seam-inventory.md) API seam 清单与缺口（seam = 运行时耦合点）
 - [cross-repo-issues.md](./cross-repo-issues.md) 跨仓问题
 - 各仓 `_gal`（`gx adm` 版本/标签流程）与根 `CHANGELOG.md`
