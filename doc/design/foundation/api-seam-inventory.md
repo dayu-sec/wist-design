@@ -59,7 +59,7 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 | agent/facts | 两侧均 `wist_api::gateway::ReportAgentFactSummary` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/discovery-policies:poll | 两侧均 `wist_api::gateway::PollDiscoveryPolicies` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/control-commands:poll | `wist_control::{PollControlCommands, AgentControlCommandsReturned}` | **`wist-control`**（有意保留，见 §5 决策 C） | ✅ **单型**（仅 gateway 用；响应内嵌 Control 域实体 `AgentControlCommand`） |
-| gateway/register | `wist_contracts::gateway_control::{RegisterGateway,…}` | contracts（手写） | ⚠️ 模型同名消息在 Control 域 |
+| gateway/register · credentials:renew · credentials/verify | 两侧均 `wist_control::{RegisterGateway, RenewGatewayCredential, VerifyGatewayCredential, GatewayEnrollmentResult, GatewayCredentialBundle, GatewayCredentialVerificationResult}` | **`wist-control`**（生成，`Control.Gateway.{Supervision,Security}`） | ✅ **单型已收拢**（原 `wist-contracts::gateway_control` 手写副本**已删**） |
 | gateway/status | `wist_control::ReportGatewayStatus` | control（生成） | ✅ |
 | gateway/upgrade-* | `wist_control::*` | control | ✅ |
 | gateway/agents/status | 两侧均 `wist_control::{ReportAgentStatus, AgentStatusAcceptedReturned}` | **`wist-control`**（生成，`Control.GatewayApp.FacingInterface`） | ✅ **单型已收拢**（G2 已消解） |
@@ -74,6 +74,11 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
   - `auth` 词汇不足：模型只有 `auth bearer` / `auth none`（68 / 6），而网关面 / agent 面代码已是 **mTLS 客户端证书**（身份由 `actor_identity … from credential.*` 表达）。`credential.gateway_id` 的 7 个、`credential.agent_id` 的 9 个 entry 实际都走证书。
   - 历史漏 `bind`：模型注释（`binding.mju` 第 309–311 行）自述 `work:poll` / `work:ack` / `uplink:poll` 长期无 `bind`，靠手加路由。
 - **G4 命名不对称（同 seam 两型）** —— *已消解*：删除了未上线的 `control::SubmitEnrollmentRequest` 生成骨架，并把 seam 报文收进独立 crate `wist-api::enrollment`；agent/enroll 两侧现在只有一份定义。
+- **G5 手写 seam 副本（`wist-contracts::gateway_control`）** —— *已消解*：网关面注册/凭据报文体本就属
+  `Control.Gateway.{Security,Supervision}`，因 `jumo-code generate` 当时对该模块 **Blocked** 才手写在 contracts；
+  现按模型生成到 `wist-control`（`center`/`gwlinkd` 改用同一类型，且两仓已不再依赖 `wist-contracts`），模块删除。
+  同一轮补齐了两处「模型落后于代码」的漂移：`GatewayEnrollmentResult` 加 `credential_bundle`、
+  `RenewGatewayCredential` 加 `requested_at`。
 
 > 判据：**同一个 seam 的报文体，只要存在"第二份定义"（另一 crate 或接收端本地），就有漂移风险。**
 
@@ -105,7 +110,8 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 1. **补模型**：给缺 `bind`/`input` 的 entry 补齐；把 G2 的本地报文提进模型；`auth` 补 `mtls`。
 2. **唯一 seam crate = `wist-api`**（已建）：seam 报文归它；`wist-contracts` 只留两侧共用的领域/数据面对象（**已移出** agent/enroll 报文）。
 3. **切代码**（自顶向下，见 `upgrade-order.md` §4）：
-   - seam A（center↔gateway）：center 与 gwlinkd 改用生成类型；删 `gateway_control` 手写副本。
+   - seam A（center↔gateway）：**已切**——center 与 gwlinkd 改用 `wist-control` 生成类型，
+     `wist-contracts::gateway_control` 手写副本已删（两仓已不再依赖 `wist-contracts`）。
    - seam B（gateway↔agentd）：`agent/enroll`、`agent/status`，以及 `gateway` 模块的 action-plan /
      action-results / facts / discovery-policies **已切**——gateway 与 agentd 改用
      `wist-api::{enrollment, agent_status, gateway}`，`contracts` 里的报文副本已删（`gateway` 模块整体消失）。
@@ -171,6 +177,7 @@ wist-api/src/<seam>/
 | `agent/work:*` · `agent/uplink:poll` | gateway | v1 | strict |
 | `agent/control-commands:poll` | control（**有意例外**，见 §5 决策 C） | v1 | strict |
 | `gateway/agents/status` | control（生成） | v1 | strict |
+| `gateway/register` · `credentials:renew` · `credentials/verify` | control（生成） | v1 | tolerant（生成默认，未申明 `deny_unknown_fields`） |
 | 其余 agent 面 / seam A | — | v1 | 逐条回填 |
 
 ## 8. 相关

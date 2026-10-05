@@ -233,6 +233,8 @@ struct GatewayEnrollmentResult {
   instance_id: String
   credential_id: String
   initial_config: String
+  // 注册成功同时签发长期凭据（客户端证书）——网关侧必须拿到它才能接入，故回执直接带回凭据包。
+  credential_bundle: GatewayCredentialBundle
 }
 
 // 网关容器安装发起命令：客户服务工程师在客户现场启动网关容器时发出，驱动
@@ -281,6 +283,7 @@ message<command> RenewGatewayCredential {
   current_certificate_serial: String
   /// 网关为新证书生成的 CSR（轮换：用旧证书证明身份）。
   certificate_signing_request: String
+  requested_at: DateTime
 }
 
 flow RegisterGatewayFlow {
