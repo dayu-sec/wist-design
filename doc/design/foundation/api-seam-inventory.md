@@ -134,7 +134,8 @@ wist-api/src/<seam>/
 ```
 
 - 版本子模块**只增不删**（长期给旧 agent 用的版本必须一直能编）；删掉某个旧版本 = `wist-api` **主版本**。
-- 示例：`wist-api/src/enrollment/{mod,v1}.rs` 已按此落位，`enrollment::EnrollmentRequest` 经 `pub use v1::*` 保持不变。
+- 全部 seam 模块（`enrollment` / `agent_status` / `gateway` / `work` / `agent_uplink`）都已按此落位
+  （`{mod,v1}.rs` + `CURRENT`），报文路径经 `pub use v1::*` 保持不变。
 
 ### 7.4 何时从「结构」切到「运行时机制」
 
