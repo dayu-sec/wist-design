@@ -126,6 +126,19 @@ usecase ReceiveGatewayStatusReport {
   outcome Control.GatewayStatusAccepted
 }
 
+// 网关升级计划投递（拉取目标 + 回报结果）
+usecase GatewayUpgradeDelivery {
+  meta {
+    label zh "网关升级计划投递"
+    label en "Gateway Upgrade Delivery"
+    summary zh "网关拉取自身应升到的目标（覆盖它的已批准升级计划；无计划时 has_plan=false），并在升级后按 work_id 幂等回报逐次结果。"
+    tags "gateway", "upgrade", "delivery"
+  }
+
+  actor Control.WistGateway
+  trigger Control.ReportGatewayUpgradeResult
+}
+
 // 查看Gateway状态
 usecase ViewGatewayStatus {
   meta {
