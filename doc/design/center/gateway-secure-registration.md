@@ -134,6 +134,7 @@ sequenceDiagram
 ## 10. 相关文档
 
 - [`gateway-enrollment-flow.md`](gateway-enrollment-flow.md)（旧版，运行期部分被本文取代）
+- [`../edge/gateway-onboard-request.md`](../edge/gateway-onboard-request.md)（页面发起接入：网关本地接入请求通道 + gwlinkd 出站拉取）
 - [`agent-gateway-protocol.md`](agent-gateway-protocol.md)（agent↔网关 已是 mTLS/客户端证书，本文与之同构）
 - [`../foundation/cross-repo-issues.md`](../foundation/cross-repo-issues.md)（CR-003）
 - [`../foundation/security-model.md`](../foundation/security-model.md)

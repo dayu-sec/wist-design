@@ -1,0 +1,11 @@
+module<interface> GatewayApp.LinkRequestInterface {
+  meta {
+    label zh "网关接入请求接口"
+    label en "Gateway Link Request Interface"
+    summary zh "WistGateway 容器向**本机 host 侧常驻**（wist-gwlinkd）暴露的**环回**接口：运维在页面上提交的「接入请求」（中心地址 + 接入券 + CA-S 信任锚）先落在网关，gwlinkd 定时拉取并完成 link-upstream / register，再回报结果。"
+    tags "gateway", "link", "onboard", "loopback", "http", "interface"
+  }
+
+  layer Application
+  provides GatewayLinkRequestInterface by protocol<http>
+}

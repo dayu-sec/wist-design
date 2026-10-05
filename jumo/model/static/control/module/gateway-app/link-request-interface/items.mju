@@ -1,0 +1,80 @@
+// Module: LinkRequestInterface — 网关承接运维「接入请求」，供 host 侧 gwlinkd 环回拉取
+//
+// 刻意**未 `bind`**（与 SelfInterface 同口径）：本端点只绑环回、面向本机常驻，其鉴权沿用
+// 「环回 + 不写 `auth none`」的既有处理；待鉴权口径与 self 面一并定案后再补 bind。
+
+message<query> QueryLinkRequest {
+  gateway_id: String
+}
+
+struct GatewayLinkRequest {
+  meta {
+    label zh "网关接入请求"
+    label en "Gateway Link Request"
+    summary zh "运维在网关页提交、由 host 侧 wist-gwlinkd 拉取执行的一次性接入请求：中心地址 + 接入券明文 + CA-S 信任锚；gwlinkd 消费后转终态。"
+    tags "gateway", "link", "onboard", "request"
+  }
+
+  // 无待办时为 false，其余字段无意义（口径同 GatewayUpgradePlan.has_plan）。
+  has_request: Bool
+  gateway_id: String
+  center_endpoint: String
+  // 一次性接入券**明文**：仅随本请求一次性传给 gwlinkd；被消费后网关清掉。
+  link_token: String
+  // CA-S 信任锚（中心服务器证书信任根）+ 必需的 PEM 内容。
+  trust_bundle_pem: String
+  requested_at: DateTime
+  requested_by: String
+  status: GatewayLinkRequestStatus
+}
+
+variant GatewayLinkRequestStatus {
+  meta {
+    label zh "接入请求状态"
+    label en "Gateway Link Request Status"
+    summary zh "接入请求的生命周期：待拉取 / 接入中 / 已接入 / 失败。"
+    tags "gateway", "link", "status"
+  }
+
+  Pending
+  Connecting
+  Connected
+  Failed
+}
+
+message<command> ReportGatewayLinkResult {
+  gateway_id: String
+  status: String
+  detail: String
+  reported_at: DateTime
+}
+
+struct GatewayLinkResultAccepted {
+  meta {
+    label zh "接入结果已接收"
+    label en "Gateway Link Result Accepted"
+    tags "gateway", "link", "result"
+  }
+
+  gateway_id: String
+  accepted_at: DateTime
+}
+
+interface GatewayLinkRequestInterface {
+  meta {
+    label zh "网关接入请求接口"
+    label en "Gateway Link Request Interface"
+    summary zh "本机 host 侧常驻（wist-gwlinkd）拉取接入请求、回报接入结果的环回接口。"
+    tags "gateway", "link", "onboard", "loopback", "http", "interface"
+  }
+
+  entry QueryLinkRequest {
+    actor WistGateway
+    output GatewayLinkRequest
+  }
+
+  entry ReportGatewayLinkResult {
+    actor WistGateway
+    output GatewayLinkResultAccepted
+  }
+}
