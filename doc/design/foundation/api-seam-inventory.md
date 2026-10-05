@@ -58,15 +58,18 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 | agent/action-plan（下发） | 两侧均 `wist_api::gateway::DispatchActionPlan` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/facts | 两侧均 `wist_api::gateway::ReportAgentFactSummary` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/discovery-policies:poll | 两侧均 `wist_api::gateway::PollDiscoveryPolicies` | **`wist-api`** | ✅ **单型已收拢** |
+| agent/control-commands:poll | `wist_control::{PollControlCommands, AgentControlCommandsReturned}` | **`wist-control`**（有意保留，见 §5 决策 C） | ✅ **单型**（仅 gateway 用；响应内嵌 Control 域实体 `AgentControlCommand`） |
 | gateway/register | `wist_contracts::gateway_control::{RegisterGateway,…}` | contracts（手写） | ⚠️ 模型同名消息在 Control 域 |
 | gateway/status | `wist_control::ReportGatewayStatus` | control（生成） | ✅ |
 | gateway/upgrade-* | `wist_control::*` | control | ✅ |
-| gateway/agents/status | `wist_center::api::gateway_ops::AgentStatusReportRequest` | **center 本地** | ❌ **未建模** |
+| gateway/agents/status | 两侧均 `wist_control::{ReportAgentStatus, AgentStatusAcceptedReturned}` | **`wist-control`**（生成，`Control.GatewayApp.FacingInterface`） | ✅ **单型已收拢**（G2 已消解） |
 
 ## 4. 缺口分类
 
 - **G1 同名重复（两 crate 各一份）**：`AgentIdentity`、`AgentIdentityStatus`、`CredentialBundle`、`HostProfile`（`wist-contracts` 与 `wist-control` 都有）。
-- **G2 本地定义（未建模）**：`wist-center` 的 `AgentStatusReportRequest` / `AgentStatusEntry`（`POST /api/v1/gateway/agents/status` 的报文体）。接收端本地拥有，发送端只能"猜"。
+- **G2 本地定义（未建模）** —— *已消解*：center 的 `AgentStatusReportRequest` / `AgentStatusEntry` 已删，
+  改用模型生成的 `wist_control::{ReportAgentStatus, AgentStatusAcceptedReturned}`（`POST /api/v1/gateway/agents/status`）；
+  发送/接收两侧同一类型。
 - **G3 模型↔代码漂移**：
   - `auth` 词汇不足：模型只有 `auth bearer` / `auth none`（68 / 6），而网关面 / agent 面代码已是 **mTLS 客户端证书**（身份由 `actor_identity … from credential.*` 表达）。`credential.gateway_id` 的 7 个、`credential.agent_id` 的 9 个 entry 实际都走证书。
   - 历史漏 `bind`：模型注释（`binding.mju` 第 309–311 行）自述 `work:poll` / `work:ack` / `uplink:poll` 长期无 `bind`，靠手加路由。
@@ -84,6 +87,19 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 3. seam 元数据进入模型：`owner`（谁权威）、`compat`（`deny_unknown_fields` / tolerant）、`api_version`。
 4. `auth` 词汇补齐 `mtls`（或 `credential`），与代码的客户端证书一致。
 
+> **决策 C（已定）：`agent/control-commands:poll` 留在 `wist-control`，不迁 `wist-api`。**
+> 三条理由：
+> 1. **响应体内嵌 Control 域实体**：`AgentControlCommandsReturned.messages: Vec<AgentControlCommand>`，
+>    而 `AgentControlCommand` 是 `Control.Agent.Command` **域实体**；迁报文必连域实体一起迁，
+>    违反「`wist-api` 只放报文」这条边界。
+> 2. **无漂移面**：该 seam 的**唯一消费方是 gateway**（agentd 不用、也无 control 依赖），
+>    不存在「两侧各一份副本」这种 §4 判据命中的情形。
+> 3. **不制造反分层依赖**：若改让 `wist-api` 依赖 `wist-control` 来引用域实体，
+>    会使 **agentd 传递依赖整个 Control 域**，违反 [`upgrade-order.md`](./upgrade-order.md) §2。
+>
+> 代价：该 seam 报文不在「唯一 seam crate」里，属**受控例外**——但因天然满足「单一所有权」，
+> 不构成 §4 的漂移判据。
+
 ## 6. 迁移步骤（按 seam，独立可验收）
 
 1. **补模型**：给缺 `bind`/`input` 的 entry 补齐；把 G2 的本地报文提进模型；`auth` 补 `mtls`。
@@ -94,7 +110,7 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
      action-results / facts / discovery-policies **已切**——gateway 与 agentd 改用
      `wist-api::{enrollment, agent_status, gateway}`，`contracts` 里的报文副本已删（`gateway` 模块整体消失）。
      余 `work` / `agent_uplink` 也已切（**报文**进 `wist-api`，**领域/状态**留 contracts）；
-     仅余 `PollControlCommands` / `AgentControlCommandsReturned`（在 `wist-control`，需动 control 发布）。
+     `control-commands:poll` **不迁**（决策 C，见 §5）——**seam B 的报文收敛至此完成**。
 4. **消灭 G1/G4**：同名/同 seam 两型合一。
 5. **钉测试**：每个 seam 一条"两侧 parse 同一类型"的契约测试 + 兼容策略断言。
 6. **回写文档**：本清单随 seam 变更更新。
@@ -153,6 +169,8 @@ wist-api/src/<seam>/
 | `agent/status` | gateway | v1 | strict（`deny_unknown_fields`） |
 | `agent/action-plan` · `agent/action-results` · `agent/facts` · `agent/discovery-policies` | gateway | v1 | strict（`deny_unknown_fields`） |
 | `agent/work:*` · `agent/uplink:poll` | gateway | v1 | strict |
+| `agent/control-commands:poll` | control（**有意例外**，见 §5 决策 C） | v1 | strict |
+| `gateway/agents/status` | control（生成） | v1 | strict |
 | 其余 agent 面 / seam A | — | v1 | 逐条回填 |
 
 ## 8. 相关
