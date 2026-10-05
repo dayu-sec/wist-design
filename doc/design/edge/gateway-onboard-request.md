@@ -63,19 +63,23 @@ sequenceDiagram
 | `gateway_id` | 本网关标识（网关侧未必自持；来自 Center 接入物 / gwlinkd 配置） |
 | `center_endpoint` | 中心基地址（`https://center.example`） |
 | `link_token` | 一次性接入券**明文**（gwlinkd 需用它 Bearer 鉴权；随请求一次性传递，被消费即清） |
-| `trust_bundle_pem` | **CA-S 信任锚**（中心服务器证书的信任根）——**必需**，见 §5 |
+| `trust_bundle_pem` | **CA-S 信任锚**（中心服务器证书的信任根）—— **https 中心必需**、http 明文可省，见 §5 |
 | `requested_at` | 提交时刻 |
 | `requested_by` | 操作人（审计） |
 | `status` | `Pending` → `Connecting` → `Connected` / `Failed` |
 | `result_detail` | 失败原因（供页面显示） |
 
-## 5. 为什么 CA 是**必需**而非可选
+## 5. CA 信任锚：https 必需、http 可省
 
-gwlinkd 访问中心走 **HTTPS**，必须用 CA-S 校中心的服务器证书。若把 CA 当可选，就等于要求运维**先把 CA 预置到主机**
-——又把「预置」偷偷塞回流程里，页面「零 CLI」不成立。因此 CA 随请求一起给；gwlinkd 拿到后把 PEM
-**落成本机文件**（如 `<state_dir>/control-center.pem`），因为 gwlinkd 配置里 `trust_bundle` 是**路径**。
+gwlinkd 访问中心若走 **HTTPS**，必须用 CA-S 校中心的服务器证书 —— 所以 **https 中心 CA 必需**：
+把 CA 当可选，要么等于要求运维**先把 CA 预置到主机**（「预置」被偷偷塞回流程，页面「零 CLI」不成立），
+要么让 gwlinkd **静默回落到系统根**（信任被悄悄放宽）。CA 随请求一起给；gwlinkd 拿到后把 PEM
+**落成本机文件**（如 `<state_dir>/control-center.pem`），因为配置里 `trust_bundle` 是**路径**。
 
-（Center 页已产出 `trust_bundle_pem` 内容，天然带得动。）
+**明文 http 中心**无服务器证书可校 —— CA **可省**。因此网关 admin 面与「链接上级」页都按
+`https://` 前缀判定必需性（仅 https 强制 CA；http 允许为空）。
+
+（Center 页在配置了 CA 时产出 `trust_bundle_pem` 内容，天然带得动。）
 
 ## 6. 接口面（网关）
 
