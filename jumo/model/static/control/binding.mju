@@ -362,6 +362,13 @@ bind WistCenterGatewayInterface {
     status GatewayStatusAccepted 200
   }
 
+  entry ReportAgentStatus {
+    route POST "/api/v1/gateway/agents/status"
+    auth bearer
+    actor_identity WistGateway.id from credential.gateway_id
+    status AgentStatusAcceptedReturned 200
+  }
+
   entry RenewGatewayCredential {
     route POST "/api/v1/gateway/credentials:renew"
     auth bearer
