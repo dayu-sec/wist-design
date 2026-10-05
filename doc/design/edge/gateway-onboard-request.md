@@ -35,8 +35,8 @@ sequenceDiagram
     participant C as Center
 
     OP->>C: Center「连接 Gateway」页 生成/轮换接入券
-    C-->>OP: 地址 + 一次性接入券 + CA-S 信任锚
-    OP->>GW: 网关「链接上级」页 填 地址+券+CA → 提交
+    C-->>OP: 一条接入链接（含 中心地址 + 接入券 + CA-S）
+    OP->>GW: 网关「链接上级」页 粘贴接入链接 → 提交（页面解出三样）
     GW->>GW: 落一条 link_request（Pending）
     Note over LD,GW: gwlinkd 每轮出站轮询（与 self-state 同一条出站路径）
     LD->>GW: GET link-request（环回）
@@ -49,6 +49,10 @@ sequenceDiagram
 - **gwlinkd 依旧只出站**：只是把「轮询网关自述面」旁边再加一条「轮询网关待办」。
 - **写侧**：页面 → 网关 **admin API**（admin bearer 鉴权）。
 - **读侧**：gwlinkd → 网关 **环回控制端点**（沿用 self 面的 loopback-only 口径）。
+- **接入物是一条 URL**：Center 页把它一次性拼成
+  `<中心>/api/v1/gateway/link-upstream?gateway_id=<id>&link_token=<券>&ca=<base64url(PEM)>`，
+  运维只复制/粘贴这一条；网关「链接上级」页解出 origin→中心地址、`link_token`、`ca`→CA。
+  它是**复制粘贴的凭据串**（不点开、不进地址栏）；网关 admin API 仍是三字段，解析在页面侧。
 
 ## 4. 载荷与状态
 
