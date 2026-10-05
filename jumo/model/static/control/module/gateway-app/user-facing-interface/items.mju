@@ -13,6 +13,36 @@ message<command> AdminGetAgentOverview = OperatorRequest {
 message<command> AdminViewGatewayManagementState = OperatorRequest {
 }
 
+// 页面发起接入（CR-003）：把 Center 页给的接入物（中心地址 + 接入券 + CA）落到本机网关，
+// 由宿主侧 wist-gwlinkd 环回拉取并完成接入。见设计 edge/gateway-onboard-request.md。
+message<command> AdminSetGatewayLinkRequest = OperatorRequest {
+  gateway_id: String?
+  center_endpoint: String
+  link_token: String
+  trust_bundle_pem: String
+}
+
+message<command> AdminViewGatewayLinkRequest = OperatorRequest {
+}
+
+/// 管理面接入请求视图（页面用）：**不含**接入券明文与 CA；status 为字符串（不回引环回面的变体）。
+struct GatewayLinkRequestView {
+  meta {
+    label zh "网关接入请求视图"
+    label en "Gateway Link Request View"
+    summary zh "管理面读取接入请求状态的视图：只含状态/结果等可公开字段，**不回传**接入券明文与信任锚。"
+    tags "gateway", "link", "view"
+  }
+
+  has_request: Bool
+  gateway_id: String
+  center_endpoint: String
+  status: String
+  result_detail: String
+  requested_by: String
+  requested_at: DateTime
+}
+
 message<command> AdminLookupAgentRegistryEntry = OperatorRequest {
   agent_id: String
 }
@@ -404,6 +434,16 @@ interface WistGatewayManagementInterface {
   entry AdminViewRolloutPlan {
     actor AdminOperator
     output RolloutPlanView
+  }
+
+  entry AdminSetGatewayLinkRequest {
+    actor AdminOperator
+    output GatewayLinkRequestView
+  }
+
+  entry AdminViewGatewayLinkRequest {
+    actor AdminOperator
+    output GatewayLinkRequestView
   }
 }
 

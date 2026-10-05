@@ -95,8 +95,11 @@ gwlinkd 访问中心走 **HTTPS**，必须用 CA-S 校中心的服务器证书�
 
 ## 8. 落地跟踪
 
-- [x] 模型：`GatewayApp.LinkRequestInterface`（环回）+ `GatewayLinkRequest(+Status)` / `GatewayLinkResultAccepted`（`jumo verify` 通过）。
-      （管理面两个 entry **未**进模型：走「手加路由 + 模型留档」路线，同 `SelfInterface`；待统一 codegen 收口时再补。）
+- [x] 模型：`GatewayApp.LinkRequestInterface`（环回）+ `GatewayLinkRequest(+Status)` / `GatewayLinkResultAccepted`；
+      管理面 entry 也已进模型：`AdminSetGatewayLinkRequest` / `AdminViewGatewayLinkRequest`（command）+ 视图
+      `GatewayLinkRequestView` + `WistGatewayManagementInterface` entry + `binding` + `AdminOperator can`（`jumo verify` 通过）。
+      （`jumo-code generate` 就绪报告仍为 **Blocked**，阻塞项为**既有**缺失（如 `GatewaySelfInterface` /
+      `AdminGrantWork` 等缺 binding，与本特性无关）；环回接口沿用 `SelfInterface` 的「未 bind」口径。）
 - [x] `wist-gateway`：`link_request` 存储（迁移 0024）+ 4 个端点 + 存储/路由测试。
 - [x] `wist-gwlinkd`：环回轮询待办 → `onboard`（endpoint/trust 取自请求、CA 落盘）+ 回报 `Connected/Failed` + 测试。
 - [x] `wist-gateway-web`：「链接上级」页改写（写本机网关，不再浏览器直连 Center）+ 状态轮询 + 契约测试。

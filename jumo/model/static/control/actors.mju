@@ -48,6 +48,8 @@ actor AdminOperator {
   can ViewGatewayOverview
   can DispatchAgentFleetCommand
   can AdminViewGatewayManagementState
+  can AdminSetGatewayLinkRequest
+  can AdminViewGatewayLinkRequest
   can AdminGetGatewayInitialConfig
   can AdminLookupAgentRegistryEntry
   can AdminQueryAgentCapabilityIndex
