@@ -121,3 +121,28 @@ event=StatusReported gateway_id=gw-lr
 
 桩收到 `{"status":"Connected"}`；中心实例 `lifecycle_state = Running`。
 （网关两埋点本身由 `wist-gateway` 路由测试 `gateway_link_request_flow_round_trips` 覆盖。）
+
+#### 真网关三进程联调（2026-10-05）
+
+上面的环回桩用**纯 HTTP**，绕过了真网关的 **HTTPS（自签证书）** —— 于是掩盖了一个真部署才暴露的缺口：
+网关 loopback 面（self-state / link-request）走 HTTPS，而 gwlinkd 原先用**系统根**，真部署**够不到**。
+
+修复：gwlinkd 新增配置项 `gateway_self_ca`（环回面信任锚，PEM），`LinkRequestClient` / `SelfReportClient`
+各加 `with_trust(...)`；`diagnose` 同源加 `self.ca`（未配=系统根 OK；配了但缺失/非法=FAIL）。
+
+随后跑通**三进程全真**（真 center + 真 `wist-gateway` + 真 gwlinkd；网关用独立 home / 端口
+`32200`+`32201` / 独立 flock，**不碰**已部署的 `:3000`）：
+
+```
+event=WaitingLinkRequest gateway_id=gw-real
+# 运维经**真网关 admin 面** POST /api/v1/admin/gateway/link-request 提交接入物
+event=LinkRequestPicked gateway_id=gw-real center=https://127.0.0.1:32191
+event=LinkUpstream gateway_id=gw-real
+event=Register gateway_id=gw-real
+event=Registered gateway_id=gw-real credential_id=cred_…
+event=StatusReported gateway_id=gw-real
+```
+
+终点核验：网关 admin 读回 `status = Connected`；中心实例 `lifecycle_state = Running` /
+`initialized_at` 已置；gwlinkd 日志**无** `SelfStateFailed`（自述面与环回面共用同一 `gateway_self_ca`，
+两面都被真自签 HTTPS 接受）。脚本：`.run/loop/drive-real-gateway.py`（gitignored）。
