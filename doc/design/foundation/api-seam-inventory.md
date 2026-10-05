@@ -52,8 +52,8 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 |---|---|---|---|
 | agent/enroll | 两侧均 `wist_api::enrollment::EnrollmentRequest` | **`wist-api`**（独立 seam crate） | ✅ **单型已收拢** |
 | agent/status | 两侧均 `wist_api::agent_status::AgentStatusReport` | **`wist-api`** | ✅ **单型已收拢** |
-| agent/work:poll · work:ack · work:result | `wist_contracts::work::*` | contracts | ⏳ **待迁** `wist-api`（与领域类型交织） |
-| agent/uplink:poll | `wist_contracts::agent_uplink::*` | contracts | ⏳ **待迁** |
+| agent/work:poll · work:ack · work:result | 两侧均 `wist_api::work::{PollWork,WorkGrant,AckWork,WorkAccepted,ReportWorkResult,WorkResultAccepted}` | **`wist-api`** | ✅ **报文已收拢**（领域 `WorkSpec*`/`StandingWork`/`OneShotWork` 留 contracts） |
+| agent/uplink:poll | 两侧均 `wist_api::agent_uplink::{PollAgentUplink,AgentUplinkGrant}` | **`wist-api`** | ✅ **报文已收拢**（`AgentUplinkState` 留 contracts） |
 | agent/action-results | 两侧均 `wist_api::gateway::ReportActionResult` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/action-plan（下发） | 两侧均 `wist_api::gateway::DispatchActionPlan` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/facts | 两侧均 `wist_api::gateway::ReportAgentFactSummary` | **`wist-api`** | ✅ **单型已收拢** |
@@ -93,7 +93,8 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
    - seam B（gateway↔agentd）：`agent/enroll`、`agent/status`，以及 `gateway` 模块的 action-plan /
      action-results / facts / discovery-policies **已切**——gateway 与 agentd 改用
      `wist-api::{enrollment, agent_status, gateway}`，`contracts` 里的报文副本已删（`gateway` 模块整体消失）。
-     余 `work` / `agent_uplink` 待迁。
+     余 `work` / `agent_uplink` 也已切（**报文**进 `wist-api`，**领域/状态**留 contracts）；
+     仅余 `PollControlCommands` / `AgentControlCommandsReturned`（在 `wist-control`，需动 control 发布）。
 4. **消灭 G1/G4**：同名/同 seam 两型合一。
 5. **钉测试**：每个 seam 一条"两侧 parse 同一类型"的契约测试 + 兼容策略断言。
 6. **回写文档**：本清单随 seam 变更更新。
@@ -150,7 +151,7 @@ wist-api/src/<seam>/
 | `agent/enroll` · `agent/credentials:renew` | gateway | v1 | strict（`deny_unknown_fields`） |
 | `agent/status` | gateway | v1 | strict（`deny_unknown_fields`） |
 | `agent/action-plan` · `agent/action-results` · `agent/facts` · `agent/discovery-policies` | gateway | v1 | strict（`deny_unknown_fields`） |
-| `agent/work:*` · `agent/uplink:poll`（待迁） | gateway | v1 | strict |
+| `agent/work:*` · `agent/uplink:poll` | gateway | v1 | strict |
 | 其余 agent 面 / seam A | — | v1 | 逐条回填 |
 
 ## 8. 相关
