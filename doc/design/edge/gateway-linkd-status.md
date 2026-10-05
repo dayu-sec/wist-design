@@ -129,12 +129,26 @@ gwlinkd 自报（snake_case；gwlinkd 侧有同一 fixture 的解析测试，两
 ## 11. 落地清单（模型 + 四个仓）
 
 - [ ] 模型 `Control.GatewayApp`：环回接口 `GwlinkdStatusInterface.ReportGwlinkdStatus`（手加、模型留档，同 self_state/link-request 口径）
-      + admin entry `AdminViewGatewayLinkdStatus` + 视图 `GatewayLinkdStatusView` + binding + `AdminOperator can`。
-- [ ] `wist-gateway`：迁移建 `gateway_linkd_status` 单行表 + store `get/upsert` + 两个端点 + 契约测试。
-- [ ] `wist-gwlinkd`：主循环每拍 `POST .../linkd-status`（状态由主循环导出）；`state` 计算；
-      环回客户端加 `report_linkd_status(...)`（复用 `LinkRequestClient` 的信任锚）+ fixture 解析测试。
-- [ ] `wist-gateway-web`：「链接上级」/「Gateway 信息」展示 gwlinkd 状态 + 契约测试。
-- [ ] 三进程全真联调：gwlinkd 停/起，页面在「运行中 / 失联」间切换。
+      + admin entry `AdminViewGatewayLinkdStatus` + 视图 `GatewayLinkdStatusView` + binding + `AdminOperator can`。（**待补**：先手加代码，模型留档后补）
+- [x] `wist-gateway`：迁移 `0025_gateway_linkd_status` + store `get/upsert` + 两个端点 + 契约/存储测试。
+- [x] `wist-gwlinkd`：主循环每拍 `POST .../linkd-status`（含首跑等待期的 `WaitingLinkRequest`）；环回客户端
+      `report_linkd_status(...)`；序列化键集测试。
+- [x] `wist-gateway-web`：「链接上级」展示 gwlinkd 状态（未检测到 / 失联 / 运行中 / 降级）+ 契约测试。
+- [ ] 三进程全真联调：gwlinkd 停/起，页面在「运行中 / 失联」间切换（已验「推-存-读」链路，UI 切换待验）。
+
+### 落地情况（2026-10-05）
+
+真网关（`wist-gateway` :3000）+ 真 gwlinkd（页面路，`GX01`）已跑通「**推-存-读**」：
+
+```
+# gwlinkd 每拍环回 POST /api/v1/gateway/linkd-status（无失败日志即成功）
+GET /api/v1/admin/gateway/linkd-status  ->
+  {"has_status":true,"gateway_id":"GX01","instance_id":"GX01/inst-…","version":"0.4.0",
+   "center_endpoint":"https://127.0.0.1:3100","state":"Linked",
+   "credential_expires_at":"2026-11-04T08:36:57Z","last_center_report_at":"2026-10-05T09:17:02Z",
+   "last_error":"","reported_at":"2026-10-05T09:17:02Z","received_at":"2026-10-05T09:17:02Z",
+   "age_seconds":8,"stale":false}
+```
 
 ## 12. 开放问题
 
