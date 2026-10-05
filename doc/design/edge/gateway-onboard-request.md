@@ -95,8 +95,26 @@ gwlinkd 访问中心走 **HTTPS**，必须用 CA-S 校中心的服务器证书�
 
 ## 8. 落地跟踪
 
-- [ ] 模型：`GatewayApp.LinkRequestInterface`（环回）+ 管理面两个 entry + 结构/状态 + usecase（`jumo verify`）。
-- [ ] `wist-gateway`：`link_request` 存储 + 4 个端点 + 测试。
-- [ ] `wist-gwlinkd`：环回轮询待办 → `onboard`（endpoint 取自请求、CA 落盘）+ 回报 + 测试。
-- [ ] `wist-gateway-web`：「链接上级」页改写（写本机网关，不再浏览器直连 Center）+ 状态显示 + 契约测试。
-- [ ] 端到端联调（`gateway-tx-01` 链路）。
+- [x] 模型：`GatewayApp.LinkRequestInterface`（环回）+ `GatewayLinkRequest(+Status)` / `GatewayLinkResultAccepted`（`jumo verify` 通过）。
+      （管理面两个 entry **未**进模型：走「手加路由 + 模型留档」路线，同 `SelfInterface`；待统一 codegen 收口时再补。）
+- [x] `wist-gateway`：`link_request` 存储（迁移 0024）+ 4 个端点 + 存储/路由测试。
+- [x] `wist-gwlinkd`：环回轮询待办 → `onboard`（endpoint/trust 取自请求、CA 落盘）+ 回报 `Connected/Failed` + 测试。
+- [x] `wist-gateway-web`：「链接上级」页改写（写本机网关，不再浏览器直连 Center）+ 状态轮询 + 契约测试。
+- [x] 端到端联调。
+
+### 落地情况（2026-10-05）
+
+真 `wist-center`（TLS）+ 真 `wist-gwlinkd` + 网关环回桩（仅两端点，代替真网关以避开其 TLS/单实例全配置）。
+实证：gwlinkd 无 env 券 → 日志 `WaitingLinkRequest`；页面上提交接入物（中心地址 + 接入券 + CA）后：
+
+```
+event=WaitingLinkRequest gateway_id=gw-lr
+event=LinkRequestPicked gateway_id=gw-lr center=https://127.0.0.1:32191
+event=LinkUpstream gateway_id=gw-lr
+event=Register gateway_id=gw-lr
+event=Registered gateway_id=gw-lr credential_id=cred_…
+event=StatusReported gateway_id=gw-lr
+```
+
+桩收到 `{"status":"Connected"}`；中心实例 `lifecycle_state = Running`。
+（网关两埋点本身由 `wist-gateway` 路由测试 `gateway_link_request_flow_round_trips` 覆盖。）
