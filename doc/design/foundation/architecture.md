@@ -731,6 +731,17 @@ Input -> Parse -> Normalize -> Attach Resource Ref -> Build Event Envelope
 - 断线恢复
 - 版本协商
 
+### 9.3 发布序与升级序
+
+共享契约 crate（如 `wist-contracts`）一改会牵扯多个**独立部署**的进程，两种顺序**方向相反**：
+
+- **发布序**：由 Cargo 依赖图决定，**叶子先发**（`wist-contracts` → `wist-validate`/`wist-metrics`
+  → `wist-agentd`；`wist-control` → 网关/中心）。
+- **升级序**：由线上协议兼容决定，**接收端先升、自顶向下**（`center` → `gateway` → `agentd`）——
+  因为契约普遍带 `deny_unknown_fields`，旧端会拒收新字段。
+
+详见 [upgrade-order.md](./upgrade-order.md)。
+
 ---
 
 ## 10. 安全与治理架构
