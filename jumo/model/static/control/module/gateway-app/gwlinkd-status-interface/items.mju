@@ -1,0 +1,44 @@
+// Module: GwlinkdStatusInterface — 网关承接 host 侧 gwlinkd 的心跳（供网关 Web 展示宿主侧常驻状态）
+//
+// 刻意**未 `bind`**（与 LinkRequestInterface / SelfInterface 同口径）：本端点只绑环回、面向本机常驻，
+// 其鉴权沿用「环回 + 不写 `auth none`」的既有处理；待鉴权口径与 self 面一并定案后再补 bind。
+
+message<command> ReportGwlinkdStatus {
+  gateway_id: String
+  instance_id: String
+  version: String
+  center_endpoint: String
+  // 运行态：WaitingLinkRequest / Linked / Degraded（Linking 为**保留**态，当前 gwlinkd 不产出）——
+  // 用字符串（与网关侧 DTO 同钉一份形状），不引变体，便于两端各自演进而不互相绊住。
+  state: String
+  credential_expires_at: String?
+  last_center_report_at: String?
+  last_error: String?
+  // gwlinkd 打的心跳时刻（RFC3339）。网关另记 received_at 算「多久没心跳」。
+  reported_at: DateTime
+}
+
+struct GwlinkdStatusAccepted {
+  meta {
+    label zh "gwlinkd 状态已接收"
+    label en "Gwlinkd Status Accepted"
+    tags "gateway", "gwlinkd", "status"
+  }
+
+  gateway_id: String
+  received_at: DateTime
+}
+
+interface GwlinkdStatusInterface {
+  meta {
+    label zh "网关 gwlinkd 状态接口"
+    label en "Gateway Gwlinkd Status Interface"
+    summary zh "本机 host 侧常驻（wist-gwlinkd）把自身状态环回推给网关的环回接口。"
+    tags "gateway", "gwlinkd", "status", "loopback", "http", "interface"
+  }
+
+  entry ReportGwlinkdStatus {
+    actor WistGateway
+    output GwlinkdStatusAccepted
+  }
+}

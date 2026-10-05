@@ -25,6 +25,15 @@ message<command> AdminSetGatewayLinkRequest = OperatorRequest {
 message<command> AdminViewGatewayLinkRequest = OperatorRequest {
 }
 
+// gwlinkd 状态（心跳）在管理面的读投影，供网关 Web 展示宿主侧常驻是否在跑 / 健康。
+message<command> AdminViewGatewayLinkdStatus = OperatorRequest {
+}
+
+// 网关**自身**状态（页面用）：与环回自述面 `SelfInterface.QuerySelfState` **同一份**，
+// 供 Web 展示「网关（容器）自己」的版本 / 健康（这正是 gwlinkd 上报中心的那份值）。
+message<command> AdminViewGatewaySelfState = OperatorRequest {
+}
+
 /// 管理面接入请求视图（页面用）：**不含**接入券明文与 CA；status 为字符串（不回引环回面的变体）。
 struct GatewayLinkRequestView {
   meta {
@@ -41,6 +50,31 @@ struct GatewayLinkRequestView {
   result_detail: String
   requested_by: String
   requested_at: DateTime
+}
+
+/// 管理面 gwlinkd 状态视图（页面用）：与 gwlinkd 心跳载荷同形状，另含服务端按**网关时钟**算的
+/// `age_seconds` / `stale`（失联阈值 90s）—— 页面据此展示「宿主侧常驻在不在跑」。
+struct GatewayLinkdStatusView {
+  meta {
+    label zh "gwlinkd 状态视图"
+    label en "Gwlinkd Status View"
+    summary zh "管理面读取 gwlinkd 心跳的视图：含自报状态与服务端算的「距最近心跳秒数 / 是否失联」。无心跳时 has_status=false。"
+    tags "gateway", "gwlinkd", "status", "view"
+  }
+
+  has_status: Bool
+  gateway_id: String
+  instance_id: String
+  version: String
+  center_endpoint: String
+  state: String
+  credential_expires_at: String
+  last_center_report_at: String
+  last_error: String
+  reported_at: DateTime
+  received_at: DateTime
+  age_seconds: Int
+  stale: Bool
 }
 
 message<command> AdminLookupAgentRegistryEntry = OperatorRequest {
@@ -444,6 +478,16 @@ interface WistGatewayManagementInterface {
   entry AdminViewGatewayLinkRequest {
     actor AdminOperator
     output GatewayLinkRequestView
+  }
+
+  entry AdminViewGatewayLinkdStatus {
+    actor AdminOperator
+    output GatewayLinkdStatusView
+  }
+
+  entry AdminViewGatewaySelfState {
+    actor AdminOperator
+    output GatewaySelfState
   }
 }
 

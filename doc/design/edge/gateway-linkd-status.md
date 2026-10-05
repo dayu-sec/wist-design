@@ -47,7 +47,7 @@ sequenceDiagram
 
 ## 4. 载荷：`GwlinkdStatus`
 
-gwlinkd 自报（snake_case；gwlinkd 侧有同一 fixture 的解析测试，两侧同钉一份形状）：
+gwlinkd 自报（snake_case；两侧各有一份**同形状的键集序列化测试**，任一侧改名即爆）：
 
 | 字段 | 说明 |
 |---|---|
@@ -55,7 +55,7 @@ gwlinkd 自报（snake_case；gwlinkd 侧有同一 fixture 的解析测试，两
 | `instance_id` | 本次运行的实例标识（`<gw>/inst-…`；重启稳定） |
 | `version` | gwlinkd 版本（`CARGO_PKG_VERSION`） |
 | `center_endpoint` | 当前接入的中心（未接入时为空） |
-| `state` | `WaitingLinkRequest` / `Linking` / `Linked` / `Degraded` 之一（见下） |
+| `state` | `WaitingLinkRequest` / `Linked` / `Degraded`（见下；`Linking` 为**保留**态，当前不产出） |
 | `credential_expires_at` | 客户端证书到期时刻（未持证为空） |
 | `last_center_report_at` | 最近一次**成功**向中心 status 上报的时刻（未成功过为空） |
 | `last_error` | 最近一次失败摘要（成功即清空；供排障） |
@@ -65,9 +65,9 @@ gwlinkd 自报（snake_case；gwlinkd 侧有同一 fixture 的解析测试，两
 | state | 含义 |
 |---|---|
 | `WaitingLinkRequest` | 在跑，尚未接入（无客户端证书）；等页面提交接入物 |
-| `Linking` | 正在 link-upstream / register |
 | `Linked` | 已接入（持客户端证书），mTLS 正常 |
 | `Degraded` | 已接入但最近有失败（中心不可达 / 上报被拒 / 续期失败）——带 `last_error` |
+| `Linking`（**保留**） | 语义为「正在 link-upstream / register」，但该窗口内主循环被占、**不发心跳**，故当前**不会**产出该值；前端仍按该枚举防御性映射（→「接入中」），以免将来接上后误判 |
 
 网关侧存储在同一行上**再加**两个**网关时钟**字段（gwlinkd 自报里没有，gateway 收到时打盖）：
 
@@ -90,18 +90,37 @@ gwlinkd 自报（snake_case；gwlinkd 侧有同一 fixture 的解析测试，两
 |---|---|---|---|
 | 环回（gwlinkd） | `POST /api/v1/gateway/linkd-status` | loopback-only | gwlinkd 推自身状态（心跳） |
 | admin（web） | `GET /api/v1/admin/gateway/linkd-status` | admin bearer | 页面读 gwlinkd 状态 + `age_seconds` / `stale` |
+| admin（web） | `GET /api/v1/admin/gateway/self-state` | admin bearer | 页面读**网关（容器）自身**状态（与环回自述面同一份计算；见 §7①） |
 
-环回端点**只绑 `127.0.0.1`**，非环回拒绝（与 self-state / link-result 同口径）。
+> 后一行是 §7① 要展示「网关（容器）」时的读口：自述面（`GET /api/v1/gateway/self-state`）限环回、
+> 只服务本机 gwlinkd，**浏览器够不到**，因此补一个 admin 读口（等价计算、换成 admin 鉴权）。
+
+环回端点挂在**主监听**上，但入口按**连接源地址**校验 loopback（非环回 403，与 self-state / link-result 同口径）——不是另起一个只绑 `127.0.0.1` 的监听。
 存储沿用网关既有形态：**单行设置表** `gateway_linkd_status`（`setting_id` 主键 =
 `DEFAULT_GATEWAY_LINKD_STATUS_SETTING_ID`），`get` / `upsert`（无 `clear`：状态是持续量，
 最后一行留着正好用来显示「失联」）。
 
 ## 7. Web 展示（`wist-gateway-web`）
 
-- **「链接上级」页**：在既有「接入状态」卡之外，加一行 **gwlinkd：运行中（最近心跳 12 秒前 · v0.4.0 · 中心 …）/ 失联（最后心跳 3 分钟前）**。
-  这样「待 wist-gwlinkd 拉取」不再是无解释的死等 —— 若 gwlinkd 不在跑/失联，一眼可见。
-- **「Gateway 信息」页**：同上（只读展示 + 证书到期 + 最近上报中心时刻）。
-- 渲染规则：`has_status=false` → 「未检测到 gwlinkd」；`stale` → 「失联」；否则「运行中」，附 `state` 与 `last_error`（Degraded 时）。
+gwlinkd 是**宿主侧、与网关容器分立**的常驻进程，有自己的生命周期 —— 「它活不活」与「接入成没成」
+是两个问题（§8）。因此给它一个**独立观测页** `/gwlinkd`（「网关状态」，与**网关（容器）自身**状态同屏），
+其余页面只留**一行摘要 + 链到该页**。
+
+- **「网关状态」独立页 `/gwlinkd`（`SubsystemGatewayStatusPage`）**：一页看清网关两层 ——
+  - **① 网关（容器）**：版本 / 存储健康 / 已登记 Agent 数 / 数据面上送开关 / 最近错误（走 admin 面的
+    自述读口 `GET /api/v1/admin/gateway/self-state`，与环回自述面同一份计算）。这正是 gwlinkd 上报中心的
+    那份值；**页面上的 gwlinkd `version` 是 gwlinkd 自己的，两者不是一回事**。
+  - **② 接入代理（gwlinkd）**：状态卡（运行中 / 失联 / 降级 / 等待接入 / 接入中 / 未检测到）+
+    版本 / 实例 / 中心 / 最近心跳 / 证书到期 / 最近上报中心，`last_error` 非空时予提示。
+  - 二者**数据来源不同**（① admin 自述读口，② gwlinkd 环回心跳），并排展示即可一眼分清「谁挂了」：
+    ① 在 gwlinkd 挂掉时仍可读（网关自己答），② 只在 gwlinkd 活着时新鲜。
+- **「链接上级」页**：在「接入状态」卡之外加一行 **gwlinkd：运行中（最近心跳 … · v… · 中心 …）/ 失联**，
+  并链到独立页 —— 「待 wist-gwlinkd 拉取」不再是无解释的死等。
+- **「Gateway 信息」页**：只留**一行状态 + 链到独立页**（不在设置页重复明细）。
+- 渲染规则：`has_status=false` → 「未检测到 gwlinkd」；`stale` → 「失联」；否则按 `state` 给
+  「运行中 / 接入中 / 等待接入 / 降级」。
+- 三处共用 `src/components/linkdStatus.ts#linkdSummary`，口径一致（失联阈值 90s 由服务端按网关时钟算）。
+- 开发态：vite 代理注入 admin token 且页面启动时播种（`seedDevAdminToken`）——否则查询 `enabled=false`、整页空白（见 `vite.config.ts` 注释）。
 
 ## 8. 与 `link_request` 的关系（为何不合并）
 
@@ -115,7 +134,7 @@ gwlinkd 自报（snake_case；gwlinkd 侧有同一 fixture 的解析测试，两
 2. **不新增到中心的通道**：状态来自 gwlinkd 自身，不经中心中转；网关**永不直连中心**。
 3. **无密钥回传**：本载荷不含任何凭据；admin 视图可原样展示。
 4. **失联判定用网关时钟**（`received_at`），不信任宿主自报时刻。
-5. **幂等单行**：重复心跳覆盖同一行；进程重启后 `instance_id` 变化可见（供识别「换了一次运行」）。
+5. **幂等单行**：重复心跳覆盖同一行。`instance_id` 持久化在 gwlinkd 的 `state_dir`（`load_or_create_instance_id`）——**进程重启不变**；只有在**重置备 / 清空 state 目录**后才会换新，届时同表换 id 可见（供识别「重新置备了一次」）。
 
 ## 10. 备选与否决
 
@@ -128,13 +147,15 @@ gwlinkd 自报（snake_case；gwlinkd 侧有同一 fixture 的解析测试，两
 
 ## 11. 落地清单（模型 + 四个仓）
 
-- [ ] 模型 `Control.GatewayApp`：环回接口 `GwlinkdStatusInterface.ReportGwlinkdStatus`（手加、模型留档，同 self_state/link-request 口径）
-      + admin entry `AdminViewGatewayLinkdStatus` + 视图 `GatewayLinkdStatusView` + binding + `AdminOperator can`。（**待补**：先手加代码，模型留档后补）
-- [x] `wist-gateway`：迁移 `0025_gateway_linkd_status` + store `get/upsert` + 两个端点 + 契约/存储测试。
+- [x] 模型 `Control.GatewayApp`：环回接口 `GwlinkdStatusInterface.ReportGwlinkdStatus`（手加、模型留档，同 self_state/link-request 口径）
+      + admin entry `AdminViewGatewayLinkdStatus` + 视图 `GatewayLinkdStatusView` + binding + `AdminOperator can`
+      + admin entry `AdminViewGatewaySelfState`（输出复用 `GatewaySelfState`）+ binding + `AdminOperator can`。
+      （2026-10-05 留档；`jumo verify` 通过，`GwlinkdStatusInterface` 与 `LinkRequestInterface`/`SelfInterface` 同为不 bind 的环回面）
+- [x] `wist-gateway`：迁移 `0025_gateway_linkd_status` + store `get/upsert` + 三个端点（环回心跳 / admin 读 linkd-status / admin 读 self-state）+ 契约/存储/端点测试。
 - [x] `wist-gwlinkd`：主循环每拍 `POST .../linkd-status`（含首跑等待期的 `WaitingLinkRequest`）；环回客户端
       `report_linkd_status(...)`；序列化键集测试。
-- [x] `wist-gateway-web`：「链接上级」展示 gwlinkd 状态（未检测到 / 失联 / 运行中 / 降级）+ 契约测试。
-- [ ] 三进程全真联调：gwlinkd 停/起，页面在「运行中 / 失联」间切换（已验「推-存-读」链路，UI 切换待验）。
+- [x] `wist-gateway-web`：新增**独立观测页** `/gwlinkd`（「网关状态」，`SubsystemGatewayStatusPage`）—— 同屏展示**网关（容器）**自身状态（走新增的 admin 自述读口）与**接入代理（gwlinkd）**状态；「链接上级」「Gateway 信息」只留一行摘要 + 链；三处共用 `linkdStatus.ts#linkdSummary`；契约 / 单元 / 源码守卫测试。✓
+- [x] 三进程全真联调：gwlinkd 停/起，`GET /api/v1/admin/gateway/linkd-status` 在「运行中（age≈15s, stale=false）/ 失联（age≈105s, stale=true）」间切换（真网关 :3000 + 真 gwlinkd `GX01`，直连与经 vite 代理一致）。✓
 
 ### 落地情况（2026-10-05）
 

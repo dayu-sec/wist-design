@@ -95,8 +95,10 @@ struct GatewayLifecycleEvent {
   at: DateTime
 }
 
+// 初始配置按**网关**查（与 AdminGetGatewayUptime/History 等同键）：键是 gateway_id，
+// 不是 instance_id（instance_id 只用于置备域）。
 message<command> AdminGetGatewayInitialConfig {
-  instance_id: String
+  gateway_id: String
 }
 
 // ── 版本发布 / 升级计划 ──

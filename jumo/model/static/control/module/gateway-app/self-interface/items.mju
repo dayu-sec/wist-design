@@ -26,6 +26,35 @@ struct GatewaySelfState {
   // 数据面上送是否启用（无目标 = 不采集、不上送）
   uplink_enabled: Bool
   last_error: String?
+  // 网关**进程**已运行秒数。
+  uptime_seconds: Int
+  // 网关**进程** CPU 占比（单核口径，100% = 占满一核，可能 >100）；量不出时为 null。
+  cpu_percent: Float?
+  // 网关**进程**常驻内存（字节，RSS）；量不出时为 null。
+  memory_bytes: Int?
+  // 已登记 Agent 中**在线**的台数（last_seen 在窗口内）。
+  online_agents: Int
+  // 已登记但**离线**的台数（= agent_count − online_agents）。
+  offline_agents: Int
+  // 机队里最久没上报的那台的滞后秒数（0 = 都新鲜）。
+  last_seen_lag_seconds: Int
+  // 存储大小（字节；SQLite 文件大小，读不到 / 内存库为 0）。
+  store_bytes: Int
+  // 累计接收 / 拒收的数据面事实条数（自进程启动）。
+  ingest_accepted_total: Int
+  ingest_rejected_total: Int
+  // 最近一次接收事实的时刻（未接收过为 null）。
+  last_ingest_at: DateTime?
+  // 主机（网关所在机器）内存总量（字节）。
+  memory_total_bytes: Int?
+  // 主机 1 / 5 / 15 分钟负载。
+  load_1m: Float?
+  load_5m: Float?
+  load_15m: Float?
+  // 主盘使用率（0..100）与总量 / 可用（字节，汇总挂载点，近似）。
+  disk_usage_percent: Float?
+  disk_total_bytes: Int?
+  disk_available_bytes: Int?
 }
 
 interface GatewaySelfInterface {

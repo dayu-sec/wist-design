@@ -1,0 +1,11 @@
+module<interface> GatewayApp.GwlinkdStatusInterface {
+  meta {
+    label zh "网关 gwlinkd 状态接口"
+    label en "Gateway Gwlinkd Status Interface"
+    summary zh "WistGateway 容器承接**本机 host 侧常驻**（wist-gwlinkd）心跳的**环回**接口：gwlinkd 纯出站、页面拉不到它，于是它每拍把自身状态环回推给网关，网关存单行，再由管理面视图暴露给 Web —— 展示「宿主侧常驻在不在跑 / 健康」。"
+    tags "gateway", "gwlinkd", "status", "loopback", "http", "interface"
+  }
+
+  layer Application
+  provides GwlinkdStatusInterface by protocol<http>
+}

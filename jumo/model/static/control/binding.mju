@@ -66,6 +66,20 @@ bind WistGatewayManagementInterface {
     status GatewayLinkRequestView 200
   }
 
+  entry AdminViewGatewayLinkdStatus {
+    route GET "/api/v1/admin/gateway/linkd-status"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status GatewayLinkdStatusView 200
+  }
+
+  entry AdminViewGatewaySelfState {
+    route GET "/api/v1/admin/gateway/self-state"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status GatewaySelfState 200
+  }
+
   entry AdminLookupAgentRegistryEntry {
     route GET "/api/v1/admin/agents/{agent_id}/registry-entry"
     auth bearer

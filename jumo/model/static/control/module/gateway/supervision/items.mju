@@ -62,6 +62,24 @@ struct GatewayRuntimeStatus {
   memory_bytes: Int?
   cpu_percent: Float?
   last_seen_at: DateTime
+  // 富化（见设计 edge/gateway-status-report.md）：机队聚合 + 进程运行时长。
+  uptime_seconds: Int?
+  agent_count: Int?
+  online_agents: Int?
+  offline_agents: Int?
+  last_seen_lag_seconds: Int?
+  // 存储 / 数据面 / 主机资源（富化，见设计 edge/gateway-status-report.md）。
+  store_bytes: Int?
+  ingest_accepted_total: Int?
+  ingest_rejected_total: Int?
+  last_ingest_at: DateTime?
+  memory_total_bytes: Int?
+  load_1m: Float?
+  load_5m: Float?
+  load_15m: Float?
+  disk_usage_percent: Float?
+  disk_total_bytes: Int?
+  disk_available_bytes: Int?
 }
 
 variant GatewayInstanceLifecycleState {
@@ -174,11 +192,30 @@ message<command> ReportGatewayStatus {
   gateway_id: String
   instance_id: String
   version: String
+  // 在线/离线：`online` / `offline`（中心按 `== "online"` 计数与展示，别用 `running`）。
   status: String
   health: String
   memory_bytes: Int?
   cpu_percent: Float?
   reported_at: DateTime
+  // ── 富化字段（可选；老网关不带这些键，中心侧 serde default 兜底）。
+  // 见设计 edge/gateway-status-report.md（与自述面 GatewaySelfState 同一份值）。
+  uptime_seconds: Int?
+  agent_count: Int?
+  online_agents: Int?
+  offline_agents: Int?
+  last_seen_lag_seconds: Int?
+  store_bytes: Int?
+  ingest_accepted_total: Int?
+  ingest_rejected_total: Int?
+  last_ingest_at: DateTime?
+  memory_total_bytes: Int?
+  load_1m: Float?
+  load_5m: Float?
+  load_15m: Float?
+  disk_usage_percent: Float?
+  disk_total_bytes: Int?
+  disk_available_bytes: Int?
 }
 
 // ── 安全注册（forGateway：预共享 Token → 身份/凭据签发，参考 Agentd） ──
