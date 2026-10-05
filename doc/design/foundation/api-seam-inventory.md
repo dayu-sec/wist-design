@@ -51,7 +51,7 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 | seam/端点 | 代码里的 wire 类型 | 定义在 | 与模型一致？ |
 |---|---|---|---|
 | agent/enroll | 两侧均 `wist_api::enrollment::EnrollmentRequest` | **`wist-api`**（独立 seam crate） | ✅ **单型已收拢** |
-| agent/status | `wist_contracts::gateway::AgentStatusReport` | contracts（手写） | ⚠️ 模型在 `Reporting.AgentStatusReport` |
+| agent/status | 两侧均 `wist_api::agent_status::AgentStatusReport` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/work:poll | `wist_contracts::work::WorkGrant` | contracts | ⚠️ 模型有 `WorkGrant`（Work 域） |
 | agent/action-results | `wist_contracts::action_result::ReportActionResult` | contracts | ⚠️ 模型在 `Reporting.ReportActionResult` |
 | agent/uplink:poll | `wist_contracts::agent_uplink::*` | contracts | ⚠️ |
@@ -87,7 +87,8 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 2. **唯一 seam crate = `wist-api`**（已建）：seam 报文归它；`wist-contracts` 只留两侧共用的领域/数据面对象（**已移出** agent/enroll 报文）。
 3. **切代码**（自顶向下，见 `upgrade-order.md` §4）：
    - seam A（center↔gateway）：center 与 gwlinkd 改用生成类型；删 `gateway_control` 手写副本。
-   - seam B（gateway↔agentd）：`agent/enroll` **已切**——gateway 与 agentd 改用 `wist-api::enrollment`，contracts 里的报文副本已删。
+   - seam B（gateway↔agentd）：`agent/enroll`、`agent/status` **已切**——gateway 与 agentd 改用
+     `wist-api::{enrollment, agent_status}`，contracts 里的报文副本已删。
 4. **消灭 G1/G4**：同名/同 seam 两型合一。
 5. **钉测试**：每个 seam 一条"两侧 parse 同一类型"的契约测试 + 兼容策略断言。
 6. **回写文档**：本清单随 seam 变更更新。
@@ -142,6 +143,7 @@ wist-api/src/<seam>/
 | seam | owner | versions | compat（接收端） |
 |---|---|---|---|
 | `agent/enroll` · `agent/credentials:renew` | gateway | v1 | strict（`deny_unknown_fields`） |
+| `agent/status` | gateway | v1 | strict（`deny_unknown_fields`） |
 | 其余 agent 面 / seam A | — | v1 | 逐条回填 |
 
 ## 8. 相关
