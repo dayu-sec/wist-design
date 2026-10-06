@@ -51,13 +51,13 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 | seam/端点 | 代码里的 wire 类型 | 定义在 | 与模型一致？ |
 |---|---|---|---|
 | agent/enroll | 两侧均 `wist_api::enrollment::EnrollmentRequest` | **`wist-api`**（独立 seam crate） | ✅ **单型已收拢** |
-| agent/status | 两侧均 `wist_api::agent_status::AgentStatusReport` | **`wist-api`** | ✅ **单型已收拢** |
+| agent/status | 两侧均 `wist_api::status::AgentStatusReport` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/work:poll · work:ack · work:result | 两侧均 `wist_api::work::{PollWork,WorkGrant,AckWork,WorkAccepted,ReportWorkResult,WorkResultAccepted}` | **`wist-api`** | ✅ **报文已收拢**（领域 `WorkSpec*`/`StandingWork`/`OneShotWork` 留 contracts） |
-| agent/uplink:poll | 两侧均 `wist_api::agent_uplink::{PollAgentUplink,AgentUplinkGrant}` | **`wist-api`** | ✅ **报文已收拢**（`AgentUplinkState` 留 contracts） |
-| agent/action-results | 两侧均 `wist_api::gateway::ReportActionResult` | **`wist-api`** | ✅ **单型已收拢** |
-| agent/action-plan（下发） | 两侧均 `wist_api::gateway::DispatchActionPlan` | **`wist-api`** | ✅ **单型已收拢** |
-| agent/facts | 两侧均 `wist_api::gateway::ReportAgentFactSummary` | **`wist-api`** | ✅ **单型已收拢** |
-| agent/discovery-policies:poll | 两侧均 `wist_api::gateway::PollDiscoveryPolicies` | **`wist-api`** | ✅ **单型已收拢** |
+| agent/uplink:poll | 两侧均 `wist_api::uplink::{PollAgentUplink,AgentUplinkGrant}` | **`wist-api`** | ✅ **报文已收拢**（`AgentUplinkState` 留 contracts） |
+| agent/action-results | 两侧均 `wist_api::action_result::ReportActionResult` | **`wist-api`** | ✅ **单型已收拢** |
+| agent/action-plan（下发） | 两侧均 `wist_api::action_plan::DispatchActionPlan` | **`wist-api`** | ✅ **单型已收拢** |
+| agent/facts | 两侧均 `wist_api::facts::ReportAgentFactSummary` | **`wist-api`** | ✅ **单型已收拢** |
+| agent/discovery-policies:poll | 两侧均 `wist_api::discovery_policies::PollDiscoveryPolicies` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/control-commands:poll | `wist_control::{PollControlCommands, AgentControlCommandsReturned}` | **`wist-control`**（有意保留，见 §5 决策 C） | ✅ **单型**（仅 gateway 用；响应内嵌 Control 域实体 `AgentControlCommand`） |
 | gateway/register · credentials:renew · credentials/verify | 两侧均 `wist_control::{RegisterGateway, RenewGatewayCredential, VerifyGatewayCredential, GatewayEnrollmentResult, GatewayCredentialBundle, GatewayCredentialVerificationResult}` | **`wist-control`**（生成，`Control.Gateway.{Supervision,Security}`） | ✅ **单型已收拢**（原 `wist-contracts::gateway_control` 手写副本**已删**） |
 | gateway/status | `wist_control::ReportGatewayStatus` | control（生成） | ✅ |
@@ -112,10 +112,12 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 3. **切代码**（自顶向下，见 `upgrade-order.md` §4）：
    - seam A（center↔gateway）：**已切**——center 与 gwlinkd 改用 `wist-control` 生成类型，
      `wist-contracts::gateway_control` 手写副本已删（两仓已不再依赖 `wist-contracts`）。
-   - seam B（gateway↔agentd）：`agent/enroll`、`agent/status`，以及 `gateway` 模块的 action-plan /
-     action-results / facts / discovery-policies **已切**——gateway 与 agentd 改用
-     `wist-api::{enrollment, agent_status, gateway}`，`contracts` 里的报文副本已删（`gateway` 模块整体消失）。
-     余 `work` / `agent_uplink` 也已切（**报文**进 `wist-api`，**领域/状态**留 contracts）；
+   - seam B（gateway↔agentd）：`agent/enroll`、`agent/status`，以及 `agent/action-plan` /
+     `agent/action-results` / `agent/facts` / `agent/discovery-policies` **已切**——gateway 与 agentd 改用
+     `wist-api::{enrollment, status, action_plan, action_result, facts, discovery_policies}`，
+     `contracts` 里的报文副本已删（`gateway` 模块整体消失；0.6.0 又把 `wist-api` 里这个杂物袋模块
+     按 seam 主题拆成上面四个）。
+     余 `work` / `uplink` 也已切（**报文**进 `wist-api`，**领域/状态**留 contracts）；
      `control-commands:poll` **不迁**（决策 C，见 §5）——**seam B 的报文收敛至此完成**。
 4. **消灭 G1/G4**：同名/同 seam 两型合一。
 5. **钉测试**：每个 seam 一条"两侧 parse 同一类型"的契约测试 + 兼容策略断言。
@@ -156,7 +158,8 @@ wist-api/src/<seam>/
 ```
 
 - 版本子模块**只增不删**（长期给旧 agent 用的版本必须一直能编）；删掉某个旧版本 = `wist-api` **主版本**。
-- 全部 seam 模块（`enrollment` / `agent_status` / `gateway` / `work` / `agent_uplink`）都已按此落位
+- 全部 seam 模块（`enrollment` / `status` / `uplink` / `work` / `action_plan` /
+  `action_result` / `facts` / `discovery_policies`）都已按此落位
   （`{mod,v1}.rs` + `CURRENT`），报文路径经 `pub use v1::*` 保持不变。
 
 ### 7.4 何时从「结构」切到「运行时机制」
