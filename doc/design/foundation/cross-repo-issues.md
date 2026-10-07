@@ -66,6 +66,14 @@ Linux 主机（page size 通常 4 KiB，arm64 上可达 16/64 KiB）上 RSS 会�
 - **C2 落地**：网关面 `GET /api/v1/gateway/upgrade-plan`（取 desired）+ `POST /api/v1/gateway/upgrade-result`
   （回执）已实现，鉴权走**客户端证书 mTLS**（见 CR-003）；`wist-gwlinkd` 拉取 → 幂等（游标）→ 驱动执行器 → 回执。
   已端到端验证：中心建/批计划 → 边缘拉到 → 驱动 → 回执落中心（`event=GatewayUpgradeResult`）。
+- **C2 回归复验（联调链路 `gateway-tx-01`，2026-10-04）**：隔离起 TLS `wist-center` + `wist-gwlinkd`，
+  中心建/批计划（target `wist-gateway-stack`，网关 `gw-loop`）→ 边缘拉到（`event=UpgradeDriven`）→
+  驱动执行器（`gops prj upgrade --to <目标> --on-failure rollback-all --json wist-gateway-stack`，
+  cwd=`gateway-tx-01`）→ 回执落中心（`event=GatewayUpgradeResult`）。回执的 `step`/`status`/`backup`
+  取自执行器 `--json` 的 `record`（真实非 dry-run 实测：`record{step:"rollback",status:"failed",
+  backup_id:…}` → 回执带 `step=rollback` 与 `backup=…`；dry-run 时 `record` 为 null 则回落退出码）。
+  幂等已验（同一 `plan_id` 跨轮询只执行一次，游标 `upgrade-cursor.json` 落盘）；新计划再驱动，
+  `from_version` 取游标记录的上一目标。
 - 仍待：**C1**（发布面 `channel` + `GET .../latest[?channel=]`）与 **A2**（计划显式保留目标网关集合——
   当前靠 `steps[].gateway_ids` 覆盖）。
 
@@ -115,8 +123,10 @@ Linux 主机（page size 通常 4 KiB，arm64 上可达 16/64 KiB）上 RSS 会�
 ### 验收
 
 - 中心发布一个版本（带 channel）后，边缘能读到「该到哪一版」并触发升级，中心能看到结果回执。
+  （**C2 路径已验**：直接建/批计划即可下发；**C1/channel 未做**——版本源仍是计划里直接填目标。）
 - 目标集合不丢：批准的计划能解析出「哪些网关、升到哪个 component / version」。
-- 幂等：同一 `plan_id` + `gateway_id` 重复拉取不重复执行。
+  （已验：`steps[].gateway_ids` 覆盖判定 + `targets[]` → `GatewayUpgradePlan{component,to_version}`；A2 显式集合仍未做。）
+- 幂等：同一 `plan_id` + `gateway_id` 重复拉取不重复执行。（已验：跨轮询只驱动一次，游标落盘。）
 
 ---
 
@@ -146,6 +156,9 @@ Linux 主机（page size 通常 4 KiB，arm64 上可达 16/64 KiB）上 RSS 会�
   - gwlinkd（`0.2.0-alpha`）：注册/轮换生成密钥对+CSR、私钥不出本机；其后全部走 mTLS；
     首跑注册可重试（落盘 RegistToken）。
   - **端到端已验**（`wist-center-stack/dev/start-gwlinkd.sh`）：注册换证 → mTLS status → 证书轮换 → 升级拉取/驱动/回执。
+  - **回归复验（2026-10-04，联调链路 `gateway-tx-01`）**：与 CR-002 同一次运行 —— 真实（非 dry-run）
+    执行器 `gops prj upgrade` 跑出 `record`（`step`/`status`/`backup_id`），gwlinkd `interpret()` 取
+    `record` 而非退出码，回执因此带 `step` 与 `backup`（见 CR-002 该条）。
 
 ### 现象
 

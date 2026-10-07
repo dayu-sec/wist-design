@@ -80,80 +80,9 @@ struct ArtifactMirror {
   mirrored_at: DateTime
 }
 
-// 一个升级目标：组件 + 目标版本（升级计划可含多个目标，如 WistAgentd v2.5.0 + WistGateway v3.1.0）。
-struct UpgradeTarget {
-  meta {
-    label zh "升级目标"
-    label en "Upgrade Target"
-    tags "release", "upgrade"
-  }
-
-  component: String
-  target_version: String
-}
-
-// 升级执行步骤：手动分批（每步升级范围内的部分网关），实现滚动升级。
-struct UpgradeStep {
-  meta {
-    label zh "升级执行步骤"
-    label en "Upgrade Step"
-    tags "release", "upgrade", "rollout"
-  }
-
-  step_index: Int
-  gateway_ids: List<String>
-  status: String
-}
-
-command CreateUpgradePlan = OperatorRequest {
-  meta {
-    label zh "创建升级计划"
-    label en "Create Upgrade Plan"
-    tags "release", "upgrade"
-  }
-
-  targets: List<UpgradeTarget>
-  gateway_ids: List<String>
-  steps: List<UpgradeStep>
-  requested_at: DateTime
-}
-
-struct UpgradePlan {
-  meta {
-    label zh "升级计划"
-    label en "Upgrade Plan"
-    tags "release", "upgrade"
-  }
-
-  plan_id: String
-  targets: List<UpgradeTarget>
-  target_count: Int
-  status: String
-  created_at: DateTime
-  steps: List<UpgradeStep>
-}
-
-command ApproveUpgradePlan {
-  meta {
-    label zh "批准升级计划"
-    label en "Approve Upgrade Plan"
-    tags "release", "upgrade"
-  }
-
-  plan_id: String
-  approved_by: String
-  approved_at: DateTime
-}
-
-struct UpgradePlanApproval {
-  meta {
-    label zh "升级计划批准"
-    label en "Upgrade Plan Approval"
-    tags "release", "upgrade"
-  }
-
-  plan_id: String
-  status: String
-  approved_by: String
-  approved_at: DateTime
-}
+// 升级计划本体不在这里建模：用通用的 `Control.Rollout.RolloutPlan`
+// （phases 带 advance_rule / current_phase / 逐目标 RolloutPlanEntry）—— 中心与网关同一套，
+// 中心铺的是网关（target = gateway_id）；创建入参也是同一份 `Control.CreateRolloutPlan`。
+// 本模块只保留「升级」这个动作特有的**发布记录**与制品镜像（WistAgentdRelease /
+// WistGatewayRelease / ArtifactMirror）—— 计划本体与创建/批准/推进/查看的入参都不在这里：
+// 计划本体是 `Control.Rollout`，管理入参是 `Control.RolloutApp.AdminInterface`（中心与网关共享）。

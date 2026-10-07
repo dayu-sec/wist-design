@@ -3,16 +3,14 @@
 // 每页只实现一个目标：
 // - GatewayListPage      查看网关列表状态（ViewGatewayStatus）
 // - GatewayInstancePage   网关实例管理（CreateGatewayInstance / BindGatewayCustomer）
-// - GatewayConfigPage     网关初始配置查询（GetInitialConfig）
 // - ReleasePage           版本发布（PublishWistAgentd / PublishWistGateway）
-// - UpgradePlanPage       升级计划管理（CreateUpgradePlan / ApproveUpgradePlan）
 // ReceiveGatewayStatusReport 为系统上报（WistGateway 后台），喂给状态展示，无独立页面。
 
 region GlobalTopNavigation {
   meta {
     label zh "顶部导航"
     label en "Top Navigation"
-    summary zh "WistCenter 的顶部导航区，作为各页面共享的页面级导航，提供网关列表、网关实例、配置、发布与升级计划入口。"
+    summary zh "WistCenter 的顶部导航区，作为各页面共享的页面级导航，提供网关列表、网关实例、发布与升级计划入口。"
     tags "center", "navigation", "top-navigation", "layout-index"
   }
 
@@ -102,33 +100,6 @@ region<section> GatewayCustomerBindPanel {
   orientation vertical
 }
 
-// ── 目标 3：网关初始配置查询 ──
-
-region<page> GatewayConfigPage {
-  meta {
-    label zh "网关初始配置"
-    label en "Gateway Initial Config"
-    summary zh "查看指定 WistGateway 实例的初始配置信息（控制中心地址、策略版本、遥测输出）。"
-    tags "center", "gateway", "config", "page"
-  }
-
-  orientation vertical
-  contains GlobalTopNavigation
-  contains GatewayInitialConfigPanel { slot_usecase: GetInitialConfig }
-  layout fill_remaining
-}
-
-region<section> GatewayInitialConfigPanel {
-  meta {
-    label zh "初始配置详情"
-    label en "Gateway Initial Config Detail"
-    summary zh "展示网关初始配置：控制中心地址、策略版本与遥测输出。"
-    tags "center", "gateway", "config"
-  }
-
-  orientation vertical
-}
-
 // ── 目标 4：版本发布 ──
 
 region<page> ReleasePage {
@@ -143,6 +114,7 @@ region<page> ReleasePage {
   contains GlobalTopNavigation
   contains WistAgentdReleasePanel { slot_usecase: PublishWistAgentd }
   contains WistGatewayReleasePanel { slot_usecase: PublishWistGateway }
+  contains UpgradePlanCreatePanel { slot_usecase: CreateUpgradePlan }
   layout fill_remaining
 }
 
@@ -168,39 +140,13 @@ region<section> WistGatewayReleasePanel {
   orientation vertical
 }
 
-// ── 目标 5：升级计划管理（创建与批准） ──
-
-region<page> UpgradePlanPage {
-  meta {
-    label zh "升级计划"
-    label en "Upgrade Plan"
-    summary zh "创建与批准 WistAgentd / WistGateway 升级计划。"
-    tags "center", "release", "upgrade", "page"
-  }
-
-  orientation vertical
-  contains GlobalTopNavigation
-  contains UpgradePlanCreatePanel { slot_usecase: CreateUpgradePlan }
-  contains UpgradePlanApprovePanel { slot_usecase: ApproveUpgradePlan }
-  layout fill_remaining
-}
+// ── 升级计划创建面板（用于发布页） ──
 
 region<section> UpgradePlanCreatePanel {
   meta {
     label zh "创建升级计划"
     label en "Create Upgrade Plan"
     summary zh "平台维护工程师创建升级计划，指定目标组件、目标版本与升级范围。"
-    tags "center", "release", "upgrade"
-  }
-
-  orientation vertical
-}
-
-region<section> UpgradePlanApprovePanel {
-  meta {
-    label zh "批准升级计划"
-    label en "Approve Upgrade Plan"
-    summary zh "客户服务工程师批准升级计划。"
     tags "center", "release", "upgrade"
   }
 

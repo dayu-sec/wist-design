@@ -30,6 +30,7 @@
 |---|---|---|---|
 | `gateway_id` | 网关实例名（调用方回显） | 请求参数 | 已有 |
 | `version` | **网关容器**版本 | `CARGO_PKG_VERSION` | 已有 |
+| `public_base_url` | 网关**对外域名**（对外基址） | 管理面「对外地址」‖`[server] public_base_url` | **Phase 4** |
 | `collected_at` | 采集时刻 | | 已有 |
 | `store_healthy` | 存储能否查 | store `list_agents` | 已有 |
 | `agent_count` | 已登记 Agent 数 | store | 已有 |
@@ -59,6 +60,11 @@ Phase 1 把它们填上（gwlinkd 从自述面取到即原样上报）。**量�
 `uptime_seconds` / 机队（`agent_count` / `online_agents` / `offline_agents` / `last_seen_lag_seconds`）/ 存储（`store_bytes`）/
 数据面（`ingest_accepted_total` / `ingest_rejected_total` / `last_ingest_at`）/ 主机（`memory_total_bytes` / `load_1m|5m|15m` /
 `disk_usage_percent` / `disk_total_bytes` / `disk_available_bytes`），另加原有的 `cpu_percent` / `memory_bytes`。
+
+**网关对外域名**（`public_base_url`）：网关**自己才知道**这个值（管理面「对外地址」优先、未设回落
+`[server] public_base_url`），自述面带上它 → gwlinkd 随 **注册**（`RegisterGateway`）与**周期状态上报**
+（`ReportGatewayStatus`）转带给中心；中心落库（`gateways.public_base_url`）并在网关列表展示「域名」。
+状态上报不带（老网关 `None`）时**保留**已落值，不抹掉。三处均为**可选键**（线上 JSON 向后兼容）。
 
 实测（中心 `GET /api/v1/admin/gateways/status`）：
 ```json

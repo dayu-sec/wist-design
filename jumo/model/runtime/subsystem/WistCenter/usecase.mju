@@ -67,8 +67,8 @@ usecase CreateUpgradePlan {
   }
 
   actor Control.PlatformMaintenanceEngineer
-  trigger Control.CreateUpgradePlan
-  outcome Control.UpgradePlan
+  trigger Control.CreateRolloutPlan
+  outcome Control.RolloutPlan
 }
 
 // 批准升级计划
@@ -80,8 +80,21 @@ usecase ApproveUpgradePlan {
   }
 
   actor Control.CustomerServiceEngineer
-  trigger Control.ApproveUpgradePlan
-  outcome Control.UpgradePlanApproval
+  trigger Control.ApproveRolloutPlan
+  outcome Control.RolloutPlan
+}
+
+// 推进升级计划到下一阶段
+usecase AdvanceUpgradePlan {
+  meta {
+    label zh "推进升级计划"
+    label en "Advance Upgrade Plan"
+    tags "release", "upgrade"
+  }
+
+  actor Control.PlatformMaintenanceEngineer
+  trigger Control.AdvanceRolloutPlan
+  outcome Control.RolloutPlan
 }
 
 // 获取初始配置信息

@@ -60,8 +60,6 @@ struct CredentialBundle {
   unique credential_id: String
   agent_id: String
   instance_id: String
-  auth_scheme: String
-  bearer_token: Secret
   certificate: String
   private_key_ref: String
   ca_bundle: String

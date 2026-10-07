@@ -241,37 +241,8 @@ message<command> AdminResumeWork = OperatorRequest {
   reason_code: String
 }
 
-// 创建灰度发布计划：动作 + 参数 + 分阶段范围 + 阶段内并发，先落成 draft。
-// action 决定做什么（今天只有 upgrade），spec 是动作参数；phases 是灰度发布的分阶段范围
-// （每阶段一段 target_ids + 一个推进闸门）。
-message<command> AdminCreateRolloutPlan = OperatorRequest {
-  action: String
-  spec: String
-  phases: List<RolloutPhase>
-  deadline_at: String
-  timeout_seconds: Int
-  batch_size: Int
-}
-
-// 列出灰度发布计划（读投影）。
-message<command> AdminListRolloutPlans = OperatorRequest {
-}
-
-// 批准灰度发布计划：批准后进入第一阶段，为阶段内每台生成一件 action 对应的一次性工作。
-message<command> AdminApproveRolloutPlan = OperatorRequest {
-  plan_id: String
-  approved_by: String
-}
-
-// 人工推进到下一阶段（advance_rule = manual 的阶段；金丝雀确认无问题后点这个）。
-message<command> AdminAdvanceRolloutPlan = OperatorRequest {
-  plan_id: String
-}
-
-// 查看某份灰度发布计划及其逐台进度。
-message<command> AdminViewRolloutPlan = OperatorRequest {
-  plan_id: String
-}
+// 灰度发布计划的管理入参**不在本模块定义**：与中心共用 `Control.RolloutApp.AdminInterface`
+// 里的 message，各 entry 用 `input` 绑过去（入参形状只定义一次）。
 
 interface WistGatewayPublicInstallInterface {
   meta {
@@ -446,26 +417,31 @@ interface WistGatewayManagementInterface {
   }
 
   entry AdminCreateRolloutPlan {
+    input Control.CreateRolloutPlan
     actor AdminOperator
     output RolloutPlan
   }
 
   entry AdminListRolloutPlans {
+    input Control.ListRolloutPlans
     actor AdminOperator
     output List<RolloutPlan>
   }
 
   entry AdminApproveRolloutPlan {
+    input Control.ApproveRolloutPlan
     actor AdminOperator
     output RolloutPlan
   }
 
   entry AdminAdvanceRolloutPlan {
+    input Control.AdvanceRolloutPlan
     actor AdminOperator
     output RolloutPlan
   }
 
   entry AdminViewRolloutPlan {
+    input Control.ViewRolloutPlan
     actor AdminOperator
     output RolloutPlanView
   }
@@ -694,7 +670,7 @@ flow AdminCreateRolloutPlanFlow {
   }
 
   actor AdminOperator
-  trigger AdminCreateRolloutPlan
+  trigger CreateRolloutPlan
 }
 
 flow AdminApproveRolloutPlanFlow {
@@ -706,7 +682,7 @@ flow AdminApproveRolloutPlanFlow {
   }
 
   actor AdminOperator
-  trigger AdminApproveRolloutPlan
+  trigger ApproveRolloutPlan
 }
 
 flow AdminAdvanceRolloutPlanFlow {
@@ -718,7 +694,7 @@ flow AdminAdvanceRolloutPlanFlow {
   }
 
   actor AdminOperator
-  trigger AdminAdvanceRolloutPlan
+  trigger AdvanceRolloutPlan
 }
 
 flow AdminViewRolloutPlanFlow {
@@ -730,7 +706,7 @@ flow AdminViewRolloutPlanFlow {
   }
 
   actor AdminOperator
-  trigger AdminViewRolloutPlan
+  trigger ViewRolloutPlan
 }
 
 flow AdminClassifyAgentFlow {

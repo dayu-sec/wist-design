@@ -76,8 +76,8 @@ agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
   所以这条规则加了 `exclude_pattern = "/Applications/"`；
 - 计分：各机器类别累加权重 → 取最高分 `s1`、次高 `s2`；
   `confidence = 100 × (s1 − s2) / s1`，若 `s1 < weak_score` 再乘 0.5（信号太弱就不冒充有把握）；
-- **无任何命中**时才用 `baseline_class`（如 macos → MacDaily，低置信度）；
-  没有基线的平台（linux）**不产出建议** —— 宁可不猜，交给人判；
+- **无任何命中**时才用 `baseline_class`（低置信度）：macos → `MacDaily`，linux → `LinuxHost`；
+  没配基线的平台**不产出建议** —— 宁可不猜，交给人判；
 - 权重口径：强特征 40（postgres、nvidia-persistenced）、中 30、弱 10~25；
   日常类特征（Safari/Mail）在开发机上同样存在，只给弱权重，靠基线兜底而不是靠它取胜。
 

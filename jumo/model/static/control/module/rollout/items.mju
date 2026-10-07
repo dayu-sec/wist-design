@@ -11,8 +11,9 @@
 //     （网关 → agent 时落到 OneShotWork，交付走 ServeWorkGrant / PollWork，
 //     结果经 ReportWorkResult 回填到 RolloutPlanEntry）。
 //
-// 与中心侧 InsightCenter.PlatformRelease 的 UpgradePlan 不同：那个是**升级网关**这一具体
-// 动作的专用建模；这里是通用的「分阶段灰度发布」结构，upgrade 只是它的第一个 action。
+// 中心与网关**共用本模块**：网关用它铺机队（target = agent），中心也用它铺网关（target = gateway）
+// —— 计划本身不关心目标是什么，物化时才落到具体执行单元。中心侧 `InsightCenter.PlatformRelease`
+// 只保留「升级」这个动作特有的入参（升哪些组件到哪个版本），计划本体就在本模块。
 
 // 灰度发布的一个阶段：一段目标范围 + 推进到下一阶段的闸门。
 struct RolloutPhase {
@@ -32,7 +33,8 @@ struct RolloutPhase {
   //   all_succeeded —— 本阶段全部成功才自动推进；
   //   success_rate:<NN> —— 本阶段成功率 >= NN% 才自动推进。
   // 闸门管的是「进入**下一阶段**」（新一批目标开始动手）。**末阶段没有下一段**：
-  // 推进它不派任何新活，只是把计划收尾 —— 所以它全部了结后**不看闸门**、自动收敛为 completed。
+  // 推进它不派任何新活，只是把计划收尾 —— 所以它全部了结后**不看闸门**就收尾：
+  // 本段**有失败则计划落 `failed`**，否则 `completed`（不把失败抹成「完成」）。
   advance_rule: String
   // pending | rolling | completed
   status: String
@@ -86,7 +88,7 @@ struct RolloutPlan {
   batch_size: Int
   // 当前进行到第几阶段（0 = 尚未开始；对应 phases[i].phase_index）。
   current_phase: Int
-  // draft | approved | rolling | completed | failed | canceled
+  // draft | rolling | completed | failed | canceled
   status: String
   created_by: String
   created_at: DateTime

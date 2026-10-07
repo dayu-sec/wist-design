@@ -389,7 +389,7 @@ usecase CreateRolloutPlan {
   }
 
   actor Control.AdminOperator
-  trigger Control.AdminCreateRolloutPlan
+  trigger Control.CreateRolloutPlan
   outcome Control.RolloutPlan
   flow Control.AdminCreateRolloutPlanFlow
 }
@@ -404,7 +404,7 @@ usecase ListRolloutPlans {
   }
 
   actor Control.AdminOperator
-  trigger Control.AdminListRolloutPlans
+  trigger Control.ListRolloutPlans
   outcome Control.RolloutPlan
 }
 
@@ -418,7 +418,7 @@ usecase ApproveRolloutPlan {
   }
 
   actor Control.AdminOperator
-  trigger Control.AdminApproveRolloutPlan
+  trigger Control.ApproveRolloutPlan
   outcome Control.RolloutPlan
   flow Control.AdminApproveRolloutPlanFlow
 }
@@ -433,7 +433,7 @@ usecase AdvanceRolloutPlan {
   }
 
   actor Control.AdminOperator
-  trigger Control.AdminAdvanceRolloutPlan
+  trigger Control.AdvanceRolloutPlan
   outcome Control.RolloutPlan
   flow Control.AdminAdvanceRolloutPlanFlow
 }
@@ -448,7 +448,7 @@ usecase ViewRolloutPlan {
   }
 
   actor Control.AdminOperator
-  trigger Control.AdminViewRolloutPlan
+  trigger Control.ViewRolloutPlan
   outcome Control.RolloutPlanView
   flow Control.AdminViewRolloutPlanFlow
 }

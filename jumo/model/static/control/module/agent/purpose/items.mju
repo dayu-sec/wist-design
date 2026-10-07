@@ -88,7 +88,7 @@ struct PurposeRuleSet {
   unique rule_set_id: String
   platform: String
   rules: List<PurposeRule>
-  // **无任何规则命中**时的基线类别（如 macos → MacDaily）；没有基线的平台留空 = 不产出建议（宁可不猜）。
+  // **无任何规则命中**时的基线类别（macos → MacDaily，linux → LinuxHost）；没有基线的平台留空 = 不产出建议（宁可不猜）。
   baseline_class: MachineClass?
   // 低于此总分视为“信号太弱”，置信度打折（不冒充有把握）。
   weak_score: Int

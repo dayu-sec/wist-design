@@ -66,8 +66,6 @@ flow AgentdRegistrationFlow {
       credential_id = "credential-issued"
       agent_id = "agent-issued"
       instance_id = "instance-issued"
-      auth_scheme = "bearer"
-      bearer_token = "credential-secret"
       issued_at = SubmitEnrollmentRequest.requested_at
     }
 

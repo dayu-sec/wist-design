@@ -83,7 +83,6 @@
         }
       ],
       "gaps": [
-        "升级结果仅落结构化事件日志，未持久化可查视图（CR-002 C2 follow-up）",
         "upgrade-plan 只取计划首个 target（单组件），多组件计划需扩 GatewayUpgradePlan"
       ]
     },
@@ -184,7 +183,7 @@
       "entries": [
         {
           "name": "AdminCreateUpgradePlan",
-          "route": "POST /api/v1/admin/upgrade-plans",
+          "route": "POST /api/v1/admin/rollout-plans",
           "handler": "wist-center:admin_ops.rs:admin_create_upgrade_plan",
           "covers": ["CreateUpgradePlan"]
         }
@@ -197,9 +196,22 @@
       "entries": [
         {
           "name": "AdminApproveUpgradePlan",
-          "route": "POST /api/v1/admin/upgrade-plans/approve",
+          "route": "POST /api/v1/admin/rollout-plans/approve",
           "handler": "wist-center:admin_ops.rs:admin_approve_upgrade_plan",
           "covers": ["ApproveUpgradePlan"]
+        }
+      ]
+    },
+    {
+      "name": "System.WistCenter.AdvanceUpgradePlan",
+      "status": "Complete",
+      "progress": 100,
+      "entries": [
+        {
+          "name": "AdminAdvanceUpgradePlan",
+          "route": "POST /api/v1/admin/rollout-plans/advance",
+          "handler": "wist-center:admin_ops.rs:admin_advance_upgrade_plan",
+          "covers": ["AdvanceUpgradePlan"]
         }
       ]
     },

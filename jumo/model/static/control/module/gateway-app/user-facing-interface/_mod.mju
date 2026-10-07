@@ -14,6 +14,7 @@ module<interface> GatewayApp.UserFacingInterface {
   depends Control.Agent.Status
   depends Control.Agent.Command
   depends Control.Rollout
+  depends Control.RolloutApp.AdminInterface
   depends Control.Gateway.Management, Control.Gateway.Management
   depends Control.Agent.Status
 }

@@ -18,6 +18,9 @@ struct GatewaySelfState {
 
   gateway_id: String
   version: String
+  // 网关**对外基址**（对外域名）：管理面「对外地址」优先，未设回落 `[server] public_base_url`。
+  // 供 host 侧 wist-gwlinkd 上报中心（中心据此知道该网关对外域名）。
+  public_base_url: String
   collected_at: DateTime
   // 存储健康：能否查询（判据在网关侧）
   store_healthy: Bool

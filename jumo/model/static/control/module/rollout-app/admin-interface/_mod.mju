@@ -1,0 +1,10 @@
+module<interface> RolloutApp.AdminInterface {
+  meta {
+    label zh "灰度发布计划管理接口（中心与网关共享）"
+    label en "Rollout Admin Interface (shared)"
+    summary zh "中心与网关**共用同一份**灰度发布计划的管理入参（创建/列出/批准/推进/查看）；计划本体在 Control.Rollout。各 app 的 entry 用 input 绑这里的 message，入参形状只定义一次。"
+    tags "control", "rollout", "admin", "shared", "interface"
+  }
+
+  layer Application
+}

@@ -86,9 +86,10 @@ struct CollectionUnit {
   rule_ref: String
   // none | root | fda
   requires_privilege: String
-  // **规则就绪度**（运行时能不能真采到）：active 规则已就绪、能落数据面 |
-  // draft 面已定、规则未就绪 | deprecated。
-  // 与「策展成熟度」分开：包/模板的 status 是人定的成熟度，**不**由本字段决定。
+  // **采集就绪度**（能不能把原文采回来）：active 采集要素齐（有来源，且至少一条来源
+  // agentd 今天真能执行）| draft 面已定、还没到能采 | deprecated。
+  // **不是**解析就绪度：能不能归类、抽字段看 `rule_ref`（可采 ≠ 可解析），本字段**不看**它。
+  // 与「策展成熟度」也分开：包/模板的 status 是人定的成熟度，**不**由本字段决定。
   status: String
 }
 
@@ -153,7 +154,7 @@ struct ContentPack {
   // 引用采集目录的 unit_id（可跨能力面）。
   unit_refs: List<String>
   catalog_version: Int
-  // **策展成熟度**（人定）：draft | active | deprecated；与单元的规则就绪度无关。
+  // **策展成熟度**（人定）：draft | active | deprecated；与单元的采集就绪度无关。
   status: String
   curated_by: String
   curated_at: DateTime
@@ -166,19 +167,20 @@ struct ContentPack {
 // 一份工作 = 一个**面**（CollectionFamily）；模板授权时按 family_scope 展开成
 // “一面一份常驻工作”，这样每个面都能单独暂停 / 限流 / 审计。
 
-// 机器类别：开箱模板覆盖的 4 类机器。加类别 = 改模型（采集范围属于合规面，要走审定）。
+// 机器类别：开箱模板覆盖的 5 类机器。加类别 = 改模型（采集范围属于合规面，要走审定）。
 // 类别是**预设**（选哪几个包），不是继承的根；一台机器同时具备多种属性时，用
 // 「预设 + 单机 WorkProposal 叠加一个包」表达，不必为此新增类别。
 variant MachineClass {
   meta {
     label zh "机器类别"
     label en "Machine Class"
-    summary zh "常驻工作模板面向的机器类别：macOS 日常机 / 开发机，Linux 计算服务器 / 数据服务器。"
+    summary zh "常驻工作模板面向的机器类别：macOS 日常机 / 开发机，Linux 通用服务器 / 计算服务器 / 数据服务器。"
     tags "control", "collection", "template"
   }
 
   MacDaily
   MacDev
+  LinuxHost
   LinuxCompute
   LinuxData
 }
@@ -191,7 +193,7 @@ struct WorkTemplate {
     tags "control", "collection", "template"
   }
 
-  // macos-daily | macos-dev | linux-compute | linux-data
+  // macos-daily | macos-dev | linux-host | linux-compute | linux-data
   unique template_id: String
   // 预设键：这台机器归到该类时用本模板；多属性机器用「模板 + 单机提案」叠加。
   machine_class: MachineClass
@@ -214,8 +216,8 @@ struct WorkTemplate {
 
 // 一个采集面在某平台上的就绪度（**派生**自该面单元）。
 //
-// 为什么需要它：就绪度曾把三件事背在 `status` 一个字段上（策展成熟度 + 规则就绪度 +
-// 单元级就绪度整块往上传成模板二值），结果是一个面本来就能采、却被“规则没写”全盘封死。
+// 为什么需要它：就绪度曾把三件事背在 `status` 一个字段上（策展成熟度 + 采集就绪度 +
+// 解析就绪度整块往上传成模板二值），结果是一个面本来就能采、却被“规则没写”全盘封死。
 // 拆开后，三个轴各归各位：
 //   模板/包的 status = 策展成熟度（人定）；
 //   单元的 status    = **采集就绪度**（能不能派下去采原文）→ 授权闸门；

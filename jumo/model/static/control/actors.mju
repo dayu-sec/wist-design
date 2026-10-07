@@ -73,11 +73,11 @@ actor AdminOperator {
   can AdminViewAgentSoftware
   can AdminViewSoftwareHoldings
   can AdminViewDiscoveryPolicies
-  can AdminCreateRolloutPlan
-  can AdminListRolloutPlans
-  can AdminApproveRolloutPlan
-  can AdminAdvanceRolloutPlan
-  can AdminViewRolloutPlan
+  can CreateRolloutPlan
+  can ListRolloutPlans
+  can ApproveRolloutPlan
+  can AdvanceRolloutPlan
+  can ViewRolloutPlan
 }
 
 actor<system> WistGateway {
@@ -138,7 +138,7 @@ actor CustomerServiceEngineer {
   can GatewayImageDownloadRequested
   can LinkUpstream
   can InitializeGatewayViaUrl
-  can ApproveUpgradePlan
+  can ApproveRolloutPlan
   can AdminShowGatewayStatus
   can AdminListGatewayStatus
 }
@@ -153,7 +153,7 @@ actor PlatformMaintenanceEngineer {
   access protocol<http>
   can PublishWistAgentd
   can PublishWistGateway
-  can CreateUpgradePlan
+  can AdvanceRolloutPlan
   can AdminDispatchGlobalPolicy
   can AdminListGatewayInstances
   can AdminGetGatewayUptime
@@ -164,9 +164,11 @@ actor PlatformMaintenanceEngineer {
   can AdminGetGatewayInitialConfig
   can AdminPublishRelease
   can AdminListReleases
-  can AdminCreateUpgradePlan
-  can AdminListUpgradePlans
-  can AdminApproveUpgradePlan
+  can CreateRolloutPlan
+  can ListRolloutPlans
+  can ApproveRolloutPlan
+  can AdvanceRolloutPlan
+  can ViewRolloutPlan
   can SetAgentInstallPackageAddress
   can AdminSetAgentInstallPackageAddress
   can AdminListAgentInstallPackages

@@ -56,6 +56,9 @@ struct GatewayRuntimeStatus {
 
   unique gateway_id: String
   instance_id: String
+  // 网关**对外基址**（对外域名）：管理面「对外地址」优先，未设回落本机 `[server] public_base_url`。
+  // 由网关状态上报带来；中心据此知道「这个网关对外是哪个域名」。
+  public_base_url: String?
   version: String?
   status: String?
   health: String?
@@ -163,6 +166,9 @@ struct GatewayUpgradePlan {
   plan_id: String?
   component: String?
   to_version: String?
+  // 中心**派生**的制品下发地址（镜像后的可下载 URL）。执行器据此取件（gops `--to <url>`）；
+  // 缺省 = 没有对应 release 记录，执行器回落用 `to_version`。见设计 edge/gateway-upgrade-and-releases.md。
+  artifact_url: String?
 }
 
 // 升级结果回执（字段对齐 agentd / gops 的 upgrade.json）。
@@ -191,6 +197,9 @@ message<command> InitializeGatewayViaUrl {
 message<command> ReportGatewayStatus {
   gateway_id: String
   instance_id: String
+  // 网关**对外基址**（对外域名）：管理面「对外地址」优先，未设回落本机 `[server] public_base_url`。
+  // 可选 —— 老网关不带这个键，中心侧 serde default 兜底。
+  public_base_url: String?
   version: String
   // 在线/离线：`online` / `offline`（中心按 `== "online"` 计数与展示，别用 `running`）。
   status: String
@@ -268,6 +277,8 @@ message<response> GatewayImageDownloadReceipt {
 message<command> RegisterGateway {
   enrollment_token: String
   instance_id: String
+  // 网关**对外基址**（对外域名）。注册即带上，中心可第一时间记下它；可选（老 gwlinkd 不带）。
+  public_base_url: String?
   /// 网关侧生成的证书签名请求（CSR，PEM）：公钥在其中，私钥永不出网关。
   certificate_signing_request: String
   requested_at: DateTime

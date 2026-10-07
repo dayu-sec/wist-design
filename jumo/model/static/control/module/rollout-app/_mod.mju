@@ -1,0 +1,9 @@
+module<package> RolloutApp {
+  meta {
+    label zh "RolloutApp"
+    summary zh "灰度发布计划的**共享**应用层：中心与网关共用的管理面入参（创建/列出/批准/推进/查看）；计划本体在 Control.Rollout。"
+    tags "control", "application", "package", "rollout"
+  }
+
+  layer Application
+}

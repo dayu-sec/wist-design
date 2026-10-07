@@ -516,23 +516,37 @@ bind PlatformReleaseInterface {
   }
 
   entry AdminCreateUpgradePlan {
-    route POST "/api/v1/admin/upgrade-plans"
+    route POST "/api/v1/admin/rollout-plans"
     auth bearer
     actor_identity PlatformMaintenanceEngineer.id from jwt.sub
-    status UpgradePlan 201
+    status RolloutPlan 201
   }
 
   entry AdminListUpgradePlans {
-    route GET "/api/v1/admin/upgrade-plans"
+    route GET "/api/v1/admin/rollout-plans"
     auth bearer
     actor_identity PlatformMaintenanceEngineer.id from jwt.sub
-    status List<UpgradePlan> 200
+    status List<RolloutPlan> 200
   }
 
   entry AdminApproveUpgradePlan {
-    route POST "/api/v1/admin/upgrade-plans/approve"
+    route POST "/api/v1/admin/rollout-plans/approve"
     auth bearer
     actor_identity PlatformMaintenanceEngineer.id from jwt.sub
-    status UpgradePlan 200
+    status RolloutPlan 200
+  }
+
+  entry AdminAdvanceUpgradePlan {
+    route POST "/api/v1/admin/rollout-plans/advance"
+    auth bearer
+    actor_identity PlatformMaintenanceEngineer.id from jwt.sub
+    status RolloutPlan 200
+  }
+
+  entry AdminViewUpgradePlan {
+    route GET "/api/v1/admin/rollout-plans/{plan_id}"
+    auth bearer
+    actor_identity PlatformMaintenanceEngineer.id from jwt.sub
+    status RolloutPlanView 200
   }
 }

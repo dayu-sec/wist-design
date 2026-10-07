@@ -79,9 +79,9 @@ lexicon {
   term AdminProposeWork { aliases "AdminSubmitProposal", "AdminDraftWork" }
   term AdminReviewWork { aliases "AdminApproveWork", "AdminJudgeWork", "AdminAcceptProposal" }
 
-  // ── 灰度发布计划（网关 → agentd）──────────────────────────
+  // ── 灰度发布计划（中心 ↔ 网关共用）───────────────────────
   // 一个通用模式：action + spec 决定做什么（今天只有 upgrade），phases 决定分阶段灰度。
-  // 区别于中心侧升级**网关**的 UpgradePlan（见 InsightCenter.PlatformRelease）。
+  // 目标通用：网关铺机队（target = agent），中心铺网关（target = gateway）。
   term RolloutPlan { aliases "GrayReleasePlan", "StagedRolloutPlan" }
   term RolloutPhase { aliases "RolloutStage", "GrayReleaseStage" }
   term RolloutPlanEntry { aliases "RolloutEntry", "RolloutTargetEntry" }

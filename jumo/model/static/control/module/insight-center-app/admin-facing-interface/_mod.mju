@@ -13,6 +13,7 @@ module<interface> InsightCenterApp.AdminFacingInterface {
   depends Control.InsightCenterApp.WistCenter
   depends Control.Gateway.Supervision
   depends Control.InsightCenter.PlatformRelease
+  depends Control.RolloutApp.AdminInterface
   depends Observed.HostInventory, Observed.HostResponsibility
   depends Observed.NetworkTopology, Observed.ServiceTopology
   depends Security.SoftwareVulnerability

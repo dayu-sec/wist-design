@@ -113,19 +113,8 @@ message<command> AdminListReleases {
   component: String
 }
 
-message<command> AdminCreateUpgradePlan = OperatorRequest {
-  targets: List<UpgradeTarget>
-  gateway_ids: List<String>
-  steps: List<UpgradeStep>
-}
-
-message<command> AdminListUpgradePlans {
-}
-
-message<command> AdminApproveUpgradePlan {
-  plan_id: String
-  approved_by: String
-}
+// 灰度发布计划的管理入参**不在本模块定义**：与网关共用 `Control.RolloutApp.AdminInterface`
+// 里的 message，各 entry 用 `input` 绑过去（入参形状只定义一次）。
 
 // ── 接口 ──
 
@@ -231,17 +220,32 @@ interface PlatformReleaseInterface {
   }
 
   entry AdminCreateUpgradePlan {
+    input Control.CreateRolloutPlan
     actor PlatformMaintenanceEngineer
-    output UpgradePlan
+    output RolloutPlan
   }
 
   entry AdminListUpgradePlans {
+    input Control.ListRolloutPlans
     actor PlatformMaintenanceEngineer
-    output List<UpgradePlan>
+    output List<RolloutPlan>
   }
 
   entry AdminApproveUpgradePlan {
+    input Control.ApproveRolloutPlan
     actor PlatformMaintenanceEngineer
-    output UpgradePlan
+    output RolloutPlan
+  }
+
+  entry AdminAdvanceUpgradePlan {
+    input Control.AdvanceRolloutPlan
+    actor PlatformMaintenanceEngineer
+    output RolloutPlan
+  }
+
+  entry AdminViewUpgradePlan {
+    input Control.ViewRolloutPlan
+    actor PlatformMaintenanceEngineer
+    output RolloutPlanView
   }
 }

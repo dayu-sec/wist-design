@@ -1,4 +1,4 @@
-# Agent 常驻工作模板（4 个开箱类别）
+# Agent 常驻工作模板（5 个开箱类别）
 
 模型侧在 `Control.Agent.Content`（`jumo/model/static/control/module/agent/content/`）分三层：
 
@@ -14,14 +14,15 @@
 不内联 spec、也不列单元；授权时展开成常驻工作，并在
 `SelectionBasis{ mode = "template", template_id, template_version }` 留下审计链。
 
-目标：4 个模板覆盖约 80% 常见机器；其余见 §5。
+目标：这 5 个模板覆盖常见主机；其余见 §5。
 
-## 1. 四个模板
+## 1. 五个模板
 
 | template_id | 机器类别 | 平台 | 定位 | 组成（包） |
 |---|---|---|---|---|
 | `macos-daily` | MacDaily | macos | 办公/日常使用 | `macos-base` |
 | `macos-dev` | MacDev | macos | 开发者机器 | `macos-base` + `macos-dev` |
+| `linux-host` | LinuxHost | linux | 通用服务器（没有 compute/data 专有面） | `linux-base` |
 | `linux-compute` | LinuxCompute | linux | 计算服务器（作业/加速卡） | `linux-base` + `linux-workload` |
 | `linux-data` | LinuxData | linux | 数据服务器（数据库/存储/备份） | `linux-base` + `linux-workload` + `linux-datastore` + `linux-ops-extra` |
 
@@ -40,7 +41,7 @@
 
 `macos-daily` 采集面（来源与优先级见 `macos-security-audit-log-sources.md` §4/§5）：
 
-| 采集面（`CollectionFamily`） | 主要来源 | 规则就绪度 |
+| 采集面（`CollectionFamily`） | 主要来源 | 解析就绪度 |
 |---|---|---|
 | `LoginSession` 登录/退出与会话 | `wtmp`/`last`、`sshd`、`loginwindow` | 有 sample，无规则 |
 | `SoftwareChange` 软件安装与更新 | `/var/log/install.log`、`softwareupdated` | 有 sample，无规则 |
@@ -56,7 +57,7 @@
 
 `macos-dev` = 上表全部 **+** 下面两个面：
 
-| 采集面 | 主要来源 | 规则就绪度 |
+| 采集面 | 主要来源 | 解析就绪度 |
 |---|---|---|
 | `PrivilegeExecution` 提权与命令执行 | `sudo` 统一日志、OpenBSM `ex/pc` + `argv` | 无 sample，无规则 |
 | `DevToolchain` 开发工具链 | Homebrew、Xcode、Docker/OrbStack、包管理器、IDE 日志 | 未调查 |
@@ -68,20 +69,25 @@
 > 为什么从模板移到裁剪后：模板级集合会把权限面**被最有特权的那一个单元拉高**——
 > 日得机只要引了一个要 fda 的单元，整机就都要 fda，哪怕这台机器根本不采它。
 
-## 3. Linux 计算服务器 / 数据服务器
+## 3. Linux 通用 / 计算 / 数据服务器
 
 组成 = `linux-security-audit-log-sources.md`（`wist-agentd/docs/design/`）§4 里该类标 P0/P1 的面：
 
 | template_id | 单元数 | 采集面 |
 |---|---|---|
+| `linux-host` | 10 | 只有跨平台公共基线（`LoginSession`/`PrivilegeExecution`/`SoftwareChange`/`ServiceLifecycle`/`CrashPanic`/`NetworkFirewall`/`RebootPower`/`KernelSystem`/`StorageHealth`/`HostMetrics`），不带 compute/data 专有面 |
 | `linux-compute` | 11 | 跨平台面 `LoginSession`/`PrivilegeExecution`/`SoftwareChange`/`ServiceLifecycle`/`CrashPanic`/`NetworkFirewall`/`RebootPower`/`HostMetrics` + Linux 侧重面 `KernelSystem`/`StorageHealth`/`ComputeWorkload`（`MiscSystem` 在计算服务器只算 P2，不采） |
 | `linux-data` | 15 | `linux-compute` 的全部 11 个 + `MiscSystem`（P1）+ `DatabaseService`（P0）+ `BackupJob`（P0）+ `NetworkService`（P0） |
 
-两者权限面均为 `root`（`auth.log`/`secure`、DB 日志、SMART）。`NetworkFirewall`（网络事件与防火墙策略快照）
+`linux-host` 同时是 `linux-v1` 用途规则表**无命中**时的基线类别：一台普通服务器（docker/nginx/…）
+既不是计算机也不是数据机，规则一条也不命中——没有基线它就不会有任何用途建议，采集链就断在第一步。
+给通用机挂专有模板会把采不到的面也派下去，所以单开一个只含公共基线的类别。
+
+三者权限面均为 `root`（`auth.log`/`secure`、DB 日志、SMART）。`NetworkFirewall`（网络事件与防火墙策略快照）
 与 `NetworkService`（对外服务的应用日志）是两个面，不合并。数据面自身（`wparse`）日志不入模板，
 它是数据面的自观测，不是被采内容。
 
-## 4. 规则就绪度（实测，2026-09）
+## 4. 解析就绪度（实测，2026-09）
 
 | 平台 | 现状 |
 |---|---|
@@ -94,9 +100,10 @@ macOS 侧重面（`PrivacyTcc`/`GatekeeperQuarantine`/`DevToolchain`）只有 ma
 Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkload`/`BackupJob`/`NetworkService`）
 只有 Linux 单元。18 个面全部有单元。
 
-→ 结论：`macos-daily`/`macos-dev` 有可跑起来的一部分（指标 + 少数日志面），
-`linux-compute`/`linux-data` 目前**只是内容定义**，没有任何规则能落地。
-两件事必须一起排期：**补 Linux 采集设计文档 + 写规则**，否则 Linux 模板授权下去必然全是
+→ 结论：`macos-daily`/`macos-dev` 有可跑起来的一部分（指标 + 少数日志面）；
+Linux 侧目前先开了 `linux-host-metrics` 一个面（指标周期采，不依赖解析规则），其余面仍**只是内容定义**、
+没有规则能落地。
+两件事必须一起排期：**补 Linux 采集设计文档 + 写规则**，否则 Linux 模板多授权下去必然全是
 `default`/`residue` 杂音。
 
 ## 5. 覆盖度：从“约 80%”到可度量
@@ -122,12 +129,12 @@ Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkl
 
 - `wist-knowledge/catalog.toml`：采集目录 v1（27 个单元、18 个面，字段与 `CollectionUnit` 一一对应）
 - `wist-knowledge/packs.toml`：内容包（平台基线 + 特性包，字段与 `ContentPack` 一一对应）
-- `wist-knowledge/templates.toml`：4 个模板（只带 `pack_refs`，字段与 `WorkTemplate` 一一对应）
+- `wist-knowledge/templates.toml`：5 个模板（只带 `pack_refs`，字段与 `WorkTemplate` 一一对应）
 
 单元的**采集来源**是结构化的 `sources: [{kind, target}]`（`FileGlob` / `Exporter` /
 `UnifiedLogPredicate` / `MetricInterval`），不再是自由文本 `spec_fragment` —— 一个来源一条，
 `glob:A|B` 这种一串多路径已拆并。loader 仍未实现（把 sources 编译成数据面输入）；`rule_ref`
-为空 = 解析规则未就绪，该单元 `status` 必为 `draft`。
+为空只说明**解析就绪度**未到（可采 ≠ 可解析），不影响单元 `status`（采集就绪度）。
 
 发现方向的**观测周期**是一份独立的策展数据：`wist-knowledge/aspect-policies.toml`
 （与用途规则表同一约定 —— 模型只留类型与字段语义，值留 `wist-knowledge/`），
@@ -146,18 +153,19 @@ Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkl
 
 ### 6.1 部分可用 / 渐进启用
 
-就绪度不再是一个包揽的含义，拆成两层：
+就绪度不再是一个包揽的含义，拆成三层（前两个在单元上，第三个在包/模板上）：
 
 | 层 | 字段 | 含义 |
 |---|---|---|
-| 规则就绪度 | `CollectionUnit.status` | 运行时能不能真采到（`active` = 规则已就绪） |
-| 策展成熟度 | `ContentPack.status` / `WorkTemplate.status` | 人定的成熟度（可授权 / 草稿 / 弃用），**与规则就绪度无关** |
+| 采集就绪度 | `CollectionUnit.status` | 能不能把原文采回来（有来源，且至少一条来源 agentd 真能执行）；`active` ⇔ 可采 |
+| 解析就绪度 | `CollectionUnit.rule_ref` | 能不能归类、抽字段；**不是闸门**（可采 ≠ 可解析） |
+| 策展成熟度 | `ContentPack.status` / `WorkTemplate.status` | 人定的成熟度（可授权 / 草稿 / 弃用），**与采集就绪度无关** |
 
 授权闸门是**面就绪度**（`FamilyReadiness`，派生：该面至少有一个 `active` 单元），不是 `template.status`：
 
 - **就绪的面**才展开成工作；
 - **采集未就绪的面不展开**，其单元进 `SelectionBasis.excluded_units`（`reason_code = collect_not_ready`）；
-- 规则落地后**无需重新策展模板**，下一次展开/刷新自动启用该面。
+- 单元采集就绪后**无需重新策展模板**，下一次展开/刷新自动启用该面。
 
 > 旧写法“引用到 draft 单元的模板不能 active”把单元级就绪度整块传成模板二值，
 > 结果是一个面就绪也能采的机器被全盘封死。拆开后，`macos-daily`（`HostMetrics` 已就绪）
@@ -208,7 +216,7 @@ Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkl
 
 > 本轮已解决：**继承 → 组合**（消除 `linux-data` 复制漂移、`linux-compute` 基线可复用）；
 > **工作粒度**从 capability 改为**面**（一面一份常驻工作，可按面暂停/限流/审计）；
-> **部分可用**：拆开“规则就绪度 / 策展成熟度”，闸门改为面就绪度（未就绪的面不展开）；
+> **部分可用**：拆开“采集就绪度 / 解析就绪度 / 策展成熟度”，闸门改为面就绪度（未就绪的面不展开）；
 > **目录版本**：多版并存 + 模板可滞后 + 已授权工作锁版；
 > **事实缺位**与“条件不满足”分开（三态）；
 > **权限面**从模板级改为**裁剪后**派生；**`MachineClass` 降为预设键**；
@@ -217,7 +225,7 @@ Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkl
 | # | 不足 | 状态 |
 |---|---|---|
 | 1 | ~~工作颗粒度 = capability（只有 2 个）→ 一份 `collect_logs` 塞十几个面，**无法按面暂停/限流**~~ | **已解决**：工作粒度改为**面**（`StandingWork.family`，模板按 `family_scope` 展开成一面一份） |
-| 2 | ~~`status` 二值 → 无法“部分可用/渐进启用”~~ | **已解决**：拆成「规则就绪度（单元）」与「策展成熟度（包/模板）」；闸门改为面就绪度（`FamilyReadiness`），未就绪的面不展开并留痕（见 §6.1） |
+| 2 | ~~`status` 二值 → 无法“部分可用/渐进启用”~~ | **已解决**：拆成「采集就绪度（单元 `status`）」「解析就绪度（单元 `rule_ref`）」与「策展成熟度（包/模板）」；闸门改为面就绪度（`FamilyReadiness`），未就绪的面不展开并留痕（见 §6.1） |
 | 3 | ~~`catalog_version` 单值**整版绑定** → 无新旧目录共存 / 模板逐个迁移 / 已授权锁旧版~~ | **已解决**：多版并存（`CollectionCatalog.superseded_by`）、模板可滞后、已授权工作锁版（`StandingWork.catalog_version`），见 §6.2 |
 | 4 | 上游无入口：类别来自 `AgentClassification`，其**写入端点未实现** | 见 `agent-purpose-inference.md` §9 |
 | 5 | 裁剪空转：`match` 依赖的 `installed`/`device`/`resource` 事实未采 | **设计已解决**（三态：`fact_not_collected` 与 `match_unsatisfied` 分开，见 §6.3）；**事实仍待采**：`B118`/`B119` |

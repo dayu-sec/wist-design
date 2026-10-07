@@ -1,0 +1,72 @@
+// 灰度发布计划的管理面入参 —— **中心与网关共用同一份**（各 app 的 entry 用 `input` 绑这里）。
+//
+// 为什么 message 收在这里、entry 仍留各 app：entry 带 `actor`（网关是 `AdminOperator`、
+// 中心是 `PlatformMaintenanceEngineer`），共享 entry 会改授权语义；重复的是**入参形状**。
+// 同理路由在 `binding.mju` 里按各 app 的 interface 分别绑（两个服务同一条路径）。
+
+// 创建灰度发布计划：目标与阶段数交给**服务端**按阶梯切分（运维只选段数，不填阶段范围）。
+message<command> CreateRolloutPlan = OperatorRequest {
+  meta {
+    label zh "创建灰度发布计划"
+    label en "Create Rollout Plan"
+    tags "rollout", "plan"
+  }
+
+  // 要执行的动作（与 OneShotWork.action 同一目录，今天只有 upgrade）。
+  action: String
+  // 动作参数（JSON）；物化时原样放进每个执行单元。今天两个用途：
+  //   网关铺机队 —— agentd 的 UpgradeSpec `{"package_url","package_sha256"}`（+ 可选 "target_version"）；
+  //   中心铺网关 —— `{"targets":[{"component","target_version"}]}`。
+  spec: String
+  // 计划要铺到的目标（互不重叠由服务端保证；网关是 agent_id，中心是 gateway_id）。
+  target_ids: List<String>
+  // 灰度阶段数（1 个金丝雀 → 10% → 30% → 70% → 全量；只选段数，不填阶段范围）。
+  phase_count: Int
+  deadline_at: DateTime
+  timeout_seconds: Int
+  // 每个阶段内同时执行的台数（0 = 不节流）。
+  batch_size: Int
+}
+
+// 列出灰度发布计划（读投影）。
+message<command> ListRolloutPlans = OperatorRequest {
+  meta {
+    label zh "列出灰度发布计划"
+    label en "List Rollout Plans"
+    tags "rollout", "plan"
+  }
+}
+
+// 批准灰度发布计划：批准后进入第一阶段（draft → rolling）。
+message<command> ApproveRolloutPlan = OperatorRequest {
+  meta {
+    label zh "批准灰度发布计划"
+    label en "Approve Rollout Plan"
+    tags "rollout", "plan"
+  }
+
+  plan_id: String
+  approved_by: String
+}
+
+// 人工推进到下一阶段（advance_rule = manual 的阶段由人工确认后点这个）。
+message<command> AdvanceRolloutPlan = OperatorRequest {
+  meta {
+    label zh "推进灰度发布计划"
+    label en "Advance Rollout Plan"
+    tags "rollout", "plan"
+  }
+
+  plan_id: String
+}
+
+// 查看某份计划及其逐目标进度。
+message<command> ViewRolloutPlan = OperatorRequest {
+  meta {
+    label zh "查看灰度发布计划"
+    label en "View Rollout Plan"
+    tags "rollout", "plan"
+  }
+
+  plan_id: String
+}
