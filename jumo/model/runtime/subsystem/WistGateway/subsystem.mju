@@ -20,6 +20,7 @@ subsystem WistGateway {
   uses module Control.Agent.Work
   uses module Control.Rollout
   uses module Control.Protocol, Control.Agent.Registry, Control.Agent.Status
+  uses module Control.Agent.HostMetrics
   uses module Control.Gateway.Management, Control.Gateway.Management
   uses module Control.GatewayApp.Application
 }

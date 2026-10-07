@@ -45,6 +45,22 @@ bind WistGatewayManagementInterface {
     status AgentOverview 200
   }
 
+  // 主机资源指标（单台）：指标取自 VM，身份 join 注册表；未知 agent 回 404。
+  entry AdminShowAgentHostMetrics {
+    route GET "/api/v1/admin/agents/{agent_id}/host-metrics"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status AgentHostMetrics 200
+  }
+
+  // 机队主机指标（列表）：一行一台有指标上报的主机，带注册表身份。
+  entry AdminListAgentHostMetrics {
+    route GET "/api/v1/admin/agents/host-metrics"
+    auth bearer
+    actor_identity AdminOperator.id from jwt.sub
+    status List<AgentHostMetricsSummary> 200
+  }
+
   entry AdminViewGatewayManagementState {
     route GET "/api/v1/admin/gateway/management-state"
     auth bearer

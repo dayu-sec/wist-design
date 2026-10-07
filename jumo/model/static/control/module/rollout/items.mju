@@ -70,6 +70,7 @@ struct RolloutPlan {
     tags "rollout", "plan"
   }
 
+  // 语义化 id：`plan-<action>-<yyyyMMdd-HHmmss>-<short>`（口径在共享 crate `wist-release::rollout::plan_id`）。
   unique plan_id: String
   // 要执行的动作：与 OneShotWork.action 同一目录，今天只有 upgrade。
   action: String

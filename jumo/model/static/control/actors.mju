@@ -45,6 +45,10 @@ actor AdminOperator {
   can ShowAgentRuntimeStatus
   can AdminGetAgentOverview
   can AdminShowAgentRuntimeStatus
+  can ShowAgentHostMetrics
+  can ListAgentHostMetrics
+  can AdminShowAgentHostMetrics
+  can AdminListAgentHostMetrics
   can ViewGatewayOverview
   can DispatchAgentFleetCommand
   can AdminViewGatewayManagementState

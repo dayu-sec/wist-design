@@ -7,5 +7,6 @@ target<bin,http> warp-gateway {
   modules Control.Agent.Certificate
   modules Control.Agent.Command
   modules Control.Protocol, Control.Agent.Registry, Control.Agent.Status
+  modules Control.Agent.HostMetrics
   modules Reporting.Protocol
 }

@@ -116,6 +116,34 @@ usecase ShowAgentRuntimeStatus {
   outcome Control.AgentRuntimeStatus
 }
 
+// 查看单台主机指标（数据面 VM + 注册表身份）
+usecase ShowAgentHostMetrics {
+  meta {
+    label zh "查看主机指标"
+    label en "Show Agent Host Metrics"
+    summary zh "管理员查看某台主机的负载 / 内存 / 磁盘 / 开机时长指标：指标取自数据面，主机名与网卡地址由网关 join 注册表补齐。"
+    tags "agent-status", "metrics", "host-metrics", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.ShowAgentHostMetrics
+  outcome Control.AgentHostMetrics
+}
+
+// 查看机队主机指标（只覆盖有指标上报的已注册机器）
+usecase ListAgentHostMetrics {
+  meta {
+    label zh "查看机队主机指标"
+    label en "List Agent Host Metrics"
+    summary zh "管理员查看机队里各主机的即时负载 / 内存 / 磁盘摘要：只覆盖有指标上报的已注册机器。"
+    tags "agent-status", "metrics", "host-metrics", "admin"
+  }
+
+  actor Control.AdminOperator
+  trigger Control.ListAgentHostMetrics
+  outcome Control.AgentHostMetricsSummary
+}
+
 // 设置 wist-agentd 安装包来源地址
 usecase SetAgentInstallPackageAddress {
   meta {

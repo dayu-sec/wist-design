@@ -1,0 +1,94 @@
+// Module: AgentHostMetrics — 主机资源指标读视图
+
+command ShowAgentHostMetrics = OperatorRequest {
+  meta {
+    label zh "查看单台主机指标"
+    label en "Show Agent Host Metrics"
+    tags "agentd", "metrics", "host-metrics"
+  }
+
+  agent_id: String
+}
+
+command ListAgentHostMetrics = OperatorRequest {
+  meta {
+    label zh "列出机队主机指标"
+    label en "List Agent Host Metrics"
+    tags "agentd", "metrics", "host-metrics", "fleet"
+  }
+}
+
+// 一台主机的即时指标快照：即时值（`query`）+ 近 1 小时趋势（`query_range`），并带注册表机器身份。
+// 身份字段为空 = 注册表里没有这台机器的画像（老数据或被手工删过），不是「没有主机名」。
+struct AgentHostMetrics {
+  meta {
+    label zh "主机指标快照"
+    label en "Agent Host Metrics"
+    summary zh "某台主机的即时资源指标与近 1 小时趋势，并带注册表身份（主机名 / node_id / 网卡地址）。"
+    tags "agentd", "metrics", "host-metrics", "view"
+  }
+
+  unique agent_id: String
+  node_id: String
+  hostname: String
+  // 形如 `en0 192.168.1.5/24`（网卡名 + 地址/掩码）；采集侧已滤掉链路本地 / 回环 / 自分配。
+  // 空表 = 还没上报过。
+  ip_addresses: List<String>
+  load_average_1m: Float?
+  load_average_5m: Float?
+  load_average_15m: Float?
+  uptime_seconds: Float?
+  memory_total_kb: Int?
+  memory_available_kb: Int?
+  disk_usage_percent: Float?
+  disk_total_kb: Int?
+  disk_available_kb: Int?
+  history: AgentHostMetricsHistory?
+}
+
+// 各指标的近 1 小时时间序列，按时间升序。
+struct AgentHostMetricsHistory {
+  meta {
+    label zh "主机指标趋势"
+    label en "Agent Host Metrics History"
+    tags "agentd", "metrics", "host-metrics"
+  }
+
+  load_average_1m: List<AgentHostMetricPoint>
+  load_average_5m: List<AgentHostMetricPoint>
+  load_average_15m: List<AgentHostMetricPoint>
+  memory_total_kb: List<AgentHostMetricPoint>
+  memory_available_kb: List<AgentHostMetricPoint>
+  disk_usage_percent: List<AgentHostMetricPoint>
+}
+
+// 一个时序采样点：`timestamp_ms` 为 Unix 毫秒，`value` 为该时刻取值。
+struct AgentHostMetricPoint {
+  meta {
+    label zh "主机指标采样点"
+    label en "Agent Host Metric Point"
+    tags "agentd", "metrics", "host-metrics"
+  }
+
+  timestamp_ms: Int
+  value: Float
+}
+
+// 机队主机指标摘要（列表页用）：只有当前值，无趋势，带注册表机器身份。
+struct AgentHostMetricsSummary {
+  meta {
+    label zh "主机指标摘要"
+    label en "Agent Host Metrics Summary"
+    summary zh "机队列表的一行：某台有指标上报主机的即时负载 / 内存 / 磁盘摘要，并带注册表身份。"
+    tags "agentd", "metrics", "host-metrics", "view"
+  }
+
+  unique agent_id: String
+  node_id: String
+  hostname: String
+  ip_addresses: List<String>
+  load_average_1m: Float?
+  memory_total_kb: Int?
+  memory_available_kb: Int?
+  disk_usage_percent: Float?
+}

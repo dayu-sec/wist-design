@@ -7,6 +7,16 @@ message<command> AdminShowAgentRuntimeStatus = OperatorRequest {
   agent_id: String
 }
 
+// 主机资源指标：管理面看「这台机器此刻的负载」（数据取自数据面 VictoriaMetrics，
+// 并按 agent_id join 注册表补齐主机名 / 网卡地址）。
+message<command> AdminShowAgentHostMetrics = OperatorRequest {
+  agent_id: String
+}
+
+// 机队主机指标列表：只覆盖有指标上报的已注册机器（与登记台账 /fleet 口径分开）。
+message<command> AdminListAgentHostMetrics = OperatorRequest {
+}
+
 message<command> AdminGetAgentOverview = OperatorRequest {
 }
 
@@ -289,6 +299,16 @@ interface WistGatewayManagementInterface {
   entry AdminGetAgentOverview {
     actor AdminOperator
     output AgentOverview
+  }
+
+  entry AdminShowAgentHostMetrics {
+    actor AdminOperator
+    output AgentHostMetrics
+  }
+
+  entry AdminListAgentHostMetrics {
+    actor AdminOperator
+    output List<AgentHostMetricsSummary>
   }
 
   entry AdminViewGatewayManagementState {

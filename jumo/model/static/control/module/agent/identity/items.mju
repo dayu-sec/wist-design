@@ -37,16 +37,20 @@ struct HostProfile {
   meta {
     label zh "Agent 宿主机画像"
     label en "Agent Host Profile"
+    summary zh "这台机器的身份：系统主机名、OS / 架构、机器 id，以及**有信息量**的网卡地址（已滤掉链路本地 / 回环 / 自分配）。注册与状态上报共用。"
     tags "agentd", "host"
   }
 
   unique node_id: String
+  // 系统主机名：`HOSTNAME` → `COMPUTERNAME` → `/etc/hostname` → `gethostname`；都拿不到时才用占位名 `local-host`。
   hostname: String
   os: String
   arch: String
   machine_id: String
   cloud_instance_id: String
   k8s_node_uid: String
+  // 有信息量的本机网卡地址，形如 `en0 192.168.3.178/24`（网卡名 + 地址/掩码）。
+  // 采集侧已滤掉 IPv6 链路本地（`fe80::/10`）/ 回环 / IPv4 自分配；空表 = 还没上报过或确实没有。
   ip_addresses: List<String>
 }
 

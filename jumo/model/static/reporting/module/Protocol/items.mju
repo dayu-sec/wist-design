@@ -246,6 +246,7 @@ message<command> ReportAgentFactSummary {
   // 留痕/展示（不进内容摘要、不参与判重）：机器名与 IP 会变，但不改变用途判据。
   host_id: String
   host_name: String
+  // 每块网卡一条，形如 `en0 192.168.1.5/24`；已滤掉链路本地 / 回环 / 自分配。
   network_addresses: List<String>
   reported_at: DateTime
 }

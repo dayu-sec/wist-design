@@ -1,0 +1,20 @@
+// Control.Agent.HostMetrics 有界上下文：管理面查看「这台机器此刻的资源状况」。
+//
+// 指标本身取自数据面 VictoriaMetrics（`system.*` 系列，按 `agent` 标签索引）：它们只有 agent 标签，
+// **不带主机名 / IP** —— 身份是注册表（`Control.Agent.Registry`）里的机器画像。本视图在查询指标后
+// 按 `agent_id` join 注册表补齐 `hostname` / `node_id` / `ip_addresses`，所以它同时回答
+// 「是哪台机器」和「此刻负载如何」。硬把这些身份塞进指标标签只会重复且过期。
+//
+// 口径与机队台账（`/fleet`）分开：本视图只覆盖**有指标上报**的已注册机器；待命 / 离线机器没有
+// 指标，不在其中，它们由机队台账承载。
+
+module<entity> Agent.HostMetrics {
+  meta {
+    label zh "Agent 主机指标"
+    label en "Agent Host Metrics"
+    summary zh "管理面查看主机资源指标（负载 / 内存 / 磁盘 / 开机时长）的读视图：数据取自数据面 VictoriaMetrics，并按 agent_id join 注册表补齐主机名与网卡地址。"
+    tags "control", "agentd", "metrics", "host-metrics", "admin"
+  }
+
+  layer Domain
+}
