@@ -37,8 +37,20 @@ region AgentInstallPackageForm {
   }
 
   orientation vertical
+  contains GitHubReleaseResolveField
   contains AgentInstallPackagePlatformSlot
   contains SubmitAgentInstallPackageAction { slot_command: SetAgentInstallPackageAddress }
+}
+
+region GitHubReleaseResolveField {
+  meta {
+    label zh "GitHub Release 一键填充"
+    label en "GitHub Release Autofill"
+    summary zh "填 release 页面地址（https://github.com/<owner>/<repo>/releases/tag/<tag>）后一键解析：网关拉该 release 的资产，按 target-triple 自动填到对应平台槽位的来源地址与摘要。"
+    tags "admin", "package", "input", "github-release"
+  }
+
+  orientation horizontal
 }
 
 region AgentInstallPackagePlatformSlot {
