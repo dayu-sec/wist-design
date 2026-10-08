@@ -34,7 +34,6 @@
 | `collected_at` | 采集时刻 | | 已有 |
 | `store_healthy` | 存储能否查 | store `list_agents` | 已有 |
 | `agent_count` | 已登记 Agent 数 | store | 已有 |
-| `uplink_enabled` | 数据面上送是否启用 | store `agent_uplink` | 已有 |
 | `last_error` | 最近错误 | store | 已有 |
 | `uptime_seconds` | 网关**进程**已运行秒数 | `sysinfo::Process::run_time` | **Phase 1** |
 | `cpu_percent` | 网关**进程** CPU 占比（单核口径） | `sysinfo`（持久 System 算增量） | **Phase 1** |

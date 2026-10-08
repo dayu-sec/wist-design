@@ -26,8 +26,6 @@ struct GatewaySelfState {
   store_healthy: Bool
   // 已登记 Agent 数（机队规模）
   agent_count: Int
-  // 数据面上送是否启用（无目标 = 不采集、不上送）
-  uplink_enabled: Bool
   last_error: String?
   // 网关**进程**已运行秒数。
   uptime_seconds: Int
