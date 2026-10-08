@@ -34,7 +34,7 @@ region<page> AgentInstallPage {
   meta {
     label zh "安装"
     label en "Install"
-    summary zh "WistGateway 的独立安装页，只提供 X86-Linux 和 Arm-Linux 两个 Agent 安装代码；无需输入租户、环境或其它参数，也不展示安装说明。"
+    summary zh "WistGateway 的独立安装页，按平台提供 Agent 安装代码（macOS-ARM / Linux x86_64-musl / Linux ARM64-musl）；无需输入租户、环境或其它参数，也不展示安装说明。"
     tags "admin", "agent-install", "install-code", "page"
   }
 
@@ -77,7 +77,7 @@ region<page> AgentInstallPackagePage {
   meta {
     label zh "安装包来源"
     label en "Install Package Source"
-    summary zh "WistGateway 的独立设置页：查看并修改网关的 wist-agentd 取包来源地址（https 链接或主机绝对路径）与可选 sha256 期望摘要。安装端始终从网关取包；保存时网关先把该来源的制品拉到本地缓存，因此改动只影响之后新签发的安装代码与 install.sh，已分发的安装命令不变。"
+    summary zh "WistGateway 的独立设置页：逐平台（macOS-ARM / Linux x86_64-musl / Linux ARM64-musl）查看并修改网关的 wist-agentd 取包来源地址（https 链接或主机绝对路径）与必填 sha256 期望摘要。安装端始终从网关取包；保存时网关先把各平台来源的制品拉到本地缓存，因此改动只影响之后新签发的安装代码与 install.sh，已分发的安装命令不变。"
     tags "admin", "agent-install", "package", "settings", "page"
   }
 

@@ -9,14 +9,30 @@ struct AgentBootstrapBundle {
   }
 
   unique bundle_id: String
-  install_script_url: String
-  agent_package_url: String
-  agent_package_sha256: String
   control_endpoint: String
   trust_bundle: String
   tenant_id: String
   environment_id: String
   expires_at: DateTime
+  // 每平台一份（agentd 是平台专用制品）：安装脚本地址 + 网关托管包地址/摘要。
+  platforms: List<AgentPlatformPackage>
+}
+
+// 某个目标平台（target-triple）对应的安装包：安装脚本地址 + 网关托管并由其派生的包地址/摘要。
+// 取代早先的单值三字段 —— 一个网关要同时服务 macOS-ARM 与 Linux x86_64/ARM64。
+struct AgentPlatformPackage {
+  meta {
+    label zh "平台安装包"
+    label en "Platform Install Package"
+    summary zh "某个目标平台（target-triple）对应的安装脚本地址与网关托管包地址/摘要。"
+    tags "enrollment", "bootstrap", "platform"
+  }
+
+  // 目标三元组，如 aarch64-apple-darwin / x86_64-unknown-linux-musl。
+  platform: String
+  install_script_url: String
+  agent_package_url: String
+  agent_package_sha256: String
 }
 
 struct ManagementEndpointTrustBundle {
@@ -192,6 +208,8 @@ struct AgentInstallCode {
 
   x86_linux_install_code: String
   arm_linux_install_code: String
+  macos_install_code: String
+  bootstrap_enrollment_token: String
   bootstrap_bundle: AgentBootstrapBundle
 }
 

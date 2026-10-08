@@ -525,12 +525,10 @@ flow AdminGetAgentInstallCodeFlow {
   step<stop> BuildInstallCode {
     create AgentBootstrapBundle {
       bundle_id = "agent-bootstrap-install-token-001"
-      install_script_url = "https://warp-gateway/api/v1/agent/install/x86/install.sh?token=install-token-001"
+      // 每平台一份安装脚本（平台限定 URL）+ 网关托管包地址/摘要；具体取值由实现层派生。
       // 分发地址恒为网关自身端点：目标主机不直连来源，只从网关取包；
       // 摘要与网关本地那份制品同源（来源由 AgentInstallPackageAddress 给出，
-      // 未录入过时没有可用包）。具体取值由实现层派生。
-      agent_package_url = "https://warp-gateway/api/v1/agent/packages/current"
-      agent_package_sha256 = "sha256:package-digest"
+      // 未录入过时没有可用包）。
       control_endpoint = "https://warp-gateway"
       trust_bundle = "internal-ca"
       tenant_id = "tenant-default"
@@ -541,6 +539,8 @@ flow AdminGetAgentInstallCodeFlow {
     create AgentInstallCode {
       x86_linux_install_code = "curl -fsSL https://warp-gateway/api/v1/agent/install/x86/install.sh?token=install-token-001 | bash"
       arm_linux_install_code = "curl -fsSL https://warp-gateway/api/v1/agent/install/arm/install.sh?token=install-token-001 | bash"
+      macos_install_code = "curl -fsSLk https://warp-gateway/api/v1/agent/install/macos/install.sh?token=install-token-001 | bash"
+      bootstrap_enrollment_token = "install-token-001"
       bootstrap_bundle = "agent-bootstrap-install-token-001"
     }
   }

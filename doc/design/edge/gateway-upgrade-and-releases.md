@@ -26,6 +26,10 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 1. **拉取时反查**：`GET /api/v1/gateway/upgrade-plan` 里，中心按计划的 `(component, target_version)`
    反查该组件**已发布的 release 记录**，把其 `artifact_url`（镜像后的绝对地址）放进
    `GatewayUpgradePlan.artifact_url`。**不新增存储**：release 记录就是唯一真源。
+   多平台组件（`galaxy-ops` / `galaxy-flow` 一次发 macOS-ARM + Linux x86_64/ARM64 三平台）
+   **必须按平台挑**：网关在拉取时用 `platform=<target-triple>` 自述本机平台，中心据此命中
+   完整三元组 ＞ 同平台家族（忽略 gnu/musl 等 abi）＞ 无平台概念的包。挑不到就**不带**地址
+   （回落用版本，不把错平台制品派给主机 —— 错平台二进制覆盖上去不报错、只会让工具静默报废）。
 2. **执行器取件用它**：gwlinkd 把 `artifact_url` 交给驱动作为执行器的取件目标
    （`gops --to <url>`）；**台账与回执仍记 `to_version`（版本）**——回执语义要的是版本，不是 URL。
 3. **无 release 时回落**：没发布过该 `(component, version)` → `artifact_url` 缺省 → 执行器回落用
@@ -35,6 +39,9 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 
 - **派生而非手输**：地址永远由中心按发布记录给；运维在计划里只选**版本**。手输的地址一旦是某台机器上的
   路径，就会在每台目标机上被逐台解释 —— 这正是 agent 包那条路踩过的坑。
+- **多平台按网关自述平台挑**：平台不是运维在计划里选的，而是**网关本机自述**（`HostTarget::target_triple()`
+  → query `platform=`）。同一 `(component, version)` 下多平台制品，中心不做「随便挑一个」——挑不准就不给地址，
+  宁可让执行器回落版本。
 - **不新增存储字段**：`artifact_url` 在拉取时计算（release 记录为准）；计划本身仍只存目标版本。
   好处是「中心换了存储后端（本地 ↔ 对象存储）」不影响历史计划。
 - **台账/回执记版本**：`UpgradeRecord.to_version` 与 `ReportGatewayUpgradeResult.to_version` 保持版本语义；
@@ -48,7 +55,8 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 |---|---|
 | 模型 | `jumo/model/static/control/module/gateway/supervision/items.mju`（`GatewayUpgradePlan.artifact_url`） |
 | 契约 | `wist-control` `gateway_upgrade_plan.rs` |
-| 中心派生 | `wist-center` `api/gateway_ops.rs`（`upgrade_plan_for` → `resolve_release_artifact_url`） |
+| 中心派生 | `wist-center` `api/gateway_ops.rs`（`upgrade_plan_for` → `resolve_release_artifact_url`，含平台匹配） |
+| 平台自述 | `wist-gwlinkd` `target.rs`（`HostTarget::target_triple`）→ `center.rs`（`get_upgrade_plan(platform=)`） |
 | 执行器取件 | `wist-gwlinkd` `upgrade.rs`（`UpgradeDriver::start` 新入参 → `ExecutorInvocation.to_version`）、`main.rs` |
 | 发布（既有） | `wist-center` `api/admin_ops.rs`（`admin_publish_release`）、`infra/artifacts.rs` |
 
@@ -58,6 +66,8 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
    网关拉 `GET /api/v1/gateway/upgrade-plan` → `artifact_url` = 那条记录的下发地址。
 2. 计划里的版本**没发布过** → `artifact_url` 缺省，网关仍能按 `to_version` 走旧路（不阻断）。
 3. gwlinkd 侧：计划带地址 → `gops` 参数是 `--to <url>`；台账/回执的 `to_version` 仍是**版本**。
+4. **多平台组件**（`galaxy-ops` 发三平台）：macOS-ARM 网关拉到的是 `aarch64-apple-darwin` 制品
+   （不是 Linux 制品）；Linux x86_64 网关拉到 musl 制品。声明平台对不上 / 老网关不声明 → 不带地址。
 
 ## 6. 相关
 

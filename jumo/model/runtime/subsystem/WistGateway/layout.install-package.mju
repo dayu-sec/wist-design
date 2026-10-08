@@ -1,10 +1,13 @@
 // WistGateway install-package page layout regions
+//
+// 安装包按**平台**（target-triple）托管：agentd 是平台专用制品（macOS-ARM + Linux x86_64/ARM64），
+// 每个平台一组来源地址 + 摘要，一次提交三平台（任一拉不到或摘要不符，整次不生效）。
 
 region AgentInstallPackageUsecaseCard {
   meta {
     label zh "安装包来源设置卡片"
     label en "Install Package Source Card"
-    summary zh "承载 ViewAgentInstallPackageAddress 与 SetAgentInstallPackageAddress：展示当前取包来源地址，并提供修改表单（保存时网关先把制品拉到本地）。"
+    summary zh "承载 ViewAgentInstallPackageAddress 与 SetAgentInstallPackageAddress：逐平台展示当前取包来源地址，并提供多平台修改表单（保存时网关先把每个平台的制品拉到本地）。"
     tags "admin", "agent-install", "package", "usecase-card"
   }
 
@@ -18,7 +21,7 @@ region AgentInstallPackageCurrentValue {
   meta {
     label zh "当前取包来源"
     label en "Current Package Source"
-    summary zh "当前生效的取包来源地址、制品摘要与最后修改信息；未设置过时来源地址为空，表示网关分发它内置的安装包。"
+    summary zh "逐平台列出当前生效的取包来源地址、制品摘要与最后修改信息；某个平台未录入时为缺件（该平台的新装会明确报错）。"
     tags "admin", "package", "current-value"
   }
 
@@ -29,14 +32,26 @@ region AgentInstallPackageForm {
   meta {
     label zh "安装包来源表单"
     label en "Install Package Source Form"
-    summary zh "输入安装包来源地址（https 链接或主机绝对路径）与可选 sha256 期望摘要并提交；地址为明文 http 时网关拒绝；保存时网关会先把该来源的制品拉到本地缓存。"
+    summary zh "三个平台（x86_64-unknown-linux-musl / aarch64-unknown-linux-musl / aarch64-apple-darwin）各填来源地址（https 链接或主机绝对路径）与必填 sha256 期望摘要，一次提交；地址为明文 http 时网关拒绝；保存时网关会先把各平台来源的制品拉到本地缓存，任一失败整次不生效。"
     tags "admin", "package", "form"
+  }
+
+  orientation vertical
+  contains AgentInstallPackagePlatformSlot
+  contains SubmitAgentInstallPackageAction { slot_command: SetAgentInstallPackageAddress }
+}
+
+region AgentInstallPackagePlatformSlot {
+  meta {
+    label zh "平台来源槽位"
+    label en "Platform Source Slot"
+    summary zh "一个平台（target-triple）的一组输入：来源地址 + 期望摘要。"
+    tags "admin", "package", "platform-slot"
   }
 
   orientation vertical
   contains AgentInstallPackageUrlInput { slot_field: package_url }
   contains AgentInstallPackageSha256Input { slot_field: package_sha256 }
-  contains SubmitAgentInstallPackageAction { slot_command: SetAgentInstallPackageAddress }
 }
 
 region AgentInstallPackageUrlInput {
@@ -53,7 +68,7 @@ region AgentInstallPackageSha256Input {
   meta {
     label zh "来源摘要输入"
     label en "Package Sha256 Input"
-    summary zh "可选期望摘要，必须是 64 位十六进制（可带 sha256: 前缀）；填写时网关用它校验拉取到的制品，留空则由网关按实际内容计算。"
+    summary zh "必填期望摘要，必须是 64 位十六进制（可带 sha256: 前缀）；网关用它校验拉取到的制品，不符即拒。"
     tags "admin", "package", "input"
   }
 
@@ -74,7 +89,7 @@ region AgentInstallPackageResult {
   meta {
     label zh "保存结果"
     label en "Save Result"
-    summary zh "保存成功后的回执：网关已从该来源拉取到本地缓存，之后新签发的安装代码与 install.sh 使用这份缓存；已分发的安装命令不变。"
+    summary zh "保存成功后的回执：网关已从各平台来源拉取到本地缓存，之后新签发的安装代码与 install.sh 按平台使用对应缓存；已分发的安装命令不变。"
     tags "admin", "package", "result"
   }
 

@@ -1,22 +1,27 @@
 // WistGateway install page layout regions
+//
+// 安装代码按**平台**（target-triple）分开：agentd 是平台专用制品（macOS-ARM + Linux x86_64/ARM64），
+// 每平台一条可复制执行的安装命令（各指向自己的平台限定 install.sh）。
 
 region AgentInstallCodeList {
   meta {
     label zh "Agent 安装代码列表"
     label en "Agent Install Code List"
+    summary zh "三个平台的 Agent 安装命令（macOS-ARM / Linux x86_64-musl / Linux ARM64-musl）。"
     tags "admin", "agent-install", "install-code-list"
   }
 
   orientation grid
-  contains X86LinuxAgentInstallCode { area: x86_linux_agent_install_code, row: 1, col: 1, width: 50%, slot_field: x86_linux_install_code }
-  contains ArmLinuxAgentInstallCode { area: arm_linux_agent_install_code, row: 1, col: 2, width: 50%, slot_field: arm_linux_install_code }
+  contains X86LinuxAgentInstallCode { area: x86_64_linux_agent_install_code, row: 1, col: 1, width: 34%, slot_field: x86_linux_install_code }
+  contains ArmLinuxAgentInstallCode { area: aarch64_linux_agent_install_code, row: 1, col: 2, width: 33%, slot_field: arm_linux_install_code }
+  contains MacosAgentInstallCode { area: macos_agent_install_code, row: 1, col: 3, width: 33%, slot_field: macos_install_code }
 }
 
 region X86LinuxAgentInstallCode {
   meta {
     label zh "X86-Linux 安装代码"
     label en "X86-Linux Install Code"
-    summary zh "用于 X86 Linux 业务服务器的 Agent 安装代码，可直接复制到终端执行。"
+    summary zh "用于 X86 Linux 业务服务器（x86_64-unknown-linux-musl）的 Agent 安装代码，可直接复制到终端执行。"
     tags "admin", "agent-install", "install-code", "x86-linux"
   }
 
@@ -27,8 +32,19 @@ region ArmLinuxAgentInstallCode {
   meta {
     label zh "Arm-Linux 安装代码"
     label en "Arm-Linux Install Code"
-    summary zh "用于 Arm Linux 业务服务器的 Agent 安装代码，可直接复制到终端执行。"
+    summary zh "用于 Arm Linux 业务服务器（aarch64-unknown-linux-musl）的 Agent 安装代码，可直接复制到终端执行。"
     tags "admin", "agent-install", "install-code", "arm-linux"
+  }
+
+  orientation vertical
+}
+
+region MacosAgentInstallCode {
+  meta {
+    label zh "macOS 安装代码"
+    label en "macOS Install Code"
+    summary zh "用于 macOS-ARM（aarch64-apple-darwin）主机的 Agent 安装代码；靠 curl 证书锁定认证，不依赖 Ed25519 脚本签名。"
+    tags "admin", "agent-install", "install-code", "macos"
   }
 
   orientation vertical
