@@ -108,6 +108,11 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 - **包管理页**（`/packages`）：四个**分开**的组件（`wist-gateway-stack` / `wist-agentd` / `galaxy-ops` /
   `galaxy-flow`），共用同一个通用面板（`PackagePanel` + `PackageTarget`）；表单只填**产物地址**（+ 可选期望摘要），
   版本从地址实时预览（真解析在中心侧）。
+- **多平台组件一次录满三平台**：`wist-agentd` / `galaxy-ops` / `galaxy-flow` 是**多平台**（一次必须录满
+  macOS-ARM + Linux x86_64 / ARM64 的 musl 版，与网关侧 `install_package.rs` 的 `PLATFORM_*` 是**同一份矩阵**
+  —— agentd 的包按平台分别托管，少一个平台就有主机装不上）；录入页给出三个平台槽位 + GitHub Release
+  一键填充，`POST /api/v1/admin/releases/:component/batch` 少任何一个平台即**整体拒绝、不落记录**
+  （中心侧 `required_platforms`）。`wist-gateway-stack` 是**单制品**包（包名里没有 target-triple），走单条录入。
 - 内核已收进**共享 crate `wist-release`**（`package` 模块）：`sha256` / 来源读取 / 摘要校验 / 内容寻址 id /
   身份解析 / 制品命名，中心与网关**共用一份**。中心侧 `wist-center/src/infra/package.rs` 只剩薄适配
   （别名导出），网关侧 `install_package.rs` 同理。**不含存储/端点/鉴权** —— 那三样各自保留。
@@ -124,9 +129,10 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 
 **仍待做**
 
-- **② Agent 包下发的后端**：中心目前**没有「调网关管理面」的写通路**。要落地得让中心把
-  `wist-agentd` 制品推到选定网关的 `POST /api/v1/admin/agent/install-package`，执行者为
-  `wist-gwlinkd`（与 ① 同一执行者）；还缺「中心怎么拿网关管理凭据（admin token / mTLS）」。
+- **② Agent 包下发的后端**：见 [`agent-package-push-to-gateways.md`](./agent-package-push-to-gateways.md)。
+  结论：**不**让中心直推网关管理面（中心是 pull-based、网关在内网/NAT 后）；改走「gwlinkd 环回把包写进网关包管理」
+  —— 在网关补一个 **loopback-only** 端点，gwlinkd 拉中心的发布计划后环回调用它。
+  **不需要中心持有网关管理凭据**（绕开「admin token / mTLS」这个缺口）。
 - **制品下载鉴权**：`/api/v1/releases/artifact/...` 当前无鉴权。
 
 ## 8. 中心侧页面：包管理 vs 发布
@@ -139,7 +145,25 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 | # | 发什么 | 去向 | 谁决定 | 现状 |
 |---|---|---|---|---|
 | ① 升级安装 | `wist-gateway-stack` / `galaxy-ops` / `galaxy-flow` | 推到网关（宿主侧）升级安装 | **中心** | 走升级计划（建计划 → 批准 → 网关拉取 → gwlinkd 执行），已通；**灰度阶段按阶梯自动生成**（只选阶段数） |
-| ② Agent 包下发 | `wist-agentd` | 推到**gateway 的包管理** | **gateway** | 页面已出，后端待接通 |
+| ② Agent 包下发 | `wist-agentd` | 推到**gateway 的包管理** | **gateway** | 页面已出，**后端设计见 [`agent-package-push-to-gateways.md`](./agent-package-push-to-gateways.md)** |
 
 关键点：**① 平推的组件不含 `agentd`** —— agentd 走 ②，中心只负责把包交给网关，升不升由网关决定。
 因此 `UpgradeTarget`（升级计划目标）只取 ① 的三个组件。
+
+### 8.1 发布执行页与「重试」
+
+「发布执行」（`/release/execute`，`AdminApproveUpgradePlan` / `AdminAdvanceUpgradePlan` /
+**`AdminRetryUpgradePlan`**）：批准进入第一阶段、按闸门人工推进，以及**重试失败项**。
+
+- **重试 = 重派（新建补跑计划）**：`POST /api/v1/admin/rollout-plans/retry`
+  （body `{plan_id, target_ids?}`，省略/为空 = 该计划里所有失败目标）为失败目标新建一份
+  **新 `plan_id`、单阶段、直接放行** 的计划；原计划**原样留作历史**（它是那次尝试的记录）。
+- **为什么不能原地重开**：gwlinkd 对每份计划**只驱一次**（落盘游标 `last_plan_id`，② 连失败也落）——
+  同一 `plan_id` 改状态在网关看来还是那份计划 → 被静默跳过（中心显示待派、网关永不重跑）。
+  新 id 才真的重驱；「需要重来由管理面**重派**计划」也是网关侧注释里的既定口径。
+- **只受理 `failed`（已终结且失败）的计划**：滚动态先「推进」把当前阶段了结（失败也算了结），
+  到终态再重试 —— 否则重派后网关仍可能回头再驱那份原计划一次（重复升级）。
+- 粒度与 gateway-web 对齐：计划级「重试失败项」+ 逐台失败条目的「重试」（`target_ids: [id]`）。
+- 代码：中心 `src/api/rollout.rs`（`build_retry_plan` / `retry_plan_id`）、`src/api/admin_ops.rs`
+  （`admin_retry_upgrade_plan`，含目标存在性校验与失败项筛选）；页面 `UpgradePlanApprovePage` +
+  `UpgradePlanEntries`。

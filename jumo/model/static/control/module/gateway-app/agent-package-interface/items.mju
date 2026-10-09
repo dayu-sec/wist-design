@@ -1,0 +1,71 @@
+// Module: AgentPackageInterface — 网关承接 host 侧 gwlinkd 交付的 agent 包（发布 ②）
+//
+// 刻意**未 `bind`**（与 GwlinkdStatusInterface / LinkRequestInterface / SelfInterface 同口径）：
+// 本端点只绑环回、面向本机常驻，其鉴权沿用「环回 + 不写 `auth none`」的既有处理；
+// 待鉴权口径与 self 面一并定案后再补 bind。
+//
+// **取包由 gwlinkd 完成**（它持 CA-S、是唯一面向中心者），网关**不出网**：gwlinkd 把取到的字节
+// 落到网关可见的本机路径，再环回交付本端点；网关据此按**既有内核**（来源 → 拉取 → 缓存 → 历史）
+// 托管。与 admin「安装包来源」端点（`WistGatewayManagementInterface.AdminSetAgentInstallPackageAddress`）
+// 同内核、同契约（本机绝对路径是一等来源）。与 ① 的区别在「谁决定升级」：① 中心推下去安装；
+// ② 只把包交给网关包管理（升不升由网关决定）。
+// 分层与理由见设计 `edge/center-content-delivery.md`；特性见 `edge/agent-package-push-to-gateways.md`。
+
+message<command> ReceiveAgentPackage {
+  artifacts: List<AgentPackageArtifact>
+  // 审计：谁发起的（中心派计划时记录的操作者）；缺省由网关落默认操作者。
+  requested_by: String?
+}
+
+struct AgentPackageArtifact {
+  meta {
+    label zh "一个平台的 agent 包交付项"
+    label en "Agent Package Artifact"
+    tags "gateway", "agent-package"
+  }
+
+  platform: String
+  // 网关**能取**的来源：gwlinkd 落地的本机绝对路径（一等来源）；网关据此读字节。
+  package_url: String
+  // 中心镜像地址（**provenance/留痕**；网关**不**据此取包，因它不持中心信任）。
+  origin: String?
+  package_sha256: String
+}
+
+struct AgentPackageAccepted {
+  meta {
+    label zh "agent 包已接收"
+    label en "Agent Package Accepted"
+    tags "gateway", "agent-package"
+  }
+
+  packages: List<AgentPackageSlot>
+}
+
+struct AgentPackageSlot {
+  meta {
+    label zh "一个平台的当前包"
+    label en "Agent Package Slot"
+    tags "gateway", "agent-package"
+  }
+
+  platform: String
+  package_url: String
+  package_sha256: String?
+  updated_by: String
+  updated_at: DateTime
+}
+
+interface AgentPackageInterface {
+  meta {
+    label zh "网关 Agent 包下发接口"
+    label en "Gateway Agent Package Interface"
+    summary zh "本机 host 侧常驻（wist-gwlinkd）把中心托管的 agent 包交付给网关托管的环回接口（取包在 gwlinkd、托管在网关）。"
+    tags "gateway", "agent-package", "loopback", "http", "interface"
+  }
+
+  entry ReceiveAgentPackage {
+    actor WistGateway
+    output AgentPackageAccepted
+  }
+}

@@ -26,6 +26,11 @@ detail = package_unavailable: read /Users/…/wist-agentd/target/package/wist-ag
 
 要点：**来源可以是本机路径，但下发给 agent 的永远是网关地址** —— 所以「本地路径」不会漂到别的机器上去。
 
+> **取包分工（见 [`center-content-delivery.md`](./center-content-delivery.md)）**：下表的「来源」是网关的**取包指令**，
+> 但**来源是中心内容**（`https://<中心>`）时，网关**没有中心信任**、拉不动 —— 这类取包应由持 CA-S 的 `wist-gwlinkd`
+> 完成，落地为**本机路径**后再交付网关托管（`package_url`=本机路径、`origin`=中心地址作 provenance）。
+> 故「来源」在分层下的正解是 **content + provenance**：网关的一等输入是内容，能否从某 URL 取不再是它的义务。
+
 ## 3. 方案（四条）
 
 1. **录入即存档 + 历史**。`POST /api/v1/admin/agent/install-package`（已有）在原有行为之外**追加**一条历史记录（内容寻址，`package_id = pkg-<sha256 前 16>`），并**为这个包单独存一份副本**在网关。

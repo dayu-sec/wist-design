@@ -169,6 +169,28 @@ struct GatewayUpgradePlan {
   // 中心**派生**的制品下发地址（镜像后的可下载 URL）。执行器据此取件（gops `--to <url>`）；
   // 缺省 = 没有对应 release 记录，执行器回落用 `to_version`。见设计 edge/gateway-upgrade-and-releases.md。
   artifact_url: String?
+  // 计划动作（`upgrade` / `push-agent-package`）。缺省 = 老中心，按 `upgrade` 处理；
+  // gwlinkd 据此分派执行器：升级走 gops，包下发环回写网关包管理。见设计 edge/agent-package-push-to-gateways.md。
+  action: String?
+  // `artifact_url` 的期望摘要（sha256）。**仅**「agent 包下发」（②）带它；① 升级路径为空。
+  artifact_sha256: String?
+  // 「agent 包下发」（②）的**多平台**制品清单：该版本**全部平台**的地址 + 摘要。
+  // ② 要网关替 **Agent 机队**托管各平台的包（机队平台可能 ≠ 网关自己主机的平台），故用列表；
+  // ① 升级仍用单值 artifact_url（网关本机就一个平台）。见设计 edge/agent-package-push-to-gateways.md。
+  artifacts: List<GatewayUpgradeArtifact>
+}
+
+struct GatewayUpgradeArtifact {
+  meta {
+    label zh "网关升级制品（单平台）"
+    label en "Gateway Upgrade Artifact"
+    summary zh "「Agent 包下发」（②）里的一个平台制品：平台（target-triple）+ 中心派生地址 + 期望摘要。"
+    tags "gateway", "upgrade", "artifact"
+  }
+
+  platform: String
+  artifact_url: String
+  artifact_sha256: String
 }
 
 // 升级结果回执（字段对齐 agentd / gops 的 upgrade.json）。

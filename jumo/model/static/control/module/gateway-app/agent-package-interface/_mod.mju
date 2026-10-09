@@ -1,0 +1,11 @@
+module<interface> GatewayApp.AgentPackageInterface {
+  meta {
+    label zh "网关 Agent 包下发接口"
+    label en "Gateway Agent Package Interface"
+    summary zh "WistGateway 容器承接**本机 host 侧常驻**（wist-gwlinkd）把**中心托管的 wist-agentd 包**写进网关**包管理**的**环回**接口：gwlinkd 拉取中心派下的「agent 包下发」计划后，环回 POST 到本端点，网关把包拉到本地并落内容寻址历史 —— **升不升由网关决定**（发布 ② 只交付包）。"
+    tags "gateway", "agent-package", "loopback", "http", "interface"
+  }
+
+  layer Application
+  provides AgentPackageInterface by protocol<http>
+}

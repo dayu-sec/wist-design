@@ -11,6 +11,7 @@ subsystem WistGateway {
   uses module Control.GatewayApp.UserFacingInterface, Control.AgentApp.FacingInterface, Control.GatewayApp.SelfInterface
   uses module Control.GatewayApp.LinkRequestInterface
   uses module Control.GatewayApp.GwlinkdStatusInterface
+  uses module Control.GatewayApp.AgentPackageInterface
   uses module Control.Agent.Enrollment, Control.Agent.Registration, Control.Agent.Identity, Control.Agent.Credential, Control.Agent.Status
   uses module Control.Agent.Certificate
   uses module Control.Agent.Command
