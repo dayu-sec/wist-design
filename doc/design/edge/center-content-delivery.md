@@ -99,6 +99,9 @@ sequenceDiagram
 ## 7. 落地影响
 
 - **②**（`agent-package-push-to-gateways.md`）：取包改 gwlinkd —— 已落地。
+- **① 网关升级**：已落地（gwlinkd 0.13.3）。`gops` 不持中心信任，直接 HEAD 中心制品地址在私有 CA 下
+  会报 `error sending request`；驱动先用 gwlinkd 的制品客户端取到 `<state>/artifacts/`，
+  再把**本机路径**交给 `gops prj upgrade --to <path>`（取件 / 摘要失败先落可读失败并回执）。
 - **知识库包**：已落地（2026-10-18），同一条通道：中心把 `wist-knowledge` 当单制品发布，
   计划动作 `push-knowledge-package`，gwlinkd 取包（含 `.sig`）→ 环回交付网关托管；
   见 [`knowledge-package-push-to-gateways.md`](./knowledge-package-push-to-gateways.md)。
