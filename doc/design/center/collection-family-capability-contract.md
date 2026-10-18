@@ -136,7 +136,8 @@
 
 值域校验这个动作必须保留（理由见 §5.4），但它的**位置**不是网关源码：表是知识库数据，网关只是装载者与校验者。
 
-**现状（待移除）**：今天是 `wist-gateway/src/app/content.rs` 里的三组常量——
+**现状**：运行期词表已**从知识库装载**（`catalog.toml` 的 `[[families]]`，§12.1 第 1 步已完成）；
+下面三组常量只剩**旧包回落**的作用（包还没有 `[[families]]` 时用它，避免升级即拒载）：
 
 ```rust
 pub const FAMILIES: &[&str] = &[
@@ -153,7 +154,8 @@ const LINUX_ONLY_FAMILIES: &[&str] = &[
 ];
 ```
 
-它们是词表的**唯一副本**，所以每次追加都得重新编译、发版、滚机队。这是 §5.2 说的债，不是设计意图。校验行为本身是对的：
+它们是旧包里的**唯一副本**，所以每次追加都得重新编译、发版、滚机队——这是 §5.2 说的债。
+带 `[[families]]` 的包不再依赖它们。校验行为本身是对的：
 
 - 装载知识库时**拒绝未知面**（面名写错不能静默收下）；
 - 拒绝平台不适用的单元；
@@ -375,6 +377,8 @@ multiline = "none"
 2. 删除/废弃能力：**知识包先退** → 再降后端；
 3. 普通内容变更：知识包直接激活/回退，后端不动；
 4. 知识包里的新面必须先进入词表，否则网关会拒载（目标态下词表随知识包走，无额外步骤）。
+5. **带 `[[families]]` 的知识包必须先升网关**：旧网关的 `CatalogFile` 是 `deny_unknown_fields`，
+   遇到不认识的 `families` 会直接拒载整包。顺序：网关（认识词表）→ 知识包 → 激活。
 
 ---
 
@@ -449,13 +453,13 @@ wist-verify collect \
 
 | # | 改动 | 位置 | 状态 |
 |---|---|---|---|
-| 1 | 面词表进知识库（`[[families]]`：`id` / `platforms` / `semantics_version` / `name_*` / `summary_*`） | `wist-knowledge` | 待做 |
-| 2 | 网关从词表装载 `families`，替代 `FAMILIES` 常量 | `wist-gateway/src/app/content.rs` | 待做 |
-| 3 | 平台归属从常量改为词表字段 | 同上 | 待做 |
-| 4 | 词表追加式校验（拒删除 / 改名 / 复用） | 同上 | 待做 |
-| 5 | 模型 `families.mju` 与词表双向一致校验 | `wist-design` / CI | 待做 |
-| 6 | 网关暴露 `families` 元数据 | `wist-gateway/src/api/content_ops.rs` | 待做 |
-| 7 | Web 改为消费 `families` 元数据 | `wist-gateway-web`（替换 `collectionFamilyText.ts`） | 待做 |
+| 1 | 面词表进知识库（`[[families]]`：`id` / `platforms` / `semantics_version` / `name_*` / `summary_*`） | `wist-knowledge` | 已完成 |
+| 2 | 网关从词表装载 `families`，替代 `FAMILIES` 常量 | `wist-gateway/src/app/content.rs` | 已完成（常量为旧包回落） |
+| 3 | 平台归属从常量改为词表字段 | 同上 | 已完成 |
+| 4 | 词表追加式校验（拒删除 / 改名 / 复用） | 同上 + `api/knowledge_ops.rs` | 已完成（激活时拒；回滚除外） |
+| 5 | 模型 `families.mju` 与词表双向一致校验 | `wist-design` / 网关测试 | 已完成 |
+| 6 | 网关暴露 `families` 元数据 | `wist-gateway/src/api/content_ops.rs` | 已完成 |
+| 7 | Web 改为消费 `families` 元数据 | `wist-gateway-web`（删除硬编码文案表） | 已完成 |
 | 8 | 能力 manifest + 稳定 ID | `wist-contracts` | 待做 |
 | 9 | agentd 上报 capabilities（接上已存在但零引用的 `capability_report.rs`） | `wist-agentd` / `wist-api` | 待做 |
 | 10 | 知识包 `requires` + 兼容性预检 | `wist-knowledge` 打包脚本、`wist-gateway/src/app/knowledge.rs` | 待做 |
@@ -468,22 +472,22 @@ wist-verify collect \
 
 三步**互不阻塞**，且都只改「承载」不改协议的值，因此可灰度、可回退。
 
-**第 1 步：词表数据化（消掉网关发版）**
+**第 1 步：词表数据化（消掉网关发版）** —— ✅ 已完成（2026-10-18）
 
-- 知识库新增 `[[families]]` 词表块；
-- 网关装载时以词表替代 `FAMILIES`，`MACOS_ONLY` / `LINUX_ONLY` 改为词表 `platforms` 字段；
-- 加追加式校验（删除 / 改名 / 复用即拒）；
-- 模型与词表双向一致由 CI 守住。
+- ✅ 知识库新增 `[[families]]` 词表块（`catalog.toml`，18 个面 + 中英文案 + 平台归属）；
+- ✅ 网关装载时以词表替代 `FAMILIES`，平台归属改读词表 `platforms`（常量仅作旧包回落）；
+- ✅ 追加式校验（删除 / 改名 / 复用即拒，回滚除外）；
+- ✅ 模型与词表一致由测试钉住（`the_knowledge_vocabulary_matches_the_model`）。
 
-验收：加一个面，网关不发版。
+验收：加一个面，网关不发版。✅ 已达成（面只在 `[[families]]` 里声明，网关代码不动）。
 
-**第 2 步：文案数据化（消掉 Web 发版）**
+**第 2 步：文案数据化（消掉 Web 发版）** —— ✅ 已完成（2026-10-18）
 
-- 词表带 `name_zh` / `name_en` / `summary_zh` / `summary_en`；
-- 网关在 `GET /api/v1/admin/content` 暴露 `families`；
-- Web 删除 `collectionFamilyText.ts`，缺元数据时回落原始 ID。
+- ✅ 词表带 `name_zh` / `name_en` / `summary_zh` / `summary_en`；
+- ✅ 网关在 `GET /api/v1/admin/content` 暴露 `families`；
+- ✅ Web 删除硬编码文案表，从接口取词；缺项回落成面 ID（旧网关不返回时也不崩）。
 
-验收：改文案不发版。
+验收：改文案不发版。✅ 已达成（文案只改 `catalog.toml`，网关与前端均不动）。
 
 **第 3 步：能力上报（消掉「网关猜能力」）**
 
