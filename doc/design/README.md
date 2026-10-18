@@ -10,7 +10,7 @@
   `wist-exec` / 本地状态 / 故障处理 / 资源发现（agentd 专属设计文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
 - `center/`
-  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、发现上报的模式与规则、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板（含采集内容与工作总览·通俗版）、Agent 工作体系交付计划、资产发现数据流
+  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、发现上报的模式与规则、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板（含采集内容与工作总览·通俗版）、Agent 工作体系交付计划、资产发现数据流、采集面与采集能力契约
 - `telemetry/`
   metrics 集成、discovery、resource mapping、uplink 设计、数据防丢失与 Batch A 规格（logs file input / macOS 采集文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
@@ -57,3 +57,4 @@
 34. [foundation/api-seam-inventory.md](./foundation/api-seam-inventory.md)
 35. [foundation/config-and-state-layout.md](./foundation/config-and-state-layout.md)（配置与运行数据的组织模式：四类内容 / 落点 / 声明 / 加载 / 写入）
 36. [foundation/layered-config-recipe.md](./foundation/layered-config-recipe.md)（现场态做法：toml 模板 → 声明 `toml` + `.env` 值）
+37. [center/collection-family-capability-contract.md](./center/collection-family-capability-contract.md)（采集面的不变量与护栏分层、能力契约、知识库承载、校验链、发布/回退、从 4 个仓收敛到 1 个的迁移路径与新增面的标准流程）

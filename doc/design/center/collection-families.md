@@ -2,7 +2,14 @@
 
 > **权威来源**：模型 `jumo/model/static/control/module/agent/content/families.mju` 的
 > `variant CollectionFamily`。本文是它的**可读视图 + 维护规矩**；值集与语义以模型为准。
-> 网关的运行期白名单（`wist-gateway` 的 `FAMILIES`）有测试与模型**逐字对照**，不一致会直接红。
+> 网关运行期的面词表有测试与模型**逐字对照**，不一致会直接红；今天这份表还是网关里的
+> `FAMILIES` 常量，目标态是知识库数据（`[[families]]`）。
+>
+> 注意：**面是内容，不是代码**。上面两处目前都是手写元数据，目标态是词表进知识库、
+> 网关从词表装载、模型与词表由 CI 双向校验，新增面不发网关与 Web（见契约文档 §5.2、§12.1）。
+>
+> 新增面的完整流程（面元数据、能力契约、校验链、发布与回退）见
+> [`collection-family-capability-contract.md`](./collection-family-capability-contract.md)。
 
 ## 1. 面是什么，不是什么
 
@@ -33,10 +40,12 @@
    历史数据里那个值会变成"不存在的面"，按面统计与回溯都会断。
 2. **要改语义就出新面**：旧面保留（历史仍可解释）、标 `deprecated` 退场。
    （**退场机制尚未实现** —— 见 §4。）
-3. **加面要同时改两处**：模型 `families.mju` + 网关白名单 `FAMILIES`。
-   两侧不一致会被测试抓（`the_family_closed_set_matches_the_model`）。
+3. **加面只动词表。** 目标态下词表是知识库数据（`[[families]]`），模型由词表生成或由 CI
+   双向比对；现状需同时改模型 `families.mju` + 网关常量 `FAMILIES`，不一致会被测试抓
+   （`the_family_closed_set_matches_the_model`）。收敛路径见契约文档 §12.1。
 
-**谁校验**：网关装载采集目录时按白名单拒未知面 —— 面名写错会**报错**，不会被静默收下。
+**谁校验**：网关装载采集目录时按词表拒未知面 —— 面名写错会**报错**，不会被静默收下；
+词表本身还要过**追加式校验**（不得删除 / 改名 / 复用已退场 ID）。
 
 ## 3. 18 个面一览
 
@@ -79,6 +88,7 @@
 
 ## 5. 相关文档
 
+- [`collection-family-capability-contract.md`](./collection-family-capability-contract.md) —— 面元数据、采集能力契约、校验链、发布/回退与新增流程
 - `jumo/model/static/control/module/agent/content/families.mju` —— **权威**（闭集定义与规矩）
 - `agent-work-templates.md` —— 模板 = 选哪些面；**面就绪度** = 授权闸门
 - `macos-security-audit-log-sources.md` —— 各面在 macOS 上的典型安全事件与来源清单
