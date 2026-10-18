@@ -87,6 +87,7 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 | `wist-gateway-stack` | `wist-gateway-stack-<version>.tar.gz` | 无（git archive，顶层是 `sys/…`） | **文件名**（目录名读不出） |
 | `galaxy-ops` | `gops-<version>-<triple>.tar.gz`（文件名待确认） | 一层同名目录（或同名二进制） | 包内目录名（无则回落文件名） |
 | `galaxy-flow` | `gx-<version>-<triple>.tar.gz`（文件名待确认） | 一层同名目录（或同名二进制） | 包内目录名（无则回落文件名） |
+| `wist-gwlinkd` | `wist-gwlinkd-<version>-<triple>.tar.gz` | 一层同名目录 | 包内目录名（无则回落文件名） |
 
 所以身份解析**先看包内首条目目录名、读不出再回落来源文件名**，且**不写死组件名**——否则 gateway-stack
 包永远读不出、加一类包就得改一次代码。
@@ -100,8 +101,8 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 - **从包里读身份 / 版本不再手输**（`read_package_identity`）：解 gzip+tar 取首条目目录名，**不写死组件名**
   （以「已知架构名」定位 target-triple、以「像版本号的段」定版本起点）切出 `(version, arch)`；目录名读不出
   （gateway-stack 包顶层是 `sys/…`）则**回落用来源文件名**。发布的 `version` **可选**：不传就用解析值，
-  传了才与解析值**核对**（归一化 `v` 后不符 → 400）；两边都解析不出 → 400。覆盖四类包：
-  agentd / gateway-stack / galaxy-ops / galaxy-flow（各自独立）。
+  传了才与解析值**核对**（归一化 `v` 后不符 → 400）；两边都解析不出 → 400。覆盖五类包：
+  agentd / gateway-stack / galaxy-ops / galaxy-flow / gwlinkd（各自独立）。
 - **落盘 / 下发用来源原名**：镜像后的文件名取来源末段（`galaxy-flow-…-musl.tar.gz`），URL 末段就是原名、
   人看着清楚、下载即得可用文件。内容寻址不再靠文件名，而在 DB：`package_sha256` +
   `(component, version, sha)` 幂等去重；名字取不到 / 危险（`.` `..`）则回落 `{component}-{version}.bin`。
@@ -144,11 +145,48 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 
 | # | 发什么 | 去向 | 谁决定 | 现状 |
 |---|---|---|---|---|
-| ① 升级安装 | `wist-gateway-stack` / `galaxy-ops` / `galaxy-flow` | 推到网关（宿主侧）升级安装 | **中心** | 走升级计划（建计划 → 批准 → 网关拉取 → gwlinkd 执行），已通；**灰度阶段按阶梯自动生成**（只选阶段数） |
+| ① 升级安装 | `wist-gateway-stack` / `galaxy-ops` / `galaxy-flow` / `wist-gwlinkd` | 推到网关（宿主侧）升级安装 | **中心** | 走升级计划（建计划 → 批准 → 网关拉取 → gwlinkd 执行），已通；**灰度阶段按阶梯自动生成**（只选阶段数） |
 | ② Agent 包下发 | `wist-agentd` | 推到**gateway 的包管理** | **gateway** | 页面已出，**后端设计见 [`agent-package-push-to-gateways.md`](./agent-package-push-to-gateways.md)** |
 
 关键点：**① 平推的组件不含 `agentd`** —— agentd 走 ②，中心只负责把包交给网关，升不升由网关决定。
-因此 `UpgradeTarget`（升级计划目标）只取 ① 的三个组件。
+因此 `UpgradeTarget`（升级计划目标）取 ① 的四个组件（含 `wist-gwlinkd`）。
+
+### 8.0 gwlinkd 自身升级（自更新）
+
+gwlinkd 是**宿主侧常驻**，升级它不能靠 gops 工程，也不该让中心直连：计划里 `component = "wist-gwlinkd"`
+时，gwlinkd **自己**完成安装（进程内取制品 → 摘要 / 架构护栏 → 原子覆盖服务定义指向的二进制），
+然后退出让服务管理器拉起：
+
+> 摘要来源：中心为 `component = "wist-gwlinkd"` 的 ① 升级计划**带上 `artifact_sha256`**
+> （其余 ① 组件仍保持「不带摘要」的既有行为）；gwlinkd 覆盖前校验，失败就拒装。
+
+```mermaid
+sequenceDiagram
+    participant C as 中心
+    participant L as gwlinkd（旧版本）
+    participant S as systemd / launchd
+    participant N as gwlinkd（新版本）
+    C-->>L: GET upgrade-plan（component=wist-gwlinkd，artifact_url）
+    L->>L: 取件 / 校验 / 原子覆盖自身
+    L-->>C: （不在这里回执）
+    L->>S: 写 restarting 后退出
+    S->>N: Restart=always / KeepAlive 拉起
+    N->>N: 用编译版本核对 to_version
+    N-->>C: POST upgrade-result（done / failed）
+```
+
+前置（缺一即**发请求前**失败）：① 已装服务定义；② 服务定义里的二进制 = 当前进程；
+③ 运行用户对二进制**目录**可写（原子 rename 需要目录可写）。
+
+**不做自动回滚**：新二进制起不来时，旧版备份在 `state_dir/tool-backups/`，人工恢复后重启服务；
+中心会因收不到回执停在「已下发」，需人工重派。
+
+因此安装布局把真实二进制放 `/usr/local/lib/wist-gwlinkd/wist-gwlinkd`（**目录与文件都归运行用户**），
+`/usr/local/bin/wist-gwlinkd` 只是符号链接；`id -u == 0` 的安装两者本来就都可写。
+旧部署（root 拥有 `/usr/local/bin` + 非 root 运行）重跑一次中心「只装 gwlinkd」命令即完成迁移。
+
+> **首次启用自更新要先换本体**：旧版 gwlinkd 不认识 `component = "wist-gwlinkd"`（会落到 gops 并失败）。
+> 先重跑「只装 gwlinkd」命令装上新版（同时完成布局迁移），之后才能用升级计划。
 
 ### 8.1 发布执行页与「重试」
 
@@ -167,3 +205,41 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 - 代码：中心 `src/api/rollout.rs`（`build_retry_plan` / `retry_plan_id`）、`src/api/admin_ops.rs`
   （`admin_retry_upgrade_plan`，含目标存在性校验与失败项筛选）；页面 `UpgradePlanApprovePage` +
   `UpgradePlanEntries`。
+
+### 8.2 建计划时的「目标」从哪来（与 Agent 升级同一口径）
+
+两个发布面板（① 升级安装 / ② Agent 包下发）不再让人逐个勾网关，**目标自动确定**：
+
+| 环节 | 口径 | 理由 |
+|---|---|---|
+| 机队 | 中心状态视图 = **已接入并上报过**、且**未归档**的网关 | 「没成功接入」的实例留在实例页「待接入」组里 —— 派活给它只会永不命中；归档的是运维已经收起来的 |
+| 目标 | 机队里**排除明确离线**（`status = offline`）的，其余全部自动成为目标，按 `gateway_id` 排序 | 与 gateway-web `selectUpgradeTargets` 同一条：离线的拉不到计划，排进金丝雀 / 批次只会把阶段卡死（永远不了结） |
+| 「未知」怎么办 | **保留**（只排 `offline`，不要求 `online`） | 未知 ≠ 离线：一次状态字段异常不能把整队目标筛空 |
+| 示例数据 | 机队或版本只要有一头回落到内置示例 → **红字告警 + 禁用提交** | 示例里的 `gateway_id` / 版本在中心并不存在，建出来的计划要么被拒、要么永远解析不出制品 |
+| 状态条标识 | 按接口真实 `source` 计数（`示例数据 ×N` / `自动刷新 5s`） | 旧标识按「浏览器有没有手填 token」判：dev 代理在服务端补 token 时会把**真机队谎报成示例**，反向也会（示例说成真的） |
+
+代码：`wist-center-web` `src/components/gatewayUpgradeTargets.ts`（选目标，纯函数）、
+`GatewayTargetBlock.tsx`（两个面板共用的目标块：机队清单 / 被排除项 / 示例告警）、
+`UpgradePlanCreatePanel.tsx` / `AgentPackagePushPanel.tsx`、`AppStatusBar.tsx`（数据来源标识）。
+
+### 8.3 单台手动升级（网关详情页，生成 curl | bash）
+
+`/gateways/:id` 新增「手动升级」面板：选 `wist-gwlinkd`（gwlink）或 `wist-gateway-stack`，
+填 / 选版本命名后，中心生成一条**可在网关宿主执行的一行命令**（不建计划、不下发任务）：
+
+```bash
+curl -fsSLk '<center>/api/v1/gateway/upgrade-script?gateway_id=..&component=..&version=..&expires=..&signature=..' | bash
+```
+
+- **管理面**：`POST /api/v1/admin/gateways/{gateway_id}/upgrade-script`（Admin Bearer）返回
+  `command` + 预览用 `script`。URL 里**不塞 admin token**；`expires + HMAC-SHA256` 短命签名
+  （默认 30 分钟）绑定网关 / 组件 / 版本。
+- **网关面**：`GET /api/v1/gateway/upgrade-script` 验签 + 验过期后直接回 shell 脚本
+  （`curl ... | bash` 打开的就是它）。
+- **命名**：`gwlink` / `gateway-stack` 是 `wist-gwlinkd` / `wist-gateway-stack` 的别名；
+  版本可带 `v` 前缀，发布记录与请求两边归一后匹配。
+- **gwlinkd**：复用首次安装的下载 / 摘要 / 架构 / 服务安装逻辑，但制品固定为请求的版本；
+  脚本仍要求已部署的 gops 工程（要 `gops sys localize` 重渲配置）。
+- **gateway-stack**：脚本按平台下载指定版本 tarball、校验 sha256，再执行
+  `gops prj upgrade --to <本地制品> --on-failure rollback-all --json`（与 gwlinkd 的升级驱动同一命令）。
+- **不依赖中心推送**：命令可离线保存（在有效期内）/ 执行时机由运维控制。

@@ -14,7 +14,7 @@
 
 | # | 发什么 | 去向 | 谁决定 | 现状 |
 |---|---|---|---|---|
-| ① 升级安装 | `wist-gateway-stack` / `galaxy-ops` / `galaxy-flow` | 推到网关（宿主侧）升级安装 | **中心** | 已通（升级计划 → 批准 → 网关拉取 → gwlinkd 执行） |
+| ① 升级安装 | `wist-gateway-stack` / `galaxy-ops` / `galaxy-flow` / `wist-gwlinkd` | 推到网关（宿主侧）升级安装 | **中心** | 已通（升级计划 → 批准 → 网关拉取 → gwlinkd 执行；gwlinkd 自身为自更新 + 重启后核对） |
 | ② Agent 包下发 | `wist-agentd` | 推到**网关的包管理** | **gateway** | 页面已出，**后端待接通** |
 
 本设计补 **② 的后端**，两个预期：

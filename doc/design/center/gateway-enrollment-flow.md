@@ -1,4 +1,4 @@
-# WarpGateway 接入 WarpInsightCenter 完整流程（下载 / 安装 / init / 注册 / 运行期）
+# WarpGateway 接入 WistCenter 完整流程（下载 / 安装 / init / 注册 / 运行期）
 
 > ⚠️ **部分被取代**：**运行期凭据**部分（`RUNTIME_TOKEN` bearer、`credentials:renew`、bearer 鉴权）
 > 已由 [`gateway-secure-registration.md`](gateway-secure-registration.md) 推翻 —— 改为**客户端证书 mTLS**（`CA-G` 单开、
@@ -15,7 +15,7 @@
 | 角色 | 说明 |
 |---|---|
 | CustomerServiceEngineer（管理员） | 在 Center 创建网关实例、获取安装材料、从 admin 页面复制 `setup_token` |
-| WarpInsightCenter（中心） | 创建实例、签发引导 token、置备、签发运行期凭据、接收状态 |
+| WistCenter（中心） | 创建实例、签发引导 token、置备、签发运行期凭据、接收状态 |
 | WarpGateway（网关 / GW-001） | 部署在边缘的容器实例；首次运行自生成身份，置备后注册并周期上报 |
 | gateway-ins | 网关实例内部运行的上报/注册组件（消费 config.toml 的 `[enrollment] token`） |
 
@@ -33,7 +33,7 @@
 ```mermaid
 sequenceDiagram
     participant Admin as CustomerServiceEngineer
-    participant Center as WarpInsightCenter
+    participant Center as WistCenter
     participant GW as WarpGateway(GW-001)
 
     rect rgb(240,244,252)
@@ -202,6 +202,29 @@ POST /api/v1/gateway/register
 | `/api/v1/gateway/register` | POST | `enrollment_token = regist` | 注册 + 签发运行期凭据 |
 | `/api/v1/gateway/status` | POST | `Bearer runtime` | 状态上报 |
 | `/api/v1/gateway/credentials:renew` | POST | `Bearer runtime` | 凭据轮换 |
+| `/api/v1/admin/gateways/{id}/archive` | POST | admin bearer | 归档 / 取消归档（body `{archived}`） |
+
+> 列表类读端点（`/admin/gateways`、`/admin/gateways/status`、`/admin/gateways/instances`）默认
+> **不带已归档**的网关；要连归档的一起看，加 `?include_archived=true`。
+
+## 6.1 归档：把不再用了的离线网关收起来
+
+死掉的网关会一直挂在态势与实例总览里（它们只是**离线**，记录还在），运维没有「这条不用管了」的表达。
+归档补上这一格，但**刻意不是删除**：
+
+| 决策点 | 取值 | 理由 |
+|---|---|---|
+| 语义 | **标记**（`gateways.archived_at`） | 状态、历史、生命周期事件、发布计划条目全留；审计与回查不因「收起来」而断 |
+| 隐藏范围 | 态势（`/admin/gateways/status`）、实例总览（`.../instances`）、聚合计数（`/admin/gateways`）默认隐藏 | 三处口径必须一致，否则「计数 3 台但只看到 2 台」 |
+| 看回来 / 恢复 | `?include_archived=true` + `{"archived": false}` | 可逆；恢复入口在实例页的「显示已归档」开关 |
+| 谁能归档 | **只允许离线**（在线 → 409） | 归档是「这台不用了」；把**在线**的网关藏起来只会让故障更难看见，要收先停 |
+| 自动回归 | 换证注册（`update_gateway_credential`）或重新上报 `online` 时清空 | 「回来了就回到正常」，不让运维记得手动取消归档；`offline` 方向的上报**不**解除（半死的网关不该自己冒回来） |
+| 前端入口 | 实例页「已运行实例」组的离线卡片给「归档」，已归档的卡片给「取消归档」+ 虚框弱化 | 待接入（Provisioned / Initializing）不给归档入口：还没跑起来，先别收 |
+
+代码：`wist-center` `src/infra/store.rs`（`StoredGateway.archived_at` + `set_gateway_archived` + 自动回归）、
+`src/api/admin_ops.rs`（`admin_set_gateway_archived`、`IncludeArchivedQuery`）、
+`docker/initdb/01_schema.sql`（`archived_at` 幂等补列）；
+`wist-center-web` `src/components/GatewayInstanceList.tsx`（归档 / 取消归档 + 「显示已归档」开关）。
 
 ## 7. 相关文档
 

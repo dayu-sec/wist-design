@@ -124,6 +124,11 @@ Phase 1 把它们填上（gwlinkd 从自述面取到即原样上报）。**量�
 1. **网关仍不直连中心**：上报由 gwlinkd 代劳（CR-003 R1 不变）。
 2. **准确值来自网关进程内**：`health` / 机队 / 进程资源都在网关侧算，gwlinkd 只搬运 + 派生 `health`。
 3. **量不出即 `null`**，不用 0 冒充（页面显示「—」）；VM 同口径：除 `up`/`info`/`health` 外**有值才推**。
-4. **自述面限环回**：admin 读口是等价计算的另一入口，不改变环回面的私密性。
+4. **自述面限「本机」**：准入 = **环回 ∪ 容器默认网关（容器里宿主那一跳）∪ `[server] self_face_allow`**
+   —— 判据实现与理由见 `wist-gateway/src/infra/local_peer.rs`（`LocalPeers`）。少了这条时，
+   **容器部署**下 gwlinkd 拉自述面会全线 403：`journalctl` 里 `SelfStateFailed` / `LinkdStatusPushFailed`，
+   而网关 Web 报「未检测到 gwlinkd 心跳」（进程其实活着）。dev 态（macOS）从不暴露，因为
+   `dev/forward-443.py` 把对端变成了 `127.0.0.1`。排障入口：网关启动日志 `event=LocalHostPeers …`。
+   admin 读口是等价计算的另一入口，不改变环回面的私密性。
 5. **中心「在线」带陈旧度**：`online = status == "online" && (now − last_seen_at) ≤ 90s`（= 3× 上报节奏，与网关侧 linkd-status 失联阈值同口径）。
    只看状态字符串会让 gwlinkd 停报（崩溃/停服）后**永远显示在线**（它只在活着时上报、从不发 `offline`）—— 与网关侧口径不一致。
