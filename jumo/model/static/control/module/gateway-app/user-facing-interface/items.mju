@@ -76,6 +76,9 @@ struct GatewayLinkdStatusView {
   gateway_id: String
   instance_id: String
   version: String
+  // 宿主依赖工具版本（空串 = 未安装 / 探测失败）。
+  gops_version: String
+  gx_version: String
   center_endpoint: String
   state: String
   credential_expires_at: String

@@ -60,6 +60,9 @@ struct GatewayRuntimeStatus {
   // 由网关状态上报带来；中心据此知道「这个网关对外是哪个域名」。
   public_base_url: String?
   version: String?
+  // 宿主侧依赖工具版本（gops / gx，装在 `$HOME/bin`，由 gwlinkd 探测上报）。
+  gops_version: String?
+  gx_version: String?
   status: String?
   health: String?
   memory_bytes: Int?
@@ -228,6 +231,10 @@ message<command> ReportGatewayStatus {
   // 可选 —— 老网关不带这个键，中心侧 serde default 兜底。
   public_base_url: String?
   version: String
+  // 宿主侧依赖工具版本（gops / gx，装在 `$HOME/bin`，由 gwlinkd 探测上报）。
+  // 可选 —— 老网关不带这两个键，中心侧 serde default 兜底。
+  gops_version: String?
+  gx_version: String?
   // 在线/离线：`online` / `offline`（中心按 `== "online"` 计数与展示，别用 `running`）。
   status: String
   health: String

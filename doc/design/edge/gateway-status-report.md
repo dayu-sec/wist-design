@@ -30,6 +30,8 @@
 |---|---|---|---|
 | `gateway_id` | 网关实例名（调用方回显） | 请求参数 | 已有 |
 | `version` | **网关容器**版本 | `CARGO_PKG_VERSION` | 已有 |
+| `gops_version` | 宿主依赖工具 `gops` 版本（装在 `$HOME/bin`） | gwlinkd 探测（`gops --version`） | 已有 |
+| `gx_version` | 宿主依赖工具 `gx` 版本（装在 `$HOME/bin`） | gwlinkd 探测（`gx --version`） | 已有 |
 | `public_base_url` | 网关**对外域名**（对外基址） | 管理面「对外地址」‖`[server] public_base_url` | **Phase 4** |
 | `collected_at` | 采集时刻 | | 已有 |
 | `store_healthy` | 存储能否查 | store `list_agents` | 已有 |
@@ -60,6 +62,11 @@ Phase 1 把它们填上（gwlinkd 从自述面取到即原样上报）。**量�
 数据面（`ingest_accepted_total` / `ingest_rejected_total` / `last_ingest_at`）/ 主机（`memory_total_bytes` / `load_1m|5m|15m` /
 `disk_usage_percent` / `disk_total_bytes` / `disk_available_bytes`），另加原有的 `cpu_percent` / `memory_bytes`。
 
+**宿主依赖工具版本**（`gops_version` / `gx_version`）：网关容器里没有这两个工具，只有宿主侧 gwlinkd 能探测
+（`$HOME/bin` 优先，其次配置里的升级执行器 / PATH）。gwlinkd 把探测结果随状态上报带给中心，中心落库并在
+网关详情展示 —— 「这台网关依赖的 gops / gx 是什么版本」不必登机器看。探测不到（未安装 / 执行失败）为 `None`，
+不假装有值。
+
 **网关对外域名**（`public_base_url`）：网关**自己才知道**这个值（管理面「对外地址」优先、未设回落
 `[server] public_base_url`），自述面带上它 → gwlinkd 随 **注册**（`RegisterGateway`）与**周期状态上报**
 （`ReportGatewayStatus`）转带给中心；中心落库（`gateways.public_base_url`）并在网关列表展示「域名」。
@@ -85,6 +92,7 @@ Phase 1 把它们填上（gwlinkd 从自述面取到即原样上报）。**量�
 |---|---|---|
 | `gateway_up` | `status` | online → 1，否则 0 |
 | `gateway_info{version}` / `gateway_health{health}` | `version` / `health` | info-style，恒 1 |
+| `gateway_gops_info{gops_version}` / `gateway_gx_info{gx_version}` | 宿主依赖工具版本 | info-style，有值才推 |
 | `gateway_memory_bytes` / `gateway_cpu_percent` | 进程资源 | gauge |
 | `gateway_uptime_seconds` | `uptime_seconds` | gauge |
 | `gateway_agent_count` / `gateway_online_agents` / `gateway_offline_agents` | 机队 | gauge |

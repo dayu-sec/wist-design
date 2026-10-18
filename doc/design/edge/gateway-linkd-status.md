@@ -56,6 +56,8 @@ gwlinkd 自报（snake_case；两侧各有一份**同形状的键集序列化测
 | `gateway_id` | gwlinkd 绑定的中心实例名（配置里的 `gateway_id`） |
 | `instance_id` | 本次运行的实例标识（`<gw>/inst-…`；重启稳定） |
 | `version` | gwlinkd 版本（`CARGO_PKG_VERSION`） |
+| `gops_version` | 宿主依赖工具 `gops` 版本（`$HOME/bin`；未安装 / 探测失败则不传该键） |
+| `gx_version` | 宿主依赖工具 `gx` 版本（同上） |
 | `center_endpoint` | 当前接入的中心（未接入时为空） |
 | `state` | `WaitingLinkRequest` / `Linked` / `Degraded`（见下；`Linking` 为**保留**态，当前不产出） |
 | `credential_expires_at` | 客户端证书到期时刻（未持证为空） |
@@ -125,8 +127,8 @@ gwlinkd 是**宿主侧、与网关容器分立**的常驻进程，有自己的�
     + 明细（版本 / 存储健康 / 已登记 Agent 数 / 数据面上送开关 / 最近错误，走 admin 面的自述读口）。（状态 → 趋势 → 明细）
     这正是 gwlinkd 上报中心的那份值；**页面上的 gwlinkd `version` 是 gwlinkd 自己的，两者不是一回事**。
   - **② 接入代理（gwlinkd）**：状态卡 + **心跳轨迹**（`LinkdHeartbeatTrend`：状态条每格一分钟、
-    缺格 = 那分钟没心跳；心跳间隔 sparkline）+ 明细（版本 / 实例 / 中心 / 最近心跳 / 证书到期 / 最近上报中心），
-    `last_error` 非空时予提示。当前拍已失联时更要看轨迹（那正是「什么时候掉的」）。
+    缺格 = 那分钟没心跳；心跳间隔 sparkline）+ 明细（版本 / 实例 / 中心 / 最近心跳 / 证书到期 / 最近上报中心 /
+    **宿主依赖工具 gops、gx 版本**），`last_error` 非空时予提示。当前拍已失联时更要看轨迹（那正是「什么时候掉的」）。
   - 两层**各占一个 tab**（同时只展开一层，免得两块长明细把页面拉成长龙；两个 panel 都挂载，
     切回去不重取数）。二者**数据来源不同**：① 在 gwlinkd 挂掉时仍可读（网关自己答），
     ② 只在 gwlinkd 活着时新鲜 —— 分 tab 但仍同屏可切。
