@@ -21,6 +21,11 @@ center 其实**已经有**发布与升级的全套件，但**镜像下来的制�
 于是运维要么手输一个远端/本机路径（会漂到别的机器上，与 `agent-upgrade-and-packages.md` §1 同款坑），
 要么依赖外部源直连。
 
+**校验（2026-10-18）**：已知动作（`upgrade` / `push-agent-package` / `push-knowledge-package`）创建计划时，
+每个 target 必须带非空 `target_version` —— 版本是派生制品地址的**唯一输入**，留空则计划永远发不出去。
+服务端直接 400（`invalid_spec`），前端禁用提交并点名缺版本的组件；
+旧 gwlinkd 对存量空版本计划会回执 `failed` 并落游标（不再静默跳过）。
+
 ## 2. 方案：地址由中心**派生**，不让运维手输
 
 1. **拉取时反查**：`GET /api/v1/gateway/upgrade-plan` 里，中心按计划的 `(component, target_version)`
