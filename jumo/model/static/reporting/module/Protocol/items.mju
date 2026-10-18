@@ -243,6 +243,11 @@ message<command> ReportAgentFactSummary {
   // 空表示「没采」，不是「没装」。
   packages: List<String>
   listen_ports: List<String>
+  // 网关下发、本机**实际探测过**的路径白名单。
+  // 与 `present_paths` 一起才能区分「没探测」（无法判定）与「探测了不存在」（不命中）。
+  probed_paths: List<String>
+  // 其中存在的路径（`probed_paths` 的子集）。
+  present_paths: List<String>
   // 留痕/展示（不进内容摘要、不参与判重）：机器名与 IP 会变，但不改变用途判据。
   host_id: String
   host_name: String
@@ -288,6 +293,8 @@ message<response> DiscoveryPoliciesReturned {
   policy_version: Int
   published_at: DateTime
   policies: List<Discovery.Probe.DiscoveryAspectPolicy>
+  // 待探测存在的绝对路径白名单（网关从采集目录的 `path_exists:` 条件推导）。
+  probe_paths: List<String>
   returned_at: DateTime
 }
 

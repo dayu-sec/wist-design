@@ -38,6 +38,10 @@ struct AgentFactSummary {
   packages: List<String>
   // 监听端口。
   listen_ports: List<String>
+  // 网关下发、agent 实际探测过的路径白名单（进内容摘要：它决定 `path_exists` 的求值）。
+  probed_paths: List<String>
+  // 其中存在的路径（`probed_paths` 的子集）。
+  present_paths: List<String>
   // ── 以下三项是**留痕/展示**：不进内容摘要，也不参与判重 ──
   // 为什么不进：摘要回答的是「内容变了没有」（幂等键与用途判据的输入）。
   // 机器名、IP 会因改名/DHCP 而变，但不影响「这台机器是干什么用的」——

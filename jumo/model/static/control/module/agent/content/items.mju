@@ -74,7 +74,10 @@ struct CollectionUnit {
   // 语法：条件之间用 `;`，同一条件的多个取值用 `|`（任一命中即算命中）：
   //   kind:value(|value)* （; kind:value…）*
   // kind ∈ installed（已装包）| device（设备，如 gpu）| service（systemd/launchd 单元）
-  //   | port（监听端口）| resource（资源量，值可带比较符，如 mem_gib>=64）。
+  //   | port（监听端口）| resource（资源量，值可带比较符，如 mem_gib>=64）
+  //   | path_exists（绝对路径是否存在：agentd 按网关随发现策略下发的白名单实探）。
+  // path_exists 的值必须是绝对路径（相对路径随 cwd 变，不能当事实）；
+  //   「**没探测过**」是**无法判定**，「探测过但不存在」才是**不命中** —— 两者不能合并。
   // 例：installed:homebrew|xcode;device:gpu
   // 求值是**三态**：命中 / 不命中 / **无法判定**。事实缺位（如包探针未采）**不是**“不命中”，
   // 而是“无法判定” —— 不得当成“没装”（同“空 = 没采不是没装”的原则）。

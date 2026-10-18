@@ -249,6 +249,45 @@ const LINUX_ONLY_FAMILIES: &[&str] = &[
 
 这里承载的是**形状**（能执行什么），不是**内容**：采集面词表属于数据，见 §5.5 末尾的边界说明。
 
+### 6.5 事实：路径存在性（`path_exists`）
+
+有些单元只应在「某个路径真的存在」时才派下去（典型：`/var/log/sudo.log` —— RHEL 默认有，
+Debian 要在 sudoers 里配 `logfile`）。这不是能力问题，而是**事实**问题。
+
+链路：
+
+```
+采集目录 `match = "path_exists:<绝对路径>"`
+  → 网关装载目录，推导 probe_paths（白名单）
+  → 随发现策略下发（`DiscoveryAspectPolicySet.probe_paths`）
+  → agentd 逐条探存在性，随事实摘报回 `probed_paths` / `present_paths`
+  → 网关 `eval_condition` 求值（三态）
+```
+
+三态必须分开：
+
+| 情况 | 求值 | 结果 |
+|---|---|---|
+| 路径**没被探测过**（旧 agent / 不在白名单） | Unknown | `excluded(fact_not_collected)` |
+| 探测过、**不存在** | No | `excluded(match_unsatisfied)` |
+| 探测过、**存在** | Yes | 选中 |
+
+约束：
+
+- 只探**绝对路径**；相对路径随进程 cwd 变，不能当事实（网关装载时就拒）；
+- 探测范围由目录的 `match` 推导，**不接受任意路径**；
+- 这两项参与内容摘要（`fact-v2`），路径变化会触发重报与重新展开。
+
+**升级顺序**：网关 → agentd → 知识包。
+
+- 新 agentd 会多报两个字段，旧网关是 `deny_unknown_fields`，会拒掉整份事实上报 —— 所以网关先上；
+- 旧 agentd 解析带 `probe_paths` 的策略会失败并回落内建周期（软失败）；
+- 在 agentd 跟上之前，`path_exists` 永远是 Unknown，相关单元按 `fact_not_collected` 排除 ——
+  所以**知识包最后上**。
+
+策略拉取有最小间隔节流（当前 5 分钟），新增的路径条件最多滞后一个轮询周期；
+在这段时间里对应单元是 `fact_not_collected`（可见，不是静默不采）。
+
 ---
 
 ## 7. 校验链：谁判断、何时判断
@@ -384,16 +423,41 @@ multiline = "none"
 
 ## 10. 展示元数据与 Web
 
-### 10.1 目标态
+### 10.1 展示链路（已落地）
 
-- 网关 `GET /api/v1/admin/content` 返回 `families: [{family, name_zh, name_en, summary_zh, summary_en}]`；
-- `wist-gateway-web` 按 `family` 查表渲染；查不到回落原始 ID，不编造说明；
+- 网关 `GET /api/v1/admin/content` 返回
+  `families: [{id, platforms, semantics_version, name_zh, name_en, summary_zh, summary_en}]`；
+- `wist-gateway-web` 按 `id` 查表渲染；查不到回落原始 ID，不编造说明；
 - 新增采集面**不需要发 Web**。
 
-### 10.2 现状（临时兜底）
+### 10.2 采集面全景（网关管理面）
 
-- `wist-gateway-web/src/components/collectionFamilyText.ts` 里硬编码了 18 个面的中英文；
-- 这是元数据链路落地前的临时方案，落地后应删除或降级为 fallback。
+`/knowledge` 页有两个 tab（tab 落在 URL 上：`/knowledge?view=families` 可直接打开全景页）：
+
+- **知识包**：生效包、世代、回滚、录入历史、锁在旧版的工作；
+- **采集面**：这一版定义的全部面 —— 名称 / 协议值、平台、说明、采集就绪（`active/total`）、
+  解析就绪（独立信号）、覆盖机型，以及筛选（已就绪 / 有单元未就绪 / 仅定义）。
+
+点开一行可以看到这个面**具体采什么**：每个单元的 `unit_id`、平台、能力、`match` 前提、
+`rule_ref`（空 = 只落原文）、所需权限，以及每条来源（`kind:target`）与**agentd 今天能不能执行**。
+不可执行的来源在这里就标出来——它正是「面已就绪，但实际采不到」的现场答案。
+
+页面明确标注：**这是目录全貌**，macOS 与 Linux 的单元都会列出，**不按本机平台过滤**；
+「平台」列才是适用范围。
+
+三种状态必须分开显示，否则会被读成同一件事：
+
+| 状态 | 含义 |
+|---|---|
+| 已就绪 | 至少一个 `status = active` 的单元 |
+| 未就绪 | 有单元，但没有一个 `active` |
+| 未建单元 | 词表里有，但任何平台都没有单元（`readiness` 里没有这一行） |
+
+这是**单台网关**的视图（本机生效的那一版知识库）；全机队聚合属于中心，当前未实现。
+
+### 10.3 前端硬编码已移除
+
+`collectionFamilyText.ts` 自 0.9.0 起只剩「按词表取词 + 缺项回落」，18 条文案已进知识库。
 
 ---
 

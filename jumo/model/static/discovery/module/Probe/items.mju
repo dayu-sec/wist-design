@@ -75,6 +75,10 @@ struct DiscoveryAspectPolicySet {
   unique policy_version: Int
   published_at: DateTime
   policies: List<DiscoveryAspectPolicy>
+  // 待探测存在的**绝对路径白名单**（由网关从采集目录的 `path_exists:` 条件推导）。
+  // agentd 探完把结果放进事实摘要的 `probed_paths` / `present_paths`。
+  // 空 = 不探测（旧网关，或这一版目录没有任何路径条件）。
+  probe_paths: List<String>
 }
 
 // 管理面看当前生效的策略表（视图类型在 Control 域：它是网关管理面的读模型）。
