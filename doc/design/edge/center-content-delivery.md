@@ -98,6 +98,8 @@ sequenceDiagram
 
 ## 7. 落地影响
 
-- **②**（`agent-package-push-to-gateways.md`）：取包改 gwlinkd —— 本次落地。
-- **知识库包** `record_knowledge_package`：将来同样改「gwlinkd 交付」，网关只托管（同一通道）。
+- **②**（`agent-package-push-to-gateways.md`）：取包改 gwlinkd —— 已落地。
+- **知识库包**：已落地（2026-10-18），同一条通道：中心把 `wist-knowledge` 当单制品发布，
+  计划动作 `push-knowledge-package`，gwlinkd 取包（含 `.sig`）→ 环回交付网关托管；
+  见 [`knowledge-package-push-to-gateways.md`](./knowledge-package-push-to-gateways.md)。
 - **网关记录的「来源」字段 / 管理页措辞**：语义 = provenance，与本文 §4 对齐。
