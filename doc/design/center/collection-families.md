@@ -61,7 +61,7 @@
 | `NetworkFirewall` | 网络 / 防火墙 / WiFi | 两平台 | mac: `wifi.log` + 统一日志 `com.apple.alf`；linux: `nft-ruleset`、`iptables-save` |
 | `RebootPower` | 关机重启 | 两平台 | mac: `shutdown_monitor.log`；linux: `journalctl-shutdown`、`last-reboot` |
 | `MiscSystem` | 系统杂项 | 两平台 | mac: `fsck_apfs*`、`cups/*`、`apache2/*`；linux: `cron`、`alternatives.log` |
-| `HostMetrics` | 主机指标 | 两平台 | `MetricInterval 15s` |
+| `HostMetrics` | 主机指标（负载 / 内存 / 磁盘容量 / 开机时长） | 两平台 | `MetricInterval 15s` |
 | `PrivacyTcc` | 隐私授权与 Keychain | macOS | `sqlite-snapshot(TCC.db)` |
 | `GatekeeperQuarantine` | 隔离来源（Gatekeeper） | macOS | 统一日志 `syspolicyd` |
 | `DevToolchain` | 开发工具链（Homebrew/Xcode/容器/包管理器/IDE） | macOS | `~/Library/Logs/Homebrew/*`、Xcode `DerivedData/*/Logs/*` |
@@ -71,6 +71,15 @@
 | `ComputeWorkload` | 作业 / 调度 / 加速卡 | Linux | `slurm/*`、`pods/*`、`dmesg:nvidia-xid` |
 | `BackupJob` | 备份与批处理 | Linux | `borg/*`、`restic/*` |
 | `NetworkService` | 网络服务（NFS/SMB/防火墙规则） | Linux | `nginx/*`、`samba/*` |
+
+> **`HostMetrics` 的磁盘口径**（Linux）：容量分两个角色 —— `system` = 根文件系统 `/`（系统盘，
+> 看使用率），`data` = 其余本地块设备挂载点汇总（数据盘，看剩余可用）。多块数据盘按容量汇总，
+> 同一设备 bind mount 只计一次；`/boot`、`/run`、`/sys`、`/proc`、`/dev` 与 `overlay`/`fuse`
+> 不计入数据盘。
+>
+> **逐挂载点明细**（`system.filesystem.*` + `mount`/`fstype` 标签）已落地，是容量告警的
+> 主指标；上面的 `system`/`data` 只是兼容汇总。完整方案（Linux/macOS 过滤规则、标签、
+> 告警与成本）见 [`disk-capacity-collection.md`](../edge/disk-capacity-collection.md)。
 
 ## 4. 已知不足 / 待决
 

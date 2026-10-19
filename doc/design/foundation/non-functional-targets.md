@@ -33,8 +33,8 @@
 
 当前阶段还要固定一个验收顺序：
 
-- 第一非功能验收门应先覆盖 `standalone` 文件日志替代切片
-- 在这条切片跑稳之前，不应把 `managed` 接入或大规模 metrics 集成当成第一验收目标
+- 第一非功能验收门覆盖 `managed` 文件日志替代切片（`standalone` 不运行数据面）
+- `managed` 接入是这条切片的前置，不是竞争目标；大规模 metrics 集成仍排在切片之后
 - 第一门要重点验证 `checkpoint / commit point`、`buffer / spool`、rotate / truncate / restart recovery 与 backpressure 行为
 - 第一门默认按“受控单路径替代切片”验收，不把通用 discovery / watcher / protect 全量能力提前并入
 
@@ -63,7 +63,7 @@
 
 第一版非功能目标建议分成两组口径：
 
-第一组是当前优先验收的 `standalone replacement slice`：
+第一组是当前优先验收的 `managed replacement slice`：
 
 - `warp-insightd` 常驻
 - 最小 self-observability 开启
@@ -107,7 +107,7 @@
 说明：
 
 - 更细的 traces / security 量化目标后续再补
-- 当前第一门先把 `standalone` 文件日志替代链路固定下来，再扩展到 Batch A metrics
+- 当前第一门先把 `managed` 文件日志替代链路固定下来，再扩展到 Batch A metrics
 
 ---
 
@@ -282,7 +282,7 @@
 
 第一版建议至少做四类验收：
 
-- `standalone replacement` soak test：
+- `managed replacement` soak test：
   - 持续文件输入 `24h`
   - rotate / truncate / restart recovery 行为符合预期
   - `checkpoint / commit point` 推进不越界
@@ -304,7 +304,7 @@
 当前阶段固定以下结论：
 
 - 非功能目标必须量化，不能只写“低资源”
-- 第一非功能验收门应先覆盖 `standalone` 文件日志替代切片
+- 第一非功能验收门应先覆盖 `managed` 文件日志替代切片
 - `warp-insight` 要优先保护业务、控制面和审计链
 - 退化策略必须先于实现编码
 - `normal / degraded / protect` 三态应作为后续实现和验收的统一口径

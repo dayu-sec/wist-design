@@ -1,6 +1,6 @@
 # WarpInsight 通过 TCP 向 WarpParse 发送日志
 
-本文说明如何把 `WarpInsight` 当前的 standalone 日志采集能力配置为通过 TCP 把日志发送到远端 `WarpParse`。
+本文说明如何把 `WarpInsight` 的日志采集能力（`managed` 模式）配置为通过 TCP 把日志发送到远端 `WarpParse`。
 
 当前链路是：
 
@@ -12,6 +12,8 @@
 
 1. `WarpParse` 侧已经启用 `tcp_src`。
 2. `WarpInsight` 所在机器可以连通 `WarpParse` 的 TCP 监听地址和端口。
+3. `WarpInsight` 处于 `managed` 模式（`[control_plane] enabled = true`）且已完成注册：
+   `standalone`（无网关）下不采集、不缓冲、不上送，`[telemetry.logs]` 整段不生效。
 
 `WarpParse` 默认示例配置见：
 
@@ -73,6 +75,11 @@ warp-insightd init-config --config-dir /etc/warpinsight
 
 ```toml
 schema_version = "v1"
+
+# 数据面只在 managed 下运行；endpoint 指向网关
+[control_plane]
+enabled = true
+endpoint = "https://<gateway>"
 
 [telemetry.logs]
 in_memory_buffer_bytes = 1048576
@@ -238,10 +245,11 @@ WARP_INSIGHTD_RUN_ONCE=1 warp-insightd --config-dir /etc/warpinsight
 
 1. `WarpParse` 的 `tcp_src` 是否真的在监听目标端口。
 2. 两台机器之间的防火墙、安全组、路由是否允许 TCP 连通。
-3. `insightd.toml` 里的 `addr`、`port` 是否写对。
-4. `path` 指向的日志文件是否存在，进程是否有读取权限。
-5. `state/spool/logs` 下是否出现 `.ndjson` 文件。
-6. 如果启用了 `multiline_mode = "indented"`，是否同时把 TCP `framing` 配成了 `len`。
+3. 先确认 `[control_plane] enabled = true`：`standalone` 下 telemetry 不运行。
+4. `insightd.toml` 里的 `addr`、`port` 是否写对。
+5. `path` 指向的日志文件是否存在，进程是否有读取权限。
+6. `state/spool/logs` 下是否出现 `.ndjson` 文件。
+7. 如果启用了 `multiline_mode = "indented"`，是否同时把 TCP `framing` 配成了 `len`。
 
 如果 `spool` 持续增长，通常表示：
 
@@ -266,6 +274,11 @@ schema_version = "v1"
 
 [agent]
 instance_name = "prod-host-01"
+
+# 数据面只在 managed 下运行
+[control_plane]
+enabled = true
+endpoint = "https://<gateway>"
 
 [telemetry.logs]
 in_memory_buffer_bytes = 1048576

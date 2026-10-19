@@ -192,6 +192,20 @@ state/telemetry/metrics_samples.json
 - `host.uptime.seconds`
 - `host.memory.total_kb`
 - `host.memory.available_kb`
+- `host.disk.{usage_percent,total_kb,available_kb}`（兼容旧名；Linux 上即根文件系统 `/`）
+- Linux 额外产出角色化汇总（兼容层）：
+  - `host.disk.system.{usage_percent,total_kb,available_kb}`：系统盘（`/`）
+  - `host.disk.data.{usage_percent,total_kb,available_kb}`：数据盘（其余本地块设备挂载点汇总）
+  - `host.disk.data.mount_count`：计入汇总的数据盘挂载数
+- **逐挂载点容量（主指标）**：`host.filesystem.{usage_percent,total_kb,available_kb}`，
+  每条带 `mount` / `fstype` 标签，映射为 `system.filesystem.*`。
+  - Linux 排除 `/boot`、`/run`、`/sys`、`/proc`、`/dev`、overlay/fuse、网络 FS；
+  - macOS 计入 `/System/Volumes/Data` 与本地 `/Volumes/*`，排除其它
+    `/System/Volumes/*` 与网络 FS；
+  - 同一文件系统被 bind mount 到多个路径时只报一次。
+
+> 完整方案（指标语义、平台过滤、成本与告警）见
+> [`disk-capacity-collection.md`](./disk-capacity-collection.md)。
 
 ### 5.2 `process_metrics`
 
@@ -234,7 +248,7 @@ Linux 下优先读取 `/proc/<pid>/stat`，其他 Unix 下回退 `ps`。
 - 还没有真正 exporter
 - 还没有 metrics uplink
 - 还没有统一 interval / timeout / budget 调度
-- 还没有完整 filesystem / disk io / network / fd / thread / restart count 指标
+- 已有逐挂载点容量（`system.filesystem.*`），但还没有 inode / disk io / network / fd / thread / restart count 指标
 - `container_metrics` 仍以 discovery hint 为主，不依赖 runtime API
 - `metrics_samples.json` 仍是本地中间态，不是最终对外协议
 

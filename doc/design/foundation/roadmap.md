@@ -61,15 +61,15 @@
 4. 安全不能全部放到后期 hardening，必须区分“基线安全”与“强化安全”
 5. 安装 bootstrap 和中心编排升级不能混成一个里程碑
 6. 验证、fixture、e2e harness 不应只在 GA 阶段才出现
-7. `warp-insightd` 无中心节点独立运行能力必须前置，而不是做成受管模式的副产品
+7. `warp-insightd` 无中心节点独立运行能力必须前置，而不是做成受管模式的副产品；但该能力只指本地执行闭环与状态机，不包含数据面
 8. 数据面 `V1` 上报目标不能默认假设是中心 telemetry ingest，应先允许统一结构化文本 record -> `warp-parse`
-9. 若近期目标是先在 `standalone` 模式下替代部分 `Fluent Bit` 工作，必须把“可替代的最小纵向切片”提升成独立验证门，而不是隐含在后续通用 telemetry 里程碑中
+9. 若近期目标是替代部分 `Fluent Bit` 工作，必须把“可替代的最小纵向切片”提升成独立验证门；该切片在 `managed` 下验收，`standalone` 不运行数据面
 
 因此，本路线图在逻辑上应调整为：
 
-- 先补“standalone 边缘运行基线”
-- 先补“standalone 文件日志输入 -> buffer/spool -> warp-parse/file output”的可替代验证切片
-- 再补“身份接入基线”
+- 先补“standalone 边缘运行基线”（本地执行器 + 状态机，不采集）
+- 再补“身份接入基线”（managed 接入）
+- 再补“managed 文件日志输入 -> buffer/spool -> warp-parse/file output”的可替代验证切片
 - 再补“统一结构化 record -> warp-parse”的通用数据面成立路径
 - 再补“边缘控制与数据双底盘”
 - 再做“中心治理闭环”
@@ -88,9 +88,9 @@
 5. 先把 metrics 底盘做稳，再扩展 logs / traces / security
 6. 先把安装和版本治理做成工程能力，再追求大规模自动化 rollout
 7. 先达到“可上线”，再追求“世界第一”的非功能水准
-8. 先保证 `standalone` 模式成立，再叠加 `managed` 模式能力
+8. 先保证 `standalone` 模式作为本地执行器成立，再叠加 `managed` 模式能力（数据面只在 `managed` 下运行）
 9. 先让数据面通过 `warp-parse` 成立，再决定是否补原生 metrics / traces receiver
-10. 先用一个受控的 `standalone` 替代切片验证架构与产品价值，再扩展成通用 telemetry 底盘
+10. 先用一个受控的 `managed` 替代切片验证架构与产品价值，再扩展成通用 telemetry 底盘
 
 当前阶段不应犯的错误：
 
@@ -109,8 +109,8 @@
 
 | 阶段 | 范围 | 目标 |
 |---|---|---|
-| P0 | M0-M4 | 冻结契约，补齐 standalone 边缘运行基线，并验证可替代部分 `Fluent Bit` 的最小纵向切片 |
-| P1 | M5-M9 | 在 standalone 验证切片基础上叠加 managed 会话、执行闭环、资源发现和通用数据面底盘 |
+| P0 | M0-M3 | 冻结契约，补齐 `standalone` 边缘运行基线（本地执行器 + 状态机） |
+| P1 | M4-M9 | 先打通 `managed` 接入（M5），再在 `managed` 下验证数据面替代切片（M4），并叠加执行闭环、资源发现和通用数据面底盘 |
 | P2 | M10-M15 | 打通中心治理、安装升级和安全审计闭环 |
 | P3 | M16-M19 | 打通多级树扩容和统一多信号能力 |
 | P4 | M20-M21 | 落地 AI / authoring 与世界级非功能验收 |
@@ -125,7 +125,7 @@
 | M1 | 契约与 Schema | 冻结核心 schema、版本与校验器 |
 | M2 | Identity / Enrollment Baseline | 固定首次注册、证书、agent 身份与实例语义 |
 | M3 | Edge Runtime Skeleton | 建立支持 `standalone` 的 `warp-insightd` / `wist-exec` / `wist-upgrader` 基础骨架 |
-| M4 | Standalone Replacement Slice | 打通 `standalone` 文件日志输入、checkpoint、buffer/spool 与 `warp-parse/file` 输出，验证可替代部分 `Fluent Bit` 工作 |
+| M4 | Managed Replacement Slice | 打通 `managed` 文件日志输入、checkpoint、buffer/spool 与 `warp-parse/file` 输出，验证可替代部分 `Fluent Bit` 工作 |
 | M5 | Gateway Session MVP | 打通 `hello`、heartbeat、capability 和会话管理 |
 | M6 | Controlled Action MVP | 打通本地执行闭环和首批只读 opcode |
 | M7 | Resource Discovery Foundation | 建立 host/process/container/pod/service 发现底盘 |
@@ -143,6 +143,9 @@
 | M19 | Telemetry Batch B/C Integrations | 扩展 Batch B/C telemetry integrations |
 | M20 | AI 与 Authoring | 落地中心 AI 辅助与作者侧 frontend |
 | M21 | GA / World-Class NFR | 完成可靠性、压测、故障注入和上线门槛验收 |
+
+> **顺序（2026-10-18 定）**：`standalone`（无网关）不采集、不缓冲、不上送，因此 M4 改为在 `managed` 下验收，
+> 实际执行顺序为 M3 → M5 → M4。里程碑编号保持不变，避免大范围引用变动。
 
 ---
 
@@ -238,7 +241,7 @@
 目标：
 
 - 建立边缘三进程最小骨架
-- 建立没有中心节点也能正常工作的 `standalone` 基线
+- 建立没有中心节点也能正常工作的 `standalone` 基线（本地执行器 + 状态机；不采集 / 不缓冲 / 不上送）
 
 子任务：
 
@@ -255,19 +258,19 @@
 
 - 三个二进制具备独立启动与最小健康检查能力
 - `warp-insightd` 能管理本地状态和子进程生命周期
-- 没有中心节点时，`warp-insightd` 仍可稳定进入常驻运行
+- 没有中心节点时，`warp-insightd` 仍可稳定进入常驻运行（不启动采集 / 缓冲 / 上送）
 - 边缘实现不依赖 DSL parser
 
 依赖关系：
 
 - 依赖 M1
 
-### 6.5 M4 Standalone Replacement Slice
+### 6.5 M4 Managed Replacement Slice
 
 目标：
 
-- 在没有中心节点的前提下，先验证 `warp-insightd` 可替代部分 `Fluent Bit` 的实际工作
-- 用最小纵向切片验证当前边缘架构，而不是等待完整中心闭环
+- 在 `managed` 接入成立后，验证 `warp-insightd` 可替代部分 `Fluent Bit` 的实际工作
+- 用最小纵向切片验证边缘数据面架构，而不是等待完整中心闭环
 
 子任务：
 
@@ -289,15 +292,15 @@
 
 验收标准：
 
-- 在 `control_plane.enabled = false` 时，`warp-insightd` 能对一个显式配置的文件路径稳定持续读取并产出统一结构化 record
+- 在 `control_plane.enabled = true`（`managed`）时，`warp-insightd` 能对一个显式配置的文件路径稳定持续读取并产出统一结构化 record
 - crash / restart 后能从已提交 `checkpoint` 继续，而不是从 `read offset` 误恢复
 - 正常 append 场景只读取新增内容；rotate / truncate / multiline 正确性基线成立
-- 可通过 `warp-parse` 或本地 fallback 输出完成至少一类真实 `standalone` 链路验证
+- 可通过 `warp-parse` 或本地 fallback 输出完成至少一类真实 `managed` 链路验证
 - 该切片对标的是能力与运行时行为，不要求兼容 `Fluent Bit` 配置格式
 
 依赖关系：
 
-- 依赖 M3
+- 依赖 M3、M5
 
 ### 6.6 M5 Gateway Session MVP
 
@@ -986,10 +989,10 @@
 
 1. 完成 M1 中尚未代码化的 schema 与校验器
 2. 启动 M3 的 `standalone` `warp-insightd` / `wist-exec` / `wist-upgrader` skeleton
-3. 启动 M4 的 `file input -> checkpoint -> buffer/spool -> warp-parse/file output` 替代验证切片
-4. 用一类真实 `standalone` 日志链路验证“能力可替代、配置不兼容”的产品假设
-5. 在 M4 跑通后，再启动 M2 的 enrollment / identity 设计与实现
-6. 在 M4 跑通后，再启动 M5 的 gateway session MVP
+3. 启动 M2 的 enrollment / identity 设计与实现
+4. 启动 M5 的 gateway session MVP
+5. 启动 M4 的 `file input -> checkpoint -> buffer/spool -> warp-parse/file output` 替代验证切片（依赖 M3、M5）
+6. 用一类真实 `managed` 日志链路验证“能力可替代、配置不兼容”的产品假设
 7. 视需要启动 M6 的首批只读 opcode 与执行闭环
 
 如果资源还能再加一条并行主线，再启动：
@@ -1000,7 +1003,8 @@
 
 - 契约
 - standalone 边缘运行基线
-- standalone 文件日志替代切片
+- managed 接入基线
+- managed 文件日志替代切片
 - checkpoint / commit point / buffer / spool
 - 统一结构化 record -> `warp-parse` 或 fallback output
 
@@ -1016,10 +1020,10 @@
 |---|---|---|---|
 | M0 | 无 | 无 | 冻结边界、术语和第一版范围 |
 | M1 | M0 | M2 设计准备 | 可校验 schema 与样例集 |
-| M2 | M1 | M3、M4 | enrollment 与身份基线 |
-| M3 | M1 | M2、M4 | standalone 三进程骨架 |
-| M4 | M3 | M2、M5 | standalone 文件日志替代验证切片 |
-| M5 | M2、M4 | M6、M10 | managed 接入与 session 基线 |
+| M2 | M1 | M3 | enrollment 与身份基线 |
+| M3 | M1 | M2 | standalone 三进程骨架 |
+| M4 | M3、M5 | M2、M6 | managed 文件日志替代验证切片 |
+| M5 | M2 | M6、M10 | managed 接入与 session 基线 |
 | M6 | M3、M5 | M7、M8 | 单节点远程执行闭环 |
 | M7 | M4 | M6、M8、M10 | 统一 resource discovery 底盘 |
 | M8 | M4、M7 | M9、M10 | telemetry core 与 `warp-parse` 上报路径 |

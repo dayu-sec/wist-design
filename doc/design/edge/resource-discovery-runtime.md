@@ -668,8 +668,8 @@ discovery runtime
 
 关键约束：
 
-- discovery 不依赖 `managed` 模式才存在
-- `standalone` 模式下 discovery 仍然成立
+- discovery 是数据面的一部分，只在 `managed` 模式下运行
+- `standalone` 模式下 discovery 不运行（与「不采、不缓、不发」同一口径）
 
 ---
 
@@ -855,6 +855,8 @@ discovery refresh
     - uptime
     - memory total / available
     - host target count
+    - disk：主盘容量；Linux 另按 `system`（`/`，系统盘）与 `data`（其余本地挂载点汇总，数据盘）
+      两个角色产出 `usage / total / available`
 - `process_metrics`
   - 已有真实本地 probe
   - 当前可产出：
@@ -1039,7 +1041,7 @@ state/telemetry/metrics_samples.json
 - 还没有真正的 exporter
 - 还没有统一 interval / timeout / budget 调度
 - 还没有 metrics uplink
-- 还没有完整 filesystem / disk io / network / fd / thread / restart count 指标
+- 已有逐挂载点容量（`system.filesystem.*`），但还没有 inode / disk io / network / fd / thread / restart count 指标
 - `container_metrics` 仍以 discovery hint 驱动为主，不依赖 runtime API
 - `metrics_samples.json` 仍是本地中间态，不是最终对外协议
 

@@ -32,9 +32,9 @@
 
 1. `M1` 契约与校验器
 2. `M3` `standalone` 三进程骨架
-3. `M4` `standalone` 可替代切片
-4. `M2` 身份与 enrollment 基线
-5. `M5` gateway session
+3. `M2` 身份与 enrollment 基线
+4. `M5` gateway session
+5. `M4` `managed` 可替代切片
 6. `M6` controlled action MVP
 7. `M7/M8/M9` discovery + telemetry core + Batch A metrics
 8. `M10/M11` control center core + dispatch 闭环
@@ -306,7 +306,7 @@ warp-insight/
 - 最小 smoke / integration harness 可覆盖 standalone 启动、状态目录初始化和空执行闭环
 - `M3` 基线能力可以在 CI 中回归验证
 
-### 4.12 B012 standalone replacement slice
+### 4.12 B012 managed replacement slice
 
 对应里程碑：
 
@@ -325,7 +325,7 @@ warp-insight/
 
 完成定义：
 
-- `standalone` 下可用受控单路径 `file input -> parser / multiline -> checkpoint -> buffer / spool -> warp-parse/file output`
+- `managed` 下可用受控单路径 `file input -> parser / multiline -> checkpoint -> buffer / spool -> warp-parse/file output`
 - `checkpoint_offset` 只在越过 `commit point` 后推进
 - 正常 append、rotate / truncate / restart recovery 正确性基线成立
 - 至少覆盖一类明确的 `Fluent Bit tail input` 替代场景
@@ -700,8 +700,8 @@ warp-insight/
 
 结果：
 
-- 可启动 `standalone` agent
-- 可完成一条 `standalone` 文件日志替代验证切片
+- 可启动 `standalone` agent（本地执行器 + 状态机，不采集）
+- 可完成一条 `managed` 文件日志替代验证切片（需先接入网关）
 - 可直接验证“是否能替代部分 `Fluent Bit` 工作”
 
 ### 6.2 Package B
@@ -734,10 +734,10 @@ warp-insight/
 3. agentd: 建立 daemon skeleton 与 state root
 4. agent-exec: 建立 workdir 协议与空 runtime
 5. upgrader: 建立 skeleton
-6. standalone logs: `file input` + watcher + reader
-7. standalone logs: parser + multiline + rotate / truncate
-8. standalone telemetry: checkpoint / commit point + buffer/spool + `warp-parse` uplink
-9. harness: standalone replacement scenario replay / soak baseline
+6. managed logs: `file input` + watcher + reader
+7. managed logs: parser + multiline + rotate / truncate
+8. managed telemetry: checkpoint / commit point + buffer/spool + `warp-parse` uplink
+9. harness: managed replacement scenario replay / soak baseline
 10. identity: `agent_id / instance_id / boot_id` 与 enrollment
 11. gateway: hello / heartbeat / reconnect
 12. action: scheduler + first read-only opcodes
@@ -754,5 +754,5 @@ warp-insight/
 
 - 可以启动开发，不需要等待更多抽象设计
 - backlog 应按模块与交付包组织，而不是只按大里程碑名组织
-- 当前第一验证目标应是 `M4` 的 standalone 替代切片，而不是 `managed` 接入
-- `M1-M9` 与 `M10-M15` 仍是主线，但优先级应先满足 `standalone -> 可替代 -> 再 managed`
+- 当前第一验证目标应是 `standalone` 作为本地执行器的基线（M3），随后先做 `managed` 接入（M5），再做 `M4` 替代切片
+- `M1-M9` 与 `M10-M15` 仍是主线，优先级为 `standalone 执行器 -> managed 接入 -> 可替代切片`

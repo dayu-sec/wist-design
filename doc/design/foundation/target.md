@@ -54,7 +54,8 @@
 - 提供内置安装、升级、服务托管与回滚能力
 - 支持环境内 agent 的自我升级
 - 支持受控的远程指令执行能力
-- `warp-insightd` 在没有中心控制节点时也能独立工作，至少应继续完成本地采集、发现、标准化、缓冲与上送
+- `warp-insightd` 在没有中心控制节点时也能独立常驻（`standalone`），但只作为本地执行器 + 状态机：不采集、不缓冲、不上送
+- 采集、发现、标准化、缓冲与上送在 `managed` 模式下运行
 - 自动发现目标环境中的资产与资源
 - 在常见目标上由 `warp-insightd` 直接完成 metric 采集，而不是默认要求额外 exporter 部署
 - 以同一份采集、同一份原始事件为主线
@@ -69,18 +70,18 @@
 
 还要补充一个明确约束：
 
-- 中心节点是增强治理能力，不是边缘数据面存活的前提
-- 没有中心节点时，`warp-insightd` 仍应作为独立 agent 正常运行
+- 中心节点是数据面与增强治理能力的前提；没有中心时，边缘只保留本地执行与状态机
+- 没有中心节点时，`warp-insightd` 仍应作为独立 agent 正常常驻（不采集、不缓冲、不上送）
 - 没有中心节点时，不提供依赖中心编排的远程任务能力
 
 当前阶段还要固定一个产品验证顺序：
 
-- 第一验证目标不是先证明 `managed` 接入完整成立
-- 第一验证目标是先证明 `standalone` 模式下，`warp-insightd` 可以完成一条可替代部分 `Fluent Bit` 工作的最小纵向切片
+- 第一验证目标不是先追求完整的中心治理闭环
+- 数据面必须先接入网关（`managed`）：第一验证目标是 `managed` 下完成一条可替代部分 `Fluent Bit` 工作的最小纵向切片
 - 这条切片应至少覆盖一个显式配置文件路径上的 `file input -> parser / multiline -> checkpoint / commit point -> buffer / spool -> warp-parse/file output`
 - 对标的是能力与运行时行为，不要求兼容 `Fluent Bit` 配置格式
 - `path_patterns[]`、通用 discovery / watcher、完整 `degraded / protect` 与更完整自观测属于后续 telemetry core 阶段
-- 只有在这条切片成立后，`managed` 接入、中心治理和统一多信号能力才应继续前推
+- `standalone` 先作为本地执行器独立成立；它不运行数据面
 
 ---
 
@@ -956,7 +957,7 @@ AI 可以增强系统，但不应成为环境内 agent 采集、发现、缓冲�
 判断 `warp-insight` 是否达标，建议看以下工程结果：
 
 - 是否可以独立安装和运行，不依赖外部采集代理作为前提
-- 是否已在 `standalone` 模式下跑通至少一类可替代部分 `Fluent Bit tail input` 的真实链路
+- 是否已在 `managed` 模式下跑通至少一类可替代部分 `Fluent Bit tail input` 的真实链路
 - 是否已经具备一类成熟采集代理的核心主干能力
 - 是否在核心对象模型和协议层面尽量符合 OpenTelemetry
 - 是否能自动发现关键资源对象
@@ -987,9 +988,9 @@ AI 可以增强系统，但不应成为环境内 agent 采集、发现、缓冲�
 7. 环境内 agent 必须把低 CPU、低内存、低波动作为硬性非功能目标。
 8. AI 能力应放在中心节点，承担事件理解、异常解释、规则建议与操作辅助。
 9. 升级与远程执行应由中心节点统一编排，由边缘 agent 受控执行。
-10. 当前第一验证目标必须先打通 `standalone` 的可替代切片，而不是先追求 `managed` 接入闭环。
+10. 当前第一验证目标是在 `managed` 下打通可替代切片，而不是先追求完整的中心治理闭环。
 11. 该切片应至少覆盖 `file input -> parser / multiline -> checkpoint / commit point -> buffer / spool -> warp-parse/file output`。
-12. 在 `standalone` 可替代切片成立后，再继续推进 enrollment、gateway、远程执行与中心治理闭环。
+12. `standalone` 只作为本地执行器独立成立（不采集、不缓冲、不上送），不承担产品验证切片。
 13. 长期目标是形成更适合目标环境、且尽量符合 OpenTelemetry 标准的一体化环境观测系统。
 
 最终目标可以用一句话描述：
