@@ -210,6 +210,10 @@ message<command> ReportGatewayUpgradeResult {
   step: String
   status: String
   detail: String
+  // 任务执行记录：目录（网关本机路径）+ 摘要（写入时已脱敏、有界）。
+  // 可选 —— 老网关不带这两个键；中心侧仍从 `detail` 里的 `日志: <dir>` 兜底解析目录。
+  log_dir: String?
+  log_excerpt: String?
   reported_at: DateTime
 }
 
