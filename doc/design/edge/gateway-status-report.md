@@ -32,6 +32,7 @@
 | `version` | **网关容器**版本 | `CARGO_PKG_VERSION` | 已有 |
 | `gops_version` | 宿主依赖工具 `gops` 版本（装在 `$HOME/bin`） | gwlinkd 探测（`gops --version`） | 已有 |
 | `gx_version` | 宿主依赖工具 `gx` 版本（装在 `$HOME/bin`） | gwlinkd 探测（`gx --version`） | 已有 |
+| `gwlinkd_version` | **gwlinkd（宿主侧常驻）自身**版本 | gwlinkd `CARGO_PKG_VERSION` | 已有 |
 | `public_base_url` | 网关**对外域名**（对外基址） | 管理面「对外地址」‖`[server] public_base_url` | **Phase 4** |
 | `collected_at` | 采集时刻 | | 已有 |
 | `store_healthy` | 存储能否查 | store `list_agents` | 已有 |
@@ -67,6 +68,10 @@ Phase 1 把它们填上（gwlinkd 从自述面取到即原样上报）。**量�
 网关详情展示 —— 「这台网关依赖的 gops / gx 是什么版本」不必登机器看。探测不到（未安装 / 执行失败）为 `None`，
 不假装有值。
 
+**gwlinkd 自身版本**（`gwlinkd_version`）：与上面的 `version`（**网关容器**版本）分开。中心页面把
+「网关版本 / gwlinkd / gops / gx」并排展示 —— 自更新与排障时先要知道**宿主常驻是哪个版本**，
+以前只报容器版本，gwlinkd 自己的版本在中心侧不可见。老 gwlinkd 不带这个键 → `None`（页面显示「—」）。
+
 **网关对外域名**（`public_base_url`）：网关**自己才知道**这个值（管理面「对外地址」优先、未设回落
 `[server] public_base_url`），自述面带上它 → gwlinkd 随 **注册**（`RegisterGateway`）与**周期状态上报**
 （`ReportGatewayStatus`）转带给中心；中心落库（`gateways.public_base_url`）并在网关列表展示「域名」。
@@ -93,6 +98,7 @@ Phase 1 把它们填上（gwlinkd 从自述面取到即原样上报）。**量�
 | `gateway_up` | `status` | online → 1，否则 0 |
 | `gateway_info{version}` / `gateway_health{health}` | `version` / `health` | info-style，恒 1 |
 | `gateway_gops_info{gops_version}` / `gateway_gx_info{gx_version}` | 宿主依赖工具版本 | info-style，有值才推 |
+| `gateway_gwlinkd_info{gwlinkd_version}` | gwlinkd（宿主侧常驻）自身版本 | info-style，有值才推（排自更新进度） |
 | `gateway_memory_bytes` / `gateway_cpu_percent` | 进程资源 | gauge |
 | `gateway_uptime_seconds` | `uptime_seconds` | gauge |
 | `gateway_agent_count` / `gateway_online_agents` / `gateway_offline_agents` | 机队 | gauge |
@@ -111,11 +117,12 @@ Phase 1 把它们填上（gwlinkd 从自述面取到即原样上报）。**量�
 
 ### 跨仓 / 版本
 
-- `wist-control` 是**独立仓**：已 bump `0.6.0 → 0.6.1`（**新增可选字段，向后兼容**）。
-- `wist-gwlinkd` / `wist-center` 的 `Cargo.toml` 暂时把 `wist-control` 切到 **path（`../wist-control`）** 以便用本地版本；
-  **发版前切回 registry**（`0.6`）。
-- 中心用 **PostgreSQL**：表结构在 `docker/initdb/01_schema.sql`（**首次初始化**才建）。已有数据卷需手动
-  `ALTER TABLE gateways ADD COLUMN …`（本仓已加；旧库需补跑）——无迁移框架，改列要手动上。
+- `wist-control` 是**独立仓**：本次 bump `0.16.2 → 0.17.0`（**新增可选字段，向后兼容**）。
+- `wist-gwlinkd` / `wist-center` 的 `Cargo.toml` 开发期把 `wist-control` 切到 **path（`../wist-control`）** 以便用本地版本；
+  **发版前切回 registry（`0.17`）**，顺序：先发 `wist-control`，再发消费方。
+- 中心用 **PostgreSQL**：表结构在 `docker/initdb/01_schema.sql`。该文件由 `PgStore::connect` 在**每次启动**
+  整份执行（`apply_schema`，全部 `IF NOT EXISTS` 幂等），所以新列会在中心重启时自动补到既有库；
+  生产库若不给应用 DDL 权限，需运维按同一份文件手动补跑。
 
 ## 3. 契约（三份形状同钉）
 
