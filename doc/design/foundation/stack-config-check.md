@@ -1,8 +1,9 @@
 # 栈级配置检查（`wist-stackcheck`）
 
-> **状态**：已实现（`wist-gateway-stack` 0.2.5-alpha 起发布）；本文是**跨栈约定**，
-> 供 `wist-center-stack` 对齐。
+> **状态**：已实现。`wist-gateway-stack` 0.2.5-alpha 起发布；`wist-center-stack` 已按 §11 的
+> `StackProfile` 方案落地（`tools/stackcheck`，15 项）。本文是**跨栈约定**。
 > **实现**：`wist-dev-gateway/wist-gateway-stack/tools/stackcheck`（Rust，lib + bin）
+> + `wist-dev-center/wist-center-stack/tools/stackcheck`
 > + `scripts/check-stack.sh`（薄壳）。
 > **关联**：[`config-and-state-layout.md`](./config-and-state-layout.md)（配置四类内容与落点）、
 > [`layered-config-recipe.md`](./layered-config-recipe.md)（`toml` 声明 + `.env` 值）、
@@ -29,21 +30,26 @@
 |---|---|---|
 | **栈**：模板渲染、变量解析、目录与挂载约定、投放包、版本口径 | **栈检查器** | 键落在哪个 TOML 段、`/packages/agents` 是否自洽、`.sig` 是否配对 |
 | **组件**：自己的配置键语义（取值范围、依赖关系） | **组件自己** | `deny_unknown_fields` + 组件 `diagnose`（endpoint 有没有 scheme、token 长度） |
+| **环境**：宿主 PATH 里那些工具的能力（openssl 实现、python3 是否在） | **栈检查器（`prereq.*`）** | 升级由 gwlinkd 派生，`openssl` 解析到 LibreSSL 而不认 `x509 -ext` |
 
 理由：**只有组件知道自己的键是什么意思**。栈去猜就会漂移；组件去查栈的目录约定又看不到全局。
+而**环境**既不是栈生成的东西、也不是组件的事 —— 但它是「栈跑不跑得起来」的前提，只能是栈检查器管。
 
 推论（很重要）：
 
 - 检查器**不需要**理解业务语义，所以它可以是**只读**的——不改盘、不 chmod、不重启。
+  （唯一例外：`prereq.tls_san_reader` 要起一个 `bash` 去跑随包脚本；它仍然不写盘。）
 - 需要 TOML 语义的两类问题里，「键属于哪个结构体」留给组件的严格解析；
   检查器只判「键是否在**文档根**」（因为那是栈的模板写错了）。
 
-## 3. 判据清单（17 项）
+## 3. 判据清单（19 项）
 
 全部只读。列「分级」为**失败时的等级**；「阻断」表示是否让 `--gate` 拒绝继续（见 §6）。
 
 | code | 读什么 | 判据 | 分级 | 阻断 |
 |---|---|---|---|---|
+| `prereq.toolchain` | 两份 `PATH` | `bash` / `openssl` / `python3` / sha256 工具都在；**当前** PATH 缺 = 后面必然失败，只有**守护进程的** PATH 缺 = 本机能跑但交给 gwlinkd 就炸 | FAIL/WARN | ✓/✗ |
+| `prereq.tls_san_reader` | `[server] tls_cert_file`（或还没有证书） | 用**随包** `scripts/lib/tls-san.sh` 在两份 PATH 下各读一次 SAN；读不出 / **静默读空** 都算失败 | FAIL/WARN | ✓/✗ |
 | `package.drop_dir` | `configs/gwlinkd/gwlinkd.toml` | `agent_package_drop_dir` 在**文档根**、是绝对路径、等于 `<PACKAGE_DIR>/agents`；若不在根则**指出真实段路径** | FAIL | ✓ |
 | `package.container_dir` | 同上 | 等于 `<GWLINKD_AGENT_PACKAGE_CONTAINER_DIR>/agents` | FAIL | ✓ |
 | `package.compose_mount` | compose | 存在 `${PACKAGE_DIR}:<target>` 挂载，且 `<target>` 与容器基址同源（短语法与长语法都认） | FAIL | ✓ |
@@ -63,6 +69,15 @@
 
 ### 几处判据为什么这样定
 
+- **`prereq.*` 判的是「环境」，不是「配置」**：它们是唯一会 **spawn（`bash`）** 的判据。
+  因为要判的恰好是「本机的 `openssl` 在**这份** PATH 下能不能干活」——用 Rust 自己解析 SAN
+  会得出与脚本不同的答案，那就又回到「检查器说行、脚本说不行」。所以它们**执行随包脚本**。
+- **为什么看两份 PATH**：升级流程由 `gwlinkd` 派生，它的 PATH 里没有 Homebrew 这类目录。
+  2026-10-23 的事故就是这个差：同一份 `init-gateway.sh`，交互式跑得过、升级跑不过，而且**静默**
+  （`set -e` + `pipefail`）。于是：当前 PATH 缺 → **阻断**（后面必然失败）；
+  只有守护进程的 PATH 缺 → **WARN**（本机能用，不拦开发机）。
+- **「静默读空」也要算失败**：老实现 `openssl x509 -ext | tr | sed` 在 LibreSSL 下 openssl 失败，
+  但**管道退出码来自 `sed`** → helper 退出 0、输出为空。只看退出码会把事故判成 OK。
 - **「阻断」不等于「严重」**：知识库包缺 `.sig` 与验签公钥丢失都是 FAIL（该修），但**不该拦住升级**
   ——当前跑着的栈是好的，只是「以后导入」会失败。阻断类只放会让本次部署直接坏掉的项。
 - **`port.available` 必须排除本栈自己**：升级的 `localize` 阶段容器正在跑，不排除就是每次误报。
@@ -132,20 +147,25 @@
 
 ## 7. 调用点
 
-全仓只有三处直接调用（都走同一个薄壳 `scripts/check-stack.sh`）：
+全仓只有四处直接调用（都走同一个薄壳 `scripts/check-stack.sh`）：
 
 ```
-sys/workflows/operators.gxl    flow localize   →  ./scripts/check-stack.sh --gate
+sys/workflows/operators.gxl    flow localize   →  ./scripts/check-stack.sh --gate --only prereq   （**最前**：前置条件）
+sys/workflows/operators.gxl    flow localize   →  ./scripts/check-stack.sh --gate                 （最后：全量守门）
 sys/workflows/operators.gxl    flow diagnose   →  ./scripts/check-stack.sh          （追加 checks）
 scripts/restore-gateway.sh     还原完成后      →  ./scripts/check-stack.sh          （只读自检）
 ```
+
+**为什么前置条件要单独跑在最前面**：`flow localize` 的渲染动作在 `apply` **之后** ——
+那一刻新包的文件刚换上去、还没重渲，`render.freshness.*` 会**合理地**判 FAIL。
+全量闸门放在开头会误拦每一次升级，所以用 `--only prereq` 只跑那一组；全量仍留在尾部。
 
 对应到命令：
 
 | 命令 | 经过 | 作用 |
 |---|---|---|
-| `gops run diagnose` | `flow diagnose` | 全量体检（17 项） |
-| `gops sys localize` | `flow localize` | 渲染完立刻守门 |
+| `gops run diagnose` | `flow diagnose` | 全量体检（19 项） |
+| `gops sys localize` | `flow localize` | 开头查前置条件，渲染完立刻全量守门 |
 | **`gops prj upgrade`** | `apply → regenerate`（= `gops sys localize`） | **新配置渲染后、`pull`/`up` 之前**拦截；失败触发 `rollback-all` |
 | `scripts/restore-gateway.sh` | 还原后 | 把「文件写回去了但互相矛盾」当场报出来 |
 
@@ -183,6 +203,12 @@ scripts/restore-gateway.sh     还原完成后      →  ./scripts/check-stack.s
 5. **并行**：镜像探测并行执行，否则一个慢 registry 会把体检拖成几十秒。
 6. **不做第二份真相源**：判据尽量复用配置里的原值，不要把 compose/vars 的内容抄一份常量。
 7. **假绿比红更糟**：任何「没扫到 / 没比对」都要显式报 WARN，不能静默 OK。
+8. **`prereq.*` 执行随包脚本，不复刻逻辑**：判据与真正跑的代码必须是**同一份实现**
+   （脚本侧只有 `scripts/lib/tls-san.sh` 一处，Rust 侧 `san_covers` 自带单测锁口径）。
+9. **守护进程的 PATH 是常量**（`/usr/bin:/bin:/usr/sbin:/sbin`）：不要去解析 launchd plist /
+   systemd unit 的实际环境——那是猜，而且改一次就要跟着改。
+10. **探针失败不能拖垮体检**：`bash` 不存在、脚本半途死掉都要落成一条具名结论，
+   而不是让整个进程非零退出或卡住（`--gate` 只认阻断类 FAIL）。
 
 ## 10. 已知限制
 
@@ -197,8 +223,32 @@ scripts/restore-gateway.sh     还原完成后      →  ./scripts/check-stack.s
 
 ## 11. 移植到 `wist-center-stack`
 
-**当前实现里的路径是写死的（gateway-stack 专用）**，复用的正确做法是抽出 `StackProfile`，
-而不是拷贝一份改字符串。
+**已实施（center-stack `tools/stackcheck`）**：检查逻辑全部通过 `StackProfile` 取路径/变量/挂载对，
+center 的 profile 在 `src/profile.rs`；未拷贝 gateway 的字符串常量。落地判据 15 项：
+
+| 组 | code |
+|---|---|
+| 变量 | `config.vars` |
+| 渲染 | `render.freshness.{center,git-proxy,web,center-pub}`、`render.placeholder` |
+| 域名 | `domain.configured` |
+| 密钥 | `secret.file_mode`、`secret.private_key_mode` |
+| 身份 / TLS | `identity.center_files`、`tls.san_covers_domain` |
+| 布局 | `layout.mounts`、`layout.public_url` |
+| 存储 | `database.initdb` |
+| 运行面 | `port.available`、`image.reachable` |
+
+与 gateway 实现的差异（有意为之）：
+
+- `public_url` 用的是 **声明（`${VAR}`）+ `.env`（现场值）** 两层，检查器比的是 `.env` 的生效值
+  与当前 `API_WGC_DOMAIN` / `CENTER_HOST_PORT` —— 改了域名但 `.env` 不跟着改会报 FAIL（不阻断升级：
+  当前栈还是好的，错的是以后生成的网关安装 URL）；
+- `layout.mounts` 把 compose 源表达式、变量展开后的落点、localize 实际写入位置三者一起比，
+  防止现场覆盖 `CENTER_CONFIG_DIR` 之类的变量把容器指到旧目录；
+- 端口探测按 compose 里的 `*_BIND_IP` 绑（center 有多个 `127.0.0.1:`），并修正了
+  `docker ps --format` 多行解析（每行第一个映射以前会漏）。
+
+**后续（未做）**：gateway 侧仍保留硬编码路径；把它的判据也收进同一份 `StackProfile` 形状，
+两边就可以共享检查代码（当前是两个 crate，各自发布）。
 
 ### 11.1 需要参数化的点
 
@@ -211,6 +261,7 @@ scripts/restore-gateway.sh     还原完成后      →  ./scripts/check-stack.s
 | `identity/` 私钥扫描 | `private_key_roots: Vec<PathBuf>` |
 | `configs/gateway/knowledge/initial/` | `knowledge: Option<KnowledgeSpec { dir, files, signing_key }>` |
 | `[server] tls_cert_file` + `WEB_DOMAIN` | `tls: Option<TlsSpec { toml, section, key, domain_var }>` |
+| `REQUIRED_COMMANDS` / 守护进程的最低 PATH | `prereq: Option<PrereqSpec { commands, daemon_path }>`（center 的 flow 可能用别的工具，例如 `psql`、`tar`） |
 | compose 文件名候选、项目名规则 | 已通用，无需参数化 |
 | 端口 / 镜像 | 已通用（从 compose 读），无需参数化 |
 
@@ -224,18 +275,19 @@ scripts/restore-gateway.sh     还原完成后      →  ./scripts/check-stack.s
 | `git-proxy` / `postgres` | 镜像可达与端口占用通用；注意 center 有多个 `127.0.0.1:` 绑定的端口 |
 | 版本口径 | `version.txt` ↔ 运行容器镜像 tag（`version.consistency`，本实现尚未做） |
 
-### 11.3 建议的落地顺序
+### 11.3 建议的落地顺序（center 已完成）
 
-1. 把 `StackProfile` 抽出来，让 gateway 用 profile 跑（**行为不变**，先加回归测试锁住 17 项）；
+1. 把 `StackProfile` 抽出来，让 gateway 用 profile 跑（**行为不变**，先加回归测试锁住 19 项）；
 2. center 写自己的 profile，先只启用已通用的检查（compose 挂载、端口、镜像、secret 权限、TLS）；
 3. 再按 center 的实际痛点补判据（内容目录自洽、artifact 目录、版本一致性）；
 4. 两边**同一套输出契约**，`gops run diagnose` 天然聚合，管理面渲染不用写第二份解析。
 
 ## 12. 验收
 
-- 单元测试 54 条（45 判据 + 9 CLI），覆盖：键落错段、渲染过期、占位值、缺签名、
+- 单元测试 60 条（50 判据 + 10 CLI），覆盖：键落错段、渲染过期、占位值、缺签名、
   有效值优先、TLS 覆盖/不覆盖/过期、SAN 通配与后缀攻击、compose 备选文件名与长语法、
-  端口冲突、离线收敛、结果文件追加与去重。
-- 现场实测（`wist-gateway-stack` 0.2.5-alpha）：17 项 / 16 ok / 1 warn（历史知识库包缺 `.sig`）/ 0 fail，
-  整次体检 **0.17 秒**（镜像走本地快路径）。
+  端口冲突、离线收敛、结果文件追加与去重；以及 `prereq.*` 的「两份 PATH 分级」、
+  「静默读空算失败」、「`--only` 只跑一组」。
+- 现场实测（`wist-gateway-stack` 0.2.5-alpha，17 项）：16 ok / 1 warn（历史知识库包缺 `.sig`）/ 0 fail，
+  整次体检 **0.17 秒**（镜像走本地快路径）。0.2.6-alpha 起为 19 项（新增 `prereq.*`）。
 - 发版门禁：`gops sys localize` 与 `gops prj upgrade` 的 `regenerate` 阶段都会执行它。
