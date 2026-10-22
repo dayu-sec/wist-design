@@ -1,6 +1,6 @@
 # Linux 服务器日志采集覆盖与支持方案（16 类）
 
-> 状态：**设计（D0–D13 已锁定；§8.1 待外部确认；§8.3 明确延后；W0 已实现（未发布），W1–W4 待实现评审）**
+> 状态：**设计（D0–D13 已锁定；§8.1 待外部确认；§8.3 明确延后；W0/W1 已实现（未发布，W1 的 D7 能力上报遗留），W2–W4 待实现评审）**
 > 需求基线：`server-file-scope.md`（工作区根，对齐链路页「主机日志」16 类，
 > `collect-stat-service/catalog/pipeline_catalog.json` 的 `origin=host_systems`）
 > 范围：Linux 服务器上的 **16 个页面分类**（记录级 `log_type` 与映射见 D8）。CWP / 流量探针 / 云产品属设备日志与云平台日志，不在本文。
@@ -329,6 +329,45 @@ RHEL 上反过来；裁剪后每个发行版只剩存在的两条。
 
 **验收**：2 ns × 3 pod；新 pod 即采；改名轮转不重放；重启不丢不重；超过 `max_files` 有明确上报。
 
+**实现状态（2026-10-22）：代码已落地，未发布；D7 能力上报未做（见下）。**
+
+| 仓 | 改动 |
+|---|---|
+| `wist-contracts` 0.9.1 | `is_glob_path` / `is_file_target`：`FileGlob` 判据放宽为「绝对路径，允许单层通配、不允许 `**`」；`is_explicit_path` 保留给单文件语义；`WorkSpecSource.exclude_globs`（默认空，空数组**不序列化**：旧 agent 的 `WorkSpecSource` 是 `deny_unknown_fields`）|
+| `wist-agentd` | 新增 `telemetry/logs/files/glob_match.rs`（glob 展开 + exclude + symlink）；`FileFamilyProcessor`（工作集差分、每文件 checkpoint / pending、`real_path` 排空轮转、跨文件预算、扫描节流、prune）；`LogFileInputSection.exclude_globs` + 校验；`log_inputs()` 接受 glob；失败语义按本文 |
+| `wist-gateway` | `SourceRow` / `UnitSource` 增 `exclude_globs` 并在装载期校验（只许在 `FileGlob`、必须绝对路径）；`materialize_spec` 透传到 wire；`active` 判据自动跟随契约；管理面 `sources[].exclude_globs` 一并返回 |
+| `wist-gateway-web` | `isGlobPath` / `isFileTarget` 与契约同口径；`excludeGlobs` 解析；原因文案改为「需绝对路径；不支持 `**` 递归」|
+| `wist-knowledge` | 无单元改动：靠通配的单元（coredump / DB / ** 目录型…）**仍保持 `draft`**（见下行）；catalog 头部注释按 W1 的能力边界重写 |
+
+**与本文的差异 / 遗留**
+
+1. **D7 能力上报未落地**（本轮不做）：它需要一条 **agent → 网关** 的新字段/新报文，
+   而 `AgentStatusReport` 与 `WorkSpecSource` 一样是 `deny_unknown_fields` 的 ——
+   新 agent 向旧网关报送新字段会被**整份拒收**，所以必须「网关先容忍、agent 后上报」两阶段发布。
+   在此之前按本节最后一条纪律执行：**glob 单元先保持 `draft`**，机队升级验证后再单独发一版目录翻 `active`。
+2. **「已见集合」用「checkpoint 里有没有这个文件」表达**，没有单独的 `(realpath, inode)` 集合：
+   已跟踪集 = `files[]`，重启后不在其中 = 新文件 → head。效果相同，少一份要维护的状态。
+3. **`max_files` 触顶已上报**（验收项末条已满足）：新增失败类 `CapacityExceeded`，
+   `detail` 稳定（按 `kind|input_id|path|detail` 去重）、量进 `magnitude`
+   （`refused=… tracked=…`）。行为仍是「不再接纳新文件、已跟踪的继续」。
+4. **glob 与 glob 的重叠无法在装载期发现**：「同一文件只读一次」的目录校验只对**显式路径**生效；
+   两条 active 单元若写互相重叠的 glob（`/var/log/*.log` 与 `/var/log/app*.log`），仍会重复采集。
+   靠策展约束 + W2 的结构化过滤器收敛。
+5. **`**` 与 `~` 不可执行**（契约、agentd 的 `unsupported_target`、web 三处同口径）；非法的
+   单层模式（如未闭合的 `[`）在 agentd 侧以 input 失败形式可见（不是静默）。
+6. **目录目标 = 直接子文件**；同一真实文件的 symlink 别名（`link.log` 与它指向的 `real.log`、
+   或两条指向同一 inode 的链）按 `realpath` **去重**，只保留先遇到的一条（不变量 2）。
+7. **单文件读失败不拖垮整族**：其余文件照常交付 + 提交 checkpoint，错误在本轮末尾上报
+   （下一轮重试那个文件）；扫描失败不推进扫描时钟，所以每轮都会重试并报错。
+8. **一个 `path` 只保留一条 checkpoint**：同一路径换了 inode（轮转但找不到旧文件、或停机期间
+   被替换）时旧条目让位 —— 否则 `checkpoint_for_path` 只取第一条，新文件永远读不到。
+
+**验证**：contracts 81 个 lib 测试、agentd 662 个 lib 测试（含 16 个文件族用例）、
+网关 675 个 lib 测试＋web 契约测试全绿；`clippy -D warnings` 0、`fmt` 干净。
+
+> 发布顺序：**先发 `wist-contracts` 0.9.1**，再发 agentd / 网关 / web ——
+> 消费方仍用 `version = "0.9"`，不需改依赖行，但本地/CI 必须能解析到 0.9.1。
+
 ### W2 容器选源过滤器
 
 - 选源根固定 `/var/log/containers`（D4）；已登记的 `real_path` 在 symlink 消失后继续读完。
@@ -533,8 +572,8 @@ RHEL 上反过来；裁剪后每个发行版只剩存在的两条。
 |---|---|
 | glob 语法 | `globset` + `literal_separator(true)`；支持 `*` `?` `[]` `{a,b}`；禁 `**`；默认不跟随 symlink |
 | pattern 首次求值 | 首次见到 pattern 用 `startup_position`（tail）；运行中/重启后新出现的文件 head |
-| glob 重叠 | 全局按 `(device, inode)` / `real_path` 去重；同一文件只允许一个 input 读，冲突作配置错误上报 |
-| checkpoint / 已见集合清理 | 文件连续 7 天不存在 → 删条目；文件消失时丢弃 pending 块并计数 |
+| glob 重叠 | **显式路径**：目录校验强制「同一文件只允许一个 active 单元」；**glob × glob 的重叠当前不可检测**（W1 遗留，靠策展约束 + W2 过滤器收敛）|
+| checkpoint / 已见集合清理 | 不匹配的条目：已读完 → 立即释放；有未封口块 → **先封口再释放**；未读完 → 保留到 7 天过期 |
 | `max_files` 超限 | 拒绝新文件、保留已跟踪、上报一次（不淘汰） |
 | 预算分配（D12） | 容器默认只采白名单 namespace；DB csv 依赖数据面过滤；`drop_if_contains` 必配 |
 | 每 input `max_files` / 每 tick `max_new_files` / 重扫 | 512 / 32 / 15s |
