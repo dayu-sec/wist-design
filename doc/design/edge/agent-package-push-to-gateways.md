@@ -56,7 +56,7 @@ sequenceDiagram
     L->>C: GET upgrade-plan?gateway_id=&platform=（mTLS，已有轮询）
     C-->>L: has_plan, action=push-agent-package,<br/>artifacts=[{platform, artifact_url, artifact_sha256}…]<br/>（该版本**全平台**）
     L->>C: 逐平台从 artifact_url 拉包（CA-S；各校验 artifact_sha256）
-    L->>G: 环回**交付**（loopback-only，**一次带全平台**）<br/>{artifacts:[{platform, package_url=/packages/wist-agentd-….tar.gz, origin=artifact_url, package_sha256}], requested_by}
+    L->>G: 环回**交付**（loopback-only，**一次带全平台**）<br/>{artifacts:[{platform, package_url=/packages/agents/wist-agentd-….tar.gz, origin=artifact_url, package_sha256}], requested_by}
     G-->>L: 200（从本机路径取 → 入包缓存 + 内容寻址历史；网关不出网）
     L->>C: POST upgrade-result（succeeded / failed）
     C-->>Eng: 计划条目进度可见；网关包管理里出现这条 agentd 包
@@ -66,7 +66,7 @@ sequenceDiagram
 
 1. **取包由 gwlinkd 完成**（它持 CA-S、是唯一面向中心者）：出站拉中心镜像地址 + 逐平台校验 `artifact_sha256`。
    网关**不出网**——它仍走 `set_agent_install_package` 那套「来源 → 拉取 → 缓存 → 记历史」，只不过这次「来源」是
-   gwlinkd 落地的**本机路径**（`/packages/<file>`）。职责划分与理由见 [`center-content-delivery.md`](./center-content-delivery.md)。
+   gwlinkd 落地的**本机路径**（`/packages/agents/<file>`）。职责划分与理由见 [`center-content-delivery.md`](./center-content-delivery.md)。
    > **为什么不是网关自己拉中心地址**：2026-10-09 真实事故——网关不信任中心私有 CA，
      `https://127.0.0.1:3100/...` 取包报 `error sending request`，环回回 502。根因是「取包」落在了不持中心信任的组件上。
 2. **② 下发的是该版本的「全平台」制品**：网关替 **Agent 机队**托管各平台的包，机队平台可 ≠ 网关自己主机的平台，
@@ -105,7 +105,7 @@ sequenceDiagram
 
 > **§5.4 命名对齐**：契约字段叫 `artifact_sha256`（与既有 `artifact_url` 成对；gwlinkd 早已 `#[serde(flatten)]`
 > 宽容读取 `artifact_sha256`）。gwlinkd **用它去取包并校验**；到**网关环回交付**时，地址改成本机路径
-> （`package_url = /packages/<file>`）、中心地址进 `origin`、摘要进 `package_sha256`（网关 `SetAgentInstallPackageArtifact` 的字段名）。
+> （`package_url = /packages/agents/<file>`）、中心地址进 `origin`、摘要进 `package_sha256`（网关 `SetAgentInstallPackageArtifact` 的字段名）。
 
 其余字段复用：`has_plan` / `plan_id` / `component`（= `wist-agentd`）/ `to_version` / `artifact_url`（中心按**网关声明的平台**派生，多平台包挑对平台）。
 `platform` 由 gwlinkd 自述（`HostTarget::target_triple()`），中心据此挑平台，**挑不到就不给地址**（宁可不派，也不派错平台制品）。
@@ -120,7 +120,7 @@ sequenceDiagram
 | 环回（gwlinkd） | `POST /api/v1/gateway/agent-package` | **loopback-only** | gwlinkd 把**已取到**的中心包交付给网关托管 |
 
 - 载荷与既有 admin 端点同形，只把「来源」换成 gwlinkd 落地的本机路径，另带中心地址作审计：
-  `{artifacts:[{platform, package_url:"/packages/<file>", origin:"https://<中心>/...", package_sha256}], requested_by}`。
+  `{artifacts:[{platform, package_url:"/packages/agents/<file>", origin:"https://<中心>/...", package_sha256}], requested_by}`。
   **一次 POST 带全部平台**——网关侧**整批一次提交**：任一不合格整体拒绝落库（各平台的本地缓存文件在拉取阶段逐个写入，全批一致性见 §10）。
   - `package_url` = 网关**能取**的来源（本机绝对路径，一等来源）；
   - `origin` = 中心镜像地址（**provenance/留痕**，网关**不**据此取包）。
@@ -148,7 +148,7 @@ sequenceDiagram
 | 凭据 | loopback（同机隐含可信） | gwlinkd 配置持 `gateway_admin_token` | 备选要多下发一个平台级管理密钥，泄露面更大 |
 | 计划载体 | 复用 `RolloutPlan` + 新 action | 单开 `AgentPackagePushPlan` | 复用已通的一整套（阶段/闸门/进度）；模型注释本就是这个意图 |
 | **取包方** | **gwlinkd 取（持 CA-S）→ 交付网关托管** | 网关自己拉中心地址 | 把「取包」放在持中心信任、且唯一面向中心的组件上；网关不背中心信任。网关自己拉会撞中心私有 CA（2026-10-09 事故）。见 `center-content-delivery.md` |
-| 交付形态 | 共享投放目录 → 本机路径（网关仍"从来源取"） | 环回塞字节 | 保持网关**同一契约、同一内核**（本机路径是一等来源）；复用现有 `PACKAGE_DIR:/packages:ro` 挂载 |
+| 交付形态 | 共享投放目录 → 本机路径（网关仍"从来源取"） | 环回塞字节 | 保持网关**同一契约、同一内核**（本机路径是一等来源）；复用现有 `PACKAGE_DIR:/packages:ro` 挂载，交付区落在其 `agents/` 子目录 |
 | 建计划时机 | 工程师在 ② 面板**显式**建（对齐 ①） | 发布包时**自动**生成全量计划 | 显式可控、可先金丝雀；自动生成可作后续便利项 |
 | **失败重试** | 中心**重派**：为失败目标**新建一份补跑计划**（新 `plan_id`、单阶段、直接放行） | 原地把失败条目改回 `pending`、计划重开 `rolling` | gwlinkd 对每份计划**只驱一次**（落盘游标 `last_plan_id`，② 连失败也落）—— 同一 `plan_id` 改状态在网关看来还是那份计划，会被**静默跳过**：中心显示待派、网关永不重跑（最难查的假重试）。新 `plan_id` 才真的重驱；原计划原样留作历史。网关侧的「原地重开」之所以成立，是因为那边不跨进程记 `last_plan_id` |
 
@@ -194,7 +194,8 @@ sequenceDiagram
   - [x] gwlinkd：环回交付载荷改为 `package_url=<容器可见本机路径>` + `origin=<中心地址>`；新增**投放目录 / 容器前缀**两项配置（`agent_package_drop_dir` / `agent_package_container_dir`，缺则 ② fail-closed）+ 文件名取制品地址末段。
   - [x] 网关：环回端点接受 `origin`（provenance，记历史的 `source`；设置里的来源仍是网关能取的本机路径）；模型 `ReceiveAgentPackage` 同步加 `origin`；**内核不变**（来源 = 本机路径）。
   - [x] 测试：gwlinkd（取包 → 落地 → 交付、网关拒收、未配投放目录 fail-closed）+ 网关（`origin` → provenance）。
-  - [x] **部署接线 + 清理**：栈把 `${PACKAGE_DIR}`（宿主）与 `GWLINKD_AGENT_PACKAGE_CONTAINER_DIR`（容器 `/packages`）由 `scripts/init-gwlinkd.sh` 渲染进 `gwlinkd.toml`（模板 + `vars.yml`/`merged_vars.yml`）；交付成功后按 `agent_package_drop_keep`（缺省 12，`0` = 不清理）保留投放目录里最新若干份（gwlinkd 侧 best-effort 清理）。
+  - [x] **部署接线 + 清理**：栈把 `${PACKAGE_DIR}`（宿主）与 `GWLINKD_AGENT_PACKAGE_CONTAINER_DIR`（容器 `/packages`）由 `scripts/init-gwlinkd.sh` 渲染进 `gwlinkd.toml`（模板 + `vars.yml`/`merged_vars.yml`）；渲染出来的两项是它们的 **`agents/` 子目录**（`<PACKAGE_DIR>/agents` / `/packages/agents`，见 §10 投放目录）；交付成功后按 `agent_package_drop_keep`（缺省 12，`0` = 不清理）保留投放目录里最新若干份（gwlinkd 侧 best-effort 清理）。
+    > **模板要求**：这两项必须渲染在**任何段头（`[table]` / `[[array]]`）之前** —— TOML 里段头之后的键归属该段，写在 `[[upgrade.component]]` 后面会变成最后一个 component 的字段，gwlinkd 在文档根读到 `None`，每个 ② 计划都以「未配置 `agent_package_drop_dir`」失败。
 - [x] 契约 / 模型：`wist-control` `GatewayUpgradePlan` 加 `action` + `artifact_sha256`（**v0.12.0** + CHANGELOG）+ 模型 `items.mju` 同步 + 契约测试。
 - [x] 契约 / 模型（**多平台**）：`GatewayUpgradePlan` 再加 `artifacts: List<GatewayUpgradeArtifact>`（`{platform, artifact_url, artifact_sha256}`；`skip_serializing_if = empty`）—— ② 下发该版本**全平台**（网关替 **Agent 机队**托管；机队平台可 ≠ 网关主机平台）；① 仍用单值。模型 `items.mju` 同步（+ `GatewayUpgradeArtifact`），`jumo verify` 通过；契约测试（多平台往返 + 空清单序列化省略）。**待发 `wist-control 0.13.0`**。
 - [x] 中心（**多平台**）：`upgrade_plan_for` ② 时填 `artifacts = resolve_release_artifacts(...)`（该版本全平台，按平台去重 / 按平台名排序，跳过无平台 / 无摘要的记录）；① 为空。单测：② 带全平台 + ① 为空、`resolve_release_artifacts` 去重 / 排序 / 跳过。
@@ -224,7 +225,7 @@ sequenceDiagram
 ### 9.2 真栈联调 runbook（多进程，手动 ops）
 
 前置：该 gateway 已完成 onboarding（gwlinkd 持有客户端证书 + `gateway_self_endpoint` / `gateway_self_ca` 配好）；
-**且 gwlinkd 已配 ② 交付**：`agent_package_drop_dir`（宿主投放目录，与网关容器挂载 `${PACKAGE_DIR}:/packages:ro` 指向同一份）+ `agent_package_container_dir`（该目录在容器里的路径，栈里 = `/packages`）。
+**且 gwlinkd 已配 ② 交付**：`agent_package_drop_dir`（宿主投放目录，= `${PACKAGE_DIR}/agents`，与网关容器挂载 `${PACKAGE_DIR}:/packages:ro` 同源）+ `agent_package_container_dir`（该目录在容器里的路径，栈里 = `/packages/agents`）。
 缺这两项 ② 会 fail-closed（收到 `push-agent-package` 计划报错）。栈里已把这两项由 `scripts/init-gwlinkd.sh` 渲染进 `gwlinkd.toml`。
 
 1. 起 center（`wist-center`，按其 `WARP_INSIGHT_CENTER_*` 配置）。
@@ -240,7 +241,7 @@ sequenceDiagram
 ## 10. 风险与遗留
 
 - **中心制品取包（已解）**：中心以私有 CA（CA-S）起 HTTPS 时，**网关**拉不动（无中心信任）。本分层把取包交给持 CA-S 的 gwlinkd，落地为**本机路径**后交付网关 —— 网关不再需要中心信任。见 `center-content-delivery.md`。
-- **投放目录**：与网关容器 `PACKAGE_DIR:/packages:ro` 一致（宿主写、容器只读）。栈已接线；gwlinkd 交付**后**按 `agent_package_drop_keep`（缺省 12）清理旧份 —— **无论成败都清**（失败也清，免得反复失败把目录撑爆），且**保留数不低于本批份数**（`keep` 偏小也不会误清刚落的文件）。为避免多平台同名制品互覆，投放文件名前缀**平台**（`<platform>__<原名>`）。
+- **投放目录**：交付区是 `${PACKAGE_DIR}/agents`（容器 `/packages/agents`）——与网关容器 `PACKAGE_DIR:/packages:ro` 同一挂载（宿主写、容器只读），**但独占一个子目录**：gwlinkd 交付**后**按 `agent_package_drop_keep`（缺省 12）清理旧份，**无论成败都清**（失败也清，免得反复失败把目录撑爆），且**保留数不低于本批份数**（`keep` 偏小也不会误清刚落的文件）；而 `prune_drop_dir` **不区分文件类型**，与知识库包（`wist-knowledge-*.tar.gz` + `.sig`）、人工投放包混在 `packages/` 根下时，多交付几轮就会把它们当旧的删掉。为避免多平台同名制品互覆，投放文件名前缀**平台**（`<platform>__<原名>`）。
 - **下架（`expired`）的版本不再派发**：① 与 ② 的制品解析都跳过 `status == "expired"` 的 release 记录（`is_dispatchable`）—— 下架后新建的升级/下发不会拿到过期制品。进行中的计划若目标版本被下架，会表现为「拿不到地址」、条目 `failed`（可随时取消下架恢复）。只跳过**显式** `expired`（历史缺省视为可派发）。
 - **中心制品下载端点无鉴权**（`gateway-upgrade-and-releases.md` §3 已知待收紧项）：现由 gwlinkd 取，一旦加鉴权，gwlinkd 已有客户端证书可直接用。
 - **`GatewayUpgradePlan` 扩字段要同步发 `wist-control`**；否则 gwlinkd 宽容读取会退化成拿不到 `artifact_sha256` → ② 无法执行。
