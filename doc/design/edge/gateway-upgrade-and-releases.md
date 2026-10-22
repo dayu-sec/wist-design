@@ -162,8 +162,8 @@ gwlinkd 是**宿主侧常驻**，升级它不能靠 gops 工程，也不该让�
 时，gwlinkd **自己**完成安装（进程内取制品 → 摘要 / 架构护栏 → 原子覆盖服务定义指向的二进制），
 然后退出让服务管理器拉起：
 
-> 摘要来源：中心为 `component = "wist-gwlinkd"` 的 ① 升级计划**带上 `artifact_sha256`**
-> （其余 ① 组件仍保持「不带摘要」的既有行为）；gwlinkd 覆盖前校验，失败就拒装。
+> 摘要来源：中心对**所有** ① 升级计划都带 `artifact_sha256`（发布记录里有就带）——
+> `wist-gwlinkd` 自更新与 `tool-copy` 宿主工具都要它做内容校验；gwlinkd 覆盖前校验，失败就拒装。
 
 ```mermaid
 sequenceDiagram

@@ -100,7 +100,7 @@ sequenceDiagram
 | 字段 | 说明 |
 |---|---|
 | `action` | 计划动作（`upgrade` / `push-agent-package`）。gwlinkd 据此分派执行器。缺省 = 老中心，按 `upgrade` 处理 |
-| `artifact_sha256` | `artifact_url` 的期望摘要。**②（`push-agent-package`）必带**；①不带（给 ① 加摘要会改变其既有取件/校验行为）。中心从**同一条** release 记录带出。见 §5.4 命名 |
+| `artifact_sha256` | `artifact_url` 的期望摘要。**所有升级计划都带**（发布记录里有就带；空/缺→不带）。① 也带，是因为 ① 里有 `install = "tool-copy"` 的**宿主工具**（`galaxy-ops` / `galaxy-flow`）：gwlinkd 就地把宿主二进制覆盖掉，而制品名不是内容寻址 —— 不给摘要就没有任何内容校验（gops 路径顺带在取件阶段卡住投毒）。中心从**同一条** release 记录带出。见 §5.4 命名 |
 | `artifacts` | `[{platform, artifact_url, artifact_sha256}]`：该版本**全部平台**（② 用；列表为空时序列化省略）。中心按平台去重、按平台名排序；缺摘要 / 无平台的记录跳过（网关要校验，缺摘要无法安全交付）。① 不带（网关本机一个平台，用单值 `artifact_url`） |
 
 > **§5.4 命名对齐**：契约字段叫 `artifact_sha256`（与既有 `artifact_url` 成对；gwlinkd 早已 `#[serde(flatten)]`
@@ -208,6 +208,7 @@ sequenceDiagram
 - [ ] 发布接线：`wist-control 0.13.0` 发到 registry 后，把 `wist-center` / `wist-gwlinkd` 的 `wist-control` 从 `path` 切回 registry 版本（**本地当前用 `path` 联调**）。属**发布动作**，需 crates.io 凭据。
 - [x] `wist-gateway`：抽 `set_agent_install_package` 内核（`admin_ops::apply_agent_install_package`，admin 与环回**共用一份**）→ 新增 `POST /api/v1/gateway/agent-package`（loopback-only，`api/agent_package.rs`）+ 路由 + 契约 fixture 测试。
 - [x] `wist-center`：`upgrade_plan_for` 按 action 回带 `artifact_sha256`（复用 `resolve_release_artifact`）+ `PUSH_AGENT_PACKAGE_ACTION` 常量；单测（②带 action+摘要、①只带地址）。
+  - 后续收紧：**所有**计划都带摘要（发布记录里有就带）—— ① 里的 `tool-copy` 宿主工具（`galaxy-ops` / `galaxy-flow`）就地覆盖宿主二进制，制品名又不是内容寻址，没有摘要就没有内容校验；单测 `a_tool_component_upgrade_plan_carries_its_digest`。
 - [x] `wist-gwlinkd`：`center.rs` 直接用契约的 `action` / `artifact_sha256`（去掉 `#[serde(flatten)]` 宽容包装）→ 新 `agent_package.rs::AgentPackageClient`（环回 POST；动作常量取自 `wist-control`）→ `main.rs` 按 `action` 分派（`drive_agent_package_push`）→ 回报中心 + 落游标。测试：载荷形状契约、非 2xx、端到端与三条失败分支（网关桩 + 中心桩 + 游标）。
 - [x] `wist-center-web`：② 面板（`AgentPackagePushPanel`）占位 → 真表单（选已托管 agentd 版本 + 网关范围 + 灰度阶段 + 执行约束），接 `createUpgradePlan({action: push-agent-package})`；批准/推进/进度复用「发布执行」页。共享表单样式抽到 `PlanForm.module.css`（①/② 共用）。
 - [~] 端到端：**网关环回端点的真 socket e2e** 已加（`wist-gateway` `api::tests`：`…works_over_a_real_loopback_socket` 真 `127.0.0.1` 监听 + 真 HTTP + 载荷按 gwlinkd 形状 + store 落库 + **回执摘要** + **本地内容寻址副本落盘且摘要相符** + 幂等；`…rejects_a_bad_digest_over_a_real_socket`；`…rejects_a_malformed_body_over_a_real_socket`；`…defaults_the_actor_and_lists_every_platform_over_a_real_socket`）。**多进程真栈**（真 center + 真 gateway + 真 gwlinkd）是手动 ops —— runbook 见 §9.2。
