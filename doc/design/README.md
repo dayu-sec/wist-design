@@ -3,7 +3,7 @@
 `doc/design` 目录按主题拆分为以下子目录：
 
 - `foundation/`
-  总体目标、总体架构、术语、路线图、实现 backlog、非功能目标、安全模型、错误处理体系、参考资料、jumo 可检规约（验证与形式化）、跨仓 issue 清单、发布序与升级序（依赖图 / 滚动升级顺序）、API seam 清单与缺口、配置与运行数据布局（含现场态分层的做法）、平台四层能力与竞争格局（Wist / WarpParse / WarpFusion / 安全分析）、Agent 层对比（云厂商 / 可观测厂商）、standalone 收敛核对清单
+  总体目标、总体架构、术语、路线图、实现 backlog、非功能目标、安全模型、错误处理体系、参考资料、jumo 可检规约（验证与形式化）、跨仓 issue 清单、发布序与升级序（依赖图 / 滚动升级顺序）、API seam 清单与缺口、配置与运行数据布局（含现场态分层的做法）、**栈级配置检查（`wist-stackcheck`：栈 查栈自己生成的东西 / 组件 查自己的键语义）**、平台四层能力与竞争格局（Wist / WarpParse / WarpFusion / 安全分析）、Agent 层对比（云厂商 / 可观测厂商）、standalone 收敛核对清单
 - `execution/`
   动作 DSL、`ActionPlan IR`、执行 schema、opcode schema、`run.gxl` 相关文档
 - `edge/`
@@ -64,3 +64,4 @@
 41. [center/warpstation-rule-publishing.md](./center/warpstation-rule-publishing.md)（WarpStation 规则管理下发：CNB git-only、Center Git Proxy、Center `wparse-proxy` + gwlinkd 短轮询命令通道、Gateway 零入站；含安全风险登记与 Hardening Checklist）
 42. [center/linux-server-log-coverage-plan.md](./center/linux-server-log-coverage-plan.md)（Linux 服务器 16 类主机日志的采集覆盖：现状判定、决策 D0–D13（原文直送 / audit 单单元 / host 信息 join / 容器 containers+realpath / journal 唯一源 60s / 能力上报 / 两层分类 / 首装 tail / 重启 seen-set / 前置条件 / 50MB 预算 / 旧 agent 兼容）、W0–W5 工作分解、跨团队待确认项（规则分派 / 归属 / 重复 / 时区 / label；范围与 SELinux 延后）与验收）
 43. [edge/gateway-business-identity.md](./edge/gateway-business-identity.md)（Gateway 业务身份：Center 绑定 customer_id → gwlinkd 下发/落盘 → wparse `.env` + sink tag → 上报回显；含 wparse `.env` 实测、tag 4 项上限、幂等 revision 与离线补偿）
+44. [foundation/stack-config-check.md](./foundation/stack-config-check.md)（栈级配置检查 `wist-stackcheck`：栈 / 组件的校验边界、17 项判据与阻断语义、生效值 vs 默认值、Flow Result 输出、闸门退出码优先级、多平台单包分发、已知限制，以及移植到 center-stack 的 `StackProfile` 参数化方案）
