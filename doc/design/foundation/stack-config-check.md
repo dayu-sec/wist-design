@@ -1,8 +1,11 @@
 # 栈级配置检查（`wist-stackcheck`）
 
-> **状态**：已实现。`wist-gateway-stack` 0.2.5-alpha 起发布；`wist-center-stack` 已按 §11 的
-> `StackProfile` 方案落地（`tools/stackcheck`，15 项）。本文是**跨栈约定**。
-> **实现**：`wist-dev-gateway/wist-gateway-stack/tools/stackcheck`（Rust，lib + bin）
+> **状态**：已实现，并已抽成共享引擎
+> [`wist-stack-tools`](https://github.com/dayu-sec/wist-stack-tools) 的 `stackcheck-core`
+> （tag `v0.1.0`）。gateway 19 项 / center 15 项；两个栈只保留 profile + 专属判据 + 薄 main。
+> 本文是**跨栈约定**。
+> **实现**：`wist-stack-tools/stackcheck-core`（Rust lib）
+> + `wist-dev-gateway/wist-gateway-stack/tools/stackcheck`
 > + `wist-dev-center/wist-center-stack/tools/stackcheck`
 > + `scripts/check-stack.sh`（薄壳）。
 > **关联**：[`config-and-state-layout.md`](./config-and-state-layout.md)（配置四类内容与落点）、
@@ -221,10 +224,19 @@ scripts/restore-gateway.sh     还原完成后      →  ./scripts/check-stack.s
 - **`port.available` 依赖 docker CLI**：容器运行时栈自己的端口会被整体跳过，
   所以这项主要在「首次部署 / 栈停着」时有价值。
 
-## 11. 移植到 `wist-center-stack`
+## 11. 落地：共享 `stackcheck-core` + 两个 profile
 
-**已实施（center-stack `tools/stackcheck`）**：检查逻辑全部通过 `StackProfile` 取路径/变量/挂载对，
-center 的 profile 在 `src/profile.rs`；未拷贝 gateway 的字符串常量。落地判据 15 项：
+**已实施为公共仓**：[`wist-stack-tools`](https://github.com/dayu-sec/wist-stack-tools) 的
+`stackcheck-core`（tag `v0.1.0`）承载：Flow Result / CLI / `StackProfile` 类型 /
+渲染、密钥、身份、挂载、`public_url`、端口、镜像判据 / compose、路径、TOML、x509 helper。
+两个栈各自只保留：
+
+- `tools/stackcheck/src/profile.rs`：本栈的路径 / 变量 / 渲染对 / 身份文件；
+- `checks.rs`：本栈专属判据（gateway 的 package / knowledge / identity / prereq / TLS 策略；
+  center 的 TLS 策略）；
+- `main.rs`：约 50 行，调 `stackcheck_core::cli::run`。
+
+center 落地判据 15 项：
 
 | 组 | code |
 |---|---|
@@ -247,8 +259,9 @@ center 的 profile 在 `src/profile.rs`；未拷贝 gateway 的字符串常量�
 - 端口探测按 compose 里的 `*_BIND_IP` 绑（center 有多个 `127.0.0.1:`），并修正了
   `docker ps --format` 多行解析（每行第一个映射以前会漏）。
 
-**后续（未做）**：gateway 侧仍保留硬编码路径；把它的判据也收进同一份 `StackProfile` 形状，
-两边就可以共享检查代码（当前是两个 crate，各自发布）。
+**两个栈已用同一份引擎**：gateway 的硬编码路径已收进 `profile::GATEWAY`；`checks.rs` 只留
+package / knowledge / identity / prereq / TLS 策略。共享引擎同时修掉了此前分叉的
+`docker ps` 多行、IPv6/行内 ports、`.env` 回落、渲染产物无来源等边界。
 
 ### 11.1 需要参数化的点
 
