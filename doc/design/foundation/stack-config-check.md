@@ -46,7 +46,7 @@
 - 需要 TOML 语义的两类问题里，「键属于哪个结构体」留给组件的严格解析；
   检查器只判「键是否在**文档根**」（因为那是栈的模板写错了）。
 
-## 3. 判据清单（19 项）
+## 3. 判据清单（22 项）
 
 全部只读。列「分级」为**失败时的等级**；「阻断」表示是否让 `--gate` 拒绝继续（见 §6）。
 
@@ -54,6 +54,8 @@
 |---|---|---|---|---|
 | `prereq.toolchain` | 两份 `PATH` | `bash` / `openssl` / `python3` / sha256 工具都在；**当前** PATH 缺 = 后面必然失败，只有**守护进程的** PATH 缺 = 本机能跑但交给 gwlinkd 就炸 | FAIL/WARN | ✓/✗ |
 | `prereq.tls_san_reader` | `[server] tls_cert_file`（或还没有证书） | 用**随包** `scripts/lib/tls-san.sh` 在两份 PATH 下各读一次 SAN；读不出 / **静默读空** 都算失败 | FAIL/WARN | ✓/✗ |
+| `prereq.container_gid` | compose + `/proc/self/status` | 从**有 bind 挂载的非 root 服务**的 `user:` 派生容器 gid，当前进程的组里必须有（对应 `gops sys perms` 整片 `Operation not permitted`） | FAIL/WARN | ✓/✗ |
+| `layout.bind_source_type` | compose 的 bind 挂载 + 宿主 | **文件类**挂载源（容器目标末段含 `.`，如 `*.pem` / `*.toml` / `*.conf`）在宿主上必须是文件；「源是目录、目标像文件」= 源文件曾缺失、被 docker 建成了目录。变量源（`${PACKAGE_DIR}`）与缺失源不在此判 | FAIL | ✓ |
 | `package.drop_dir` | `configs/gwlinkd/gwlinkd.toml` | `agent_package_drop_dir` 在**文档根**、是绝对路径、等于 `<PACKAGE_DIR>/agents`；若不在根则**指出真实段路径** | FAIL | ✓ |
 | `package.container_dir` | 同上 | 等于 `<GWLINKD_AGENT_PACKAGE_CONTAINER_DIR>/agents` | FAIL | ✓ |
 | `package.compose_mount` | compose | 存在 `${PACKAGE_DIR}:<target>` 挂载，且 `<target>` 与容器基址同源（短语法与长语法都认） | FAIL | ✓ |
@@ -65,7 +67,9 @@
 | `package.knowledge_signature.history` | 同上 | 历史包缺签名只计数 | WARN | ✗ |
 | `package.knowledge_signature.orphan` | 同上 | 有 `.sig` 找不到对应的包 | WARN | ✗ |
 | `identity.signing_pubkey` | `wist-gateway.value.json` | 配了 `knowledge_signing_pubkey` 就必须在候选落点之一存在 | FAIL | ✗ |
-| `identity.gwlinkd_paths` | `gwlinkd.toml` + `identity/gwlinkd/.env` | `state_dir` / `identity_dir` / `GWLINKD_TRUST_BUNDLE` 指向的路径存在 | WARN | ✗ |
+| `identity.gwlinkd_paths` | `gwlinkd.toml` + `identity/gwlinkd/.env` | `state_dir` / `identity_dir` / `GWLINKD_TRUST_BUNDLE` 指向的路径存在（**相对路径按栈根解析**，不按进程 CWD） | WARN | ✗ |
+| `identity.trust_anchor` | `identity/gwlinkd/.env` 的 `GWLINKD_TRUST_BUNDLE` | 文件不存在 → 放行（回落系统根）；**是目录**（docker 建的）或不是 `BEGIN CERTIFICATE` → FAIL。目录挡住的正是「CA 写回原位」 | FAIL | ✓ |
+| `identity.trust_projection` | `identity/gwlinkd/{control-center.pem,trust/control-center.pem}` | 真身有可读 PEM 时，容器投影必存在且**逐字节相同**；真身没了但投影还在 = 陈旧。两头都没有 = 合法现场（公网 CA / 尚未接入中心） | WARN | ✗ |
 | `knowledge.initial_layout` | `configs/gateway/knowledge/initial/` | 五份数据文件齐全（缺 → FAIL；目录整体不在 → WARN） | FAIL/WARN | ✓/✗ |
 | `tls.san_covers_domain` | `[server] tls_cert_file` | 证书在有效期内，且 SAN **精确**覆盖 `WEB_DOMAIN`（`*.a.b` 只覆盖一层） | FAIL | ✓ |
 | `port.available` | compose + docker | 排除**本栈自己**已发布的端口后，其余端口能被 bind | FAIL | ✓ |
@@ -92,6 +96,19 @@
   证书 SAN 为 `gw.example.com.evil.net` 时也会判过。
 - **`render.freshness` 是启发式**（mtime），已知误报：手工改了值文件里**主配置并不引用**的字段。
   见 §10。
+- **`layout.bind_source_type` 与 `identity.trust_anchor` 是同一起事故的两面**（2026-10-23）：
+  `identity/gwlinkd/control-center.pem` 缺失时，docker 会**静默**把这条 bind 建成同名目录；
+  wparse 容器把它当 `SSL_CERT_FILE`，构造 HTTP 客户端失败（`build victoriametric client failed`），
+  容器重启 52 次。教训是：**「挂载源存在」不等于「挂载源是文件」** —— gops 的 `mount` 检查只看存在性，
+  所以栈这一侧要自己判类型；同时「非 PEM 的信任锚」还要在**组件启动前**报，不能等它把容器拖进重启循环。
+- **信任锚的三条结构契约**（比只加检查更重要）：
+  1. 它是**可选输入**：公网 CA 的中心不需要，中心还没接入时也不存在 —— 两个状态都必须能跑；
+  2. 容器**只挂目录**（`identity/gwlinkd/trust/`），不挂单文件 —— 从根上不给 docker「把文件建成目录」的机会；
+  3. 真身（`identity/gwlinkd/control-center.pem`，gwlinkd 页面接入时写）与投影分开，由
+     `scripts/init-gwlinkd-pub.sh` 在 localize 时同步（有就拷、没有就删，幂等）。
+     代价：接入后新写入的 CA 要等下一次 localize 才到容器 —— 在那之前 `project_remote` 本来也
+     拉不动（还没接中心），所以这个窗口是空的。
+  组件侧兜底：入口脚本判到投影不是可读 PEM 就 `unset SSL_CERT_FILE` / `GIT_SSL_CAINFO` 并回落到系统根。
 
 ## 4. 变量来源：生效值，不是默认值
 
@@ -233,7 +250,7 @@ scripts/restore-gateway.sh     还原完成后      →  ./scripts/check-stack.s
 compose、路径、TOML、x509 helper。两个栈各自只保留：
 
 - `tools/stackcheck/src/profile.rs`：本栈的路径 / 变量 / 渲染对 / 身份文件；
-- `checks.rs`：本栈专属判据（gateway 的 package / knowledge / identity / prereq / TLS 策略；
+- `checks.rs`：本栈专属判据（gateway 的 layout / package / knowledge / identity / prereq / TLS 策略；
   center 的 TLS 策略）；
 - `main.rs`：约 50 行，调 `stackcheck_core::cli::run`。
 
