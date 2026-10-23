@@ -378,6 +378,52 @@ RHEL 上反过来；裁剪后每个发行版只剩存在的两条。
 - `business` / `gateway` / `k8s_pod` 是同一批流的三种归类，采集侧只采一次。
 - label 选择列为独立能力，等 `K8sDiscoveryProbe` 落地后再评估。
 
+**实现状态（2026-10-23）：代码已落地，未发布；D7 能力上报仍未做（同 W1）。**
+
+| 仓 | 改动 |
+|---|---|
+| `wist-contracts` 0.9.2（已发 2026-10-23） | `WorkSpecSource.filters: ContainerFilters`（`namespace_in` / `pod_not_in`，`deny_unknown_fields`，两个列表都空时**整字段不序列化**）；`ContainerFilters::validate()`（值必须是精确名字：拒空串 / 首尾空白 / 通配符 / >253）；`CONTAINER_LOG_ROOT = "/var/log/containers"` |
+| `wist-agentd` | 发现阶段求值：`telemetry/logs/files/glob_match.rs` 的 `resolve_family_paths` 在展开、剔完 `exclude_globs` 之后按`<pod>_<ns>_<container>-<id>.log` 解析并应用 filters；`LogFileInputSection.filters` + 配置校验；`control/work.rs` 从 spec 折算进 input；读取器（tail / checkpoint / 轮转 / 预算）**一行未改** |
+| `wist-gateway` | `SourceRow` / `UnitSource` 增 `filters`；装载期校验（只许 `FileGlob`、值形状、**目标必须在 `/var/log/containers` 下**）；`materialize_spec` 透传到 wire；管理面 `sources[].filters` 一并返回（空不输出）| 
+| `wist-gateway-web` | `ContainerFilters` 类型 + `filters` 解析（缺失 = 空）；`sourceText()` 把过滤器写进来源文案（`ns in [...]` / `pod not in [...]`）|
+| `wist-knowledge` | 无改动：目录里还没有容器单元（它们是 W1 就绪后才策展的 `draft`）|
+
+**与本文的差异 / 遗留**
+
+1. **filters 非空需要新 agent**（与 D7 同一条纪律）：`WorkSpecSource` 是 `deny_unknown_fields` 的，
+   旧 agent 收到 `filters` 会拒收整份 spec。所以：空过滤器不序列化（旧机队无感），
+   **带 filters 的单元在机队升级验证前保持 `draft`**。
+2. **“名字不符约定”不当故障**：过滤器在场时，解析不出 pod/ns 的条目（`README` / `x.log`）
+   **不作为候选**。理由是选源根就是容器目录（网关已约束），那里每个条目都是容器 symlink；
+   真出现异常名字说明集群/运行时变了，那应该在目录侧改，而不是让 agentd 静默多采一份。
+3. **两个列表的求值顺序固定**：先 `namespace_in`（白名单）后 `pod_not_in`（黑名单），
+   语义是“先圈 ns，再剔 pod”；两者同时给时，被剔的 pod 即使在白名单 ns 里也不采。
+4. **过滤器只能在 `/var/log/containers` 下**：装载期就拒（而不是运行时“一个都匹配不上”）。
+   这一条写死在网关校验里，是为了把“配错了”提前到策展环节。
+5. **label 选择仍未做**：`K8sDiscoveryProbe` 还是 `NotImplemented`，本地拿不到 label；
+   等它落地后再以独立字段评估（不往 `filters` 里塞名字对不上的东西）。
+6. **W1 遗留 4 仍在**：两条 active 单元写相互重叠的 glob（`/var/log/*.log` 与 `/var/log/app*.log`）
+   依旧会重复采集 —— filters 只是把“选源”结构化，并不解决 glob 与 glob 的重叠。
+7. **选择层在“扫描上限之前”求值**（本轮修正）：`max_paths` 只数**留下的**。
+   否则目录里候选很多时会先截断、再过滤 —— 留下的可能远少于上限（甚至为空），
+   而“超过上限”又被当成正常状态，没人会发现少采了。同一修正也覆盖了 W1 的 `exclude_globs`。
+8. **取消选择立即生效**（本轮修正）：发现阶段会回报“目标匹配上了、但被选择层剔掉”的
+   `deselected` 集合；已跟踪且仍在其中的文件**当轮停读并释放 checkpoint** ——
+   容器日志持续增长，靠“排空到 EOF”永远排不完，当时的病态就是“取消了选择却还在采”。
+   轮转/删除的旧名字不在枚举结果里，仍走原有的排空逻辑（W1 行为不变）。
+9. **已知取舍：取消后再选上 = 新文件**（`head`）—— 与 W1 对“曾排除的文件”同一语义。
+   代价是可能重复上送该文件已有内容；要“续读”得给 checkpoint 加“暂不采集”状态（未做，
+   因为需要动 checkpoint 结构，与“不改采集侧状态模型”的纪律冲突）。
+10. **名字比较逐字进行**（不折叠大小写）：k8s 名字永远小写，折叠反而会把写错的值当成能用。
+
+**验证**：contracts 85 个 lib 测试、agentd 690 个 lib 测试 + config_validation 17 个集成用例
+（含 2 ns × 3 pod 验收、选择先于截断、取消选择立即停读）、网关 685 个 lib 测试
+（含前缀相似路径拒绝、带 filters 的 active 仍可采、管理面空值不输出）、web 契约测试全绿；
+`clippy -D warnings` 0、`fmt` 干净、`tsc -b` 干净。
+
+> 发布顺序：**先发 `wist-contracts` 0.9.2**（已完成，CI 发布），再发 agentd / 网关 / web（消费方仍用 `version = "0.9"`，已验证可解析）。
+> 本地联调用 `Cargo.toml` 底部的 `[patch.crates-io]`，**提交前已还原**（CI 没有同级目录）。
+
 ### W3 journald 内核导出器
 
 - 契约 / agentd / web 增 `journalctl-kernel`：`/usr/bin/journalctl -k -p 4 -o json`，周期 60s；
