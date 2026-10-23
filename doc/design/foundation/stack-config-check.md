@@ -2,7 +2,8 @@
 
 > **状态**：已实现，并已抽成共享引擎
 > [`wist-stack-tools`](https://github.com/dayu-sec/wist-stack-tools) 的 `stackcheck-core`
-> （tag `v0.1.0`）。gateway 19 项 / center 15 项；两个栈只保留 profile + 专属判据 + 薄 main。
+> （crates.io `wist-stackcheck-core` 0.1.x；发布由 tag `v*.*.*` 的 CI 执行）。
+> gateway 19 项 / center 15 项；两个栈只保留 profile + 专属判据 + 薄 main。
 > 本文是**跨栈约定**。
 > **实现**：`wist-stack-tools/stackcheck-core`（Rust lib）
 > + `wist-dev-gateway/wist-gateway-stack/tools/stackcheck`
@@ -227,9 +228,9 @@ scripts/restore-gateway.sh     还原完成后      →  ./scripts/check-stack.s
 ## 11. 落地：共享 `stackcheck-core` + 两个 profile
 
 **已实施为公共仓**：[`wist-stack-tools`](https://github.com/dayu-sec/wist-stack-tools) 的
-`stackcheck-core`（tag `v0.1.0`）承载：Flow Result / CLI / `StackProfile` 类型 /
-渲染、密钥、身份、挂载、`public_url`、端口、镜像判据 / compose、路径、TOML、x509 helper。
-两个栈各自只保留：
+`stackcheck-core`（crates.io `wist-stackcheck-core` 0.1.x）承载：Flow Result / CLI /
+`StackProfile` 类型 / 渲染、密钥、身份、挂载、`public_url`、端口、镜像判据 /
+compose、路径、TOML、x509 helper。两个栈各自只保留：
 
 - `tools/stackcheck/src/profile.rs`：本栈的路径 / 变量 / 渲染对 / 身份文件；
 - `checks.rs`：本栈专属判据（gateway 的 package / knowledge / identity / prereq / TLS 策略；
