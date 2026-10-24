@@ -560,12 +560,12 @@ web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0
 | 仓 / 制品 | 版本 | 覆盖的阶段 |
 |---|---|---|
 | `wist-contracts` | 0.9.5 | W1 glob 判据 + `exclude_globs`、W2 `filters`、W3 `journalctl-kernel`、D7 能力清单；**G1** `LogsCapabilities.filters`、**G3** `drop_if_contains` + `MULTILINE_MODES` 增 `mysql_slow` / `postgres_csv`；**fact-v3** 摘要前缀 + `EPHEMERAL_PORT_START` |
-| `wist-api` | 0.9.1 | `AgentStatusReport.logs_capabilities`（D7） |
-| `wist-agentd` | 0.9.1-alpha | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报；**G1** 上报 `filters` + `drop_if_contains`；**G3/W4** `mysql_slow` / `postgres_csv` 记录边界 + 噪音行丢弃（不占 `seq`）；**fact-v3** 进程标识取 `/proc/<pid>/exe` |
-| `wist-gateway` | 0.20.1-alpha | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对 |
+| `wist-api` | 0.9.2 | `AgentStatusReport.logs_capabilities`（D7）；`DiscoveryPoliciesReturned → DiscoveryAspectPolicySet` 的**唯一转换** |
+| `wist-agentd` | 0.9.3-alpha | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报；**G1** 上报 `filters` + `drop_if_contains`；**G3/W4** `mysql_slow` / `postgres_csv` 记录边界 + 噪音行丢弃（不占 `seq`）；**fact-v3** 进程标识取 `/proc/<pid>/exe`；**0.9.2 修**探测白名单被丢 |
+| `wist-gateway` | 0.20.2-alpha | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对；0.20.2 诊断补全 |
 | `wist-gateway-web` | 0.14.1-alpha | W1/W2 解析与展示、导出器词表跟上 W3；**W4** `drop_if_contains` 与非默认读法展示 |
 | `wist-knowledge` | 0.5.1 | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行（`catalog_version` 10） |
-| `wist-gateway-stack` | 0.2.13-alpha | 网关 0.20.1 / 前端 0.14.1 / 出厂知识库包 0.5.1 接线（镜像已在 ghcr + TCR，包已在 COS） |
+| `wist-gateway-stack` | 0.2.14-alpha | 网关 0.20.2 / 前端 0.14.1 / 出厂知识库包 0.5.1 接线（镜像已在 ghcr + TCR，包已在 COS） |
 
 **现场滚动顺序是硬约束**：**网关先于 agentd**（旧网关的 `deny_unknown_fields` 会拒收新能力上报，
 新 agentd 的能力清单才能落地），**知识库包最后**（旧网关不认识的导出器 / 读法会让**整份目录加载失败**）。
@@ -577,6 +577,10 @@ contracts 始终最先发布（所有仓的编译依赖）。
 `v0.9.1-alpha`（agentd）、`v0.14.1-alpha`（web）、`v0.5.1`（知识库）；
 部署包 `wist-gateway-stack` 跟到 **`v0.2.13-alpha`**（sha256 `203faecf…`）。
 
+紧接着的补丁系列（真机反馈触发，已发版）：`v0.9.2`（api，策略表唯一转换）→
+**`v0.9.2-alpha` / `v0.9.3-alpha`（agentd，探测白名单被丢的修复）** →
+`v0.20.2-alpha`（网关，拒绝文案带条件 + 管理面回真实白名单）→ **`v0.2.14-alpha`**（stack）。
+
 | 仓 | 版本 | 改了什么 |
 |---|---|---|
 | `wist-contracts` | 0.9.5 | **G1** `LogsCapabilities.filters`（`namespace_in` / `pod_not_in`）；**G3** `drop_if_contains`（字段 + 能力轴 + `validate_drop_if_contains`）、`MULTILINE_MODES` 增 `mysql_slow` / `postgres_csv`；`missing_log_capabilities` 改为收整条 `WorkSpecSource` |
@@ -584,6 +588,12 @@ contracts 始终最先发布（所有仓的编译依赖）。
 | `wist-gateway` | 0.20.1-alpha | 按新能力轴裁源（`drop_if_contains` 不支持时**降级**：去字段、不裁源）；装载期校验 `drop_if_contains`；同面的 `draft` 单元不再一起派；人工 `spec=` 也做能力裁剪；读法词表改为复用契约 |
 | `wist-gateway-web` | 0.14.1-alpha | 目录 / 派活视图展示 `drop_if_contains` 与非默认读法（`read: postgres_csv`） |
 | `wist-knowledge` | 0.5.1 | G2 容器单元；14 翻 `active`（事实门用 `path_exists`，绕开未实现的包探针）；auth 噪音行；`catalog_version` 10 |
+
+> ⚠ **真机踩过的坑（已修）**：agentd 0.9.1 及以前在 `fetch_discovery_policies` 里用
+> `DiscoveryAspectPolicySet::new(..)` 重建策略表，而那个构造器把 `probe_paths` 置空 ——
+> 于是 agent 从不探测任何路径，`path_exists:` 判定的面（auth / sudo / audit / kernel /
+> 数据库 / 容器 stdout）在真机上**永远授不了权**（`work_conflict: … fact_not_collected`）。
+> 现场表现只有“授不了权”，日志采集本身正常 —— 是最容易误判成“目录/网关配置错”的一类。
 
 发布顺序（已按此执行）：**contracts 0.9.5 先发**（否则后四个仓编译不过），随后
 **网关 0.20.1 → agentd 0.9.1 → web 0.14.1 → knowledge 0.5.1** ——
@@ -635,7 +645,7 @@ contracts 始终最先发布（所有仓的编译依赖）。
 
 > 发版顺序（硬约束，**2026-10-24 已执行**）：contracts 0.9.5 → 网关 0.20.1 → agentd 0.9.1 → web 0.14.1 → knowledge 0.5.1。
 > 下一个版本沿用同一顺序；`wist-gateway-stack` 要单独跟版（它不随组件 tag 自动前进）——
-> 本轮已跟到 `v0.2.13-alpha`，站点用 `gops prj upgrade -v 0.2.13-alpha` 取新包。
+> 本轮已跟到 `v0.2.14-alpha`，站点用 `gops prj upgrade -v 0.2.14-alpha` 取新包。
 
 #### 阅读注意
 
