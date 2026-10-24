@@ -107,6 +107,64 @@ cri-dockerd 把 k8s 容器也放在 `/var/lib/docker/containers` —— 这时�
 
 ## 6. 内容（知识库侧）
 
+### 6.1 面怎么定：**不开新面**，只加单元
+
+三层职责先分清（见 [`collection-family-capability-contract.md`](./collection-family-capability-contract.md) §4–§6）：
+
+| 层 | 回答什么 | 稳定性 |
+|---|---|---|
+| **面（family）** | 用户要看的**一类东西**，也是数据面归类的目的地 | 高：闭集、不改名、带 `platforms` |
+| **单元（unit）** | 某个平台上的一个**采集载体**：匹配条件 + 来源 + 读法 + 权限 | 中：随载体变，可 `draft`/`active` 独立开关 |
+| **来源（source）** | 具体路径 / 导出器 / 周期 | 低：随部署变 |
+
+判据（按顺序问）：
+
+1. **现有面能不能表达这个语义？** 能 ⇒ 不加面。
+   容器 stdout 的语义没变（13 business / 15 gateway / 16 k8s_pod 仍是「容器里的应用在说什么」），
+   变的只是**这个机器怎么拿到它**（kubelet 符号链接目录 vs docker 日志目录）。⇒ **不开新面**。
+2. **现有读法 / source kind 能不能采？** 不能 ⇒ 轨道 B（先定能力，再建单元）。
+3. **什么时候才加面？** 当「用户要**单独看**这一类」且「数据面要**单独分派**」同时成立。
+   容器**应用**日志不满足（它与 k8s 容器日志是同一类）；
+   真正的「容器运行时」面（docker/containerd 的启停、镜像拉取、运行时错误）**才**是另一类，
+   它今天没有单元，也不需要本方案。
+
+### 6.2 为什么必须是两个单元，而不是一个单元两条来源
+
+| 判据 | k8s（已有） | docker（本方案） |
+|---|---|---|
+| 路径 | `/var/log/containers/*.log` | `/var/lib/docker/containers/*/*-json.log*` |
+| 读法 | `none`（CRI 前缀，一行一条） | `docker_json`（解包） |
+| 目录是否存在 | kubelet 建的 | 只有装了 docker 才有 |
+
+**读法不同就应该是不同单元**（同单元多来源的前提是「同一读法 + 同一权限 + 同一匹配前提」，
+如 `auth.log` / `secure`）。合在一个单元里还会丢掉两个能力：
+
+- 无法表达「二选一」：`match` 只能表达“这些路径里有就行”，k8s 节点上会两条来源一起派 → 重采；
+- 无法分环境回退：Docker 单元可以先在几台机器上翻 `active`，出问题只回退它。
+
+命名沿用现有约定（平台前缀 + 载体）：`linux-docker-container-stdout`，
+与 `linux-container-stdout`（k8s）并列，同属 `ComputeWorkload`。
+
+> **已知限制一：`data-root` 非默认**。docker 可被改成 `--data-root /data/docker`，
+> 而目录里的 `match` / `target` 是**字面路径**（不支持双层 glob）。目前只认 `/var/lib/docker`；
+> 现场非默认时只能另开一条单元，或以后给目录加变量支持。
+>
+> **已知限制二：以后的载体**。podman / containerd 若与 docker 的文件布局或读法**确实不同**，
+> 按同一判据各自开单元；只是根目录不同的（如同为 `json-file` 布局、换了 data-root）用 glob
+> 或现场覆盖解决，不开单元。
+
+### 6.3 13 / 15 / 16 的细分在 Docker 侧要等 M2
+
+现有的细分靠**文件名**：`/var/log/containers/<pod>_<ns>_<container>-<id>.log`。
+Docker 侧文件名只有容器 id，**没有名字** ⇒ M1 阶段这三个类分不开。
+
+因此 M1 的诚实状态是：日志进了 `ComputeWorkload`，`rule_ref` 留空（= **可采但解析未就绪**，
+与 §7 对其它面的口径一致）；M2 从 `config.v2.json` 的 `Name` / `Config.Image` /
+`Config.Labels`（compose 的 `com.docker.compose.service`、k8s 的 `io.kubernetes.container.name`）
+拿到身份后，数据面才能像 k8s 那样分派。
+
+### 6.4 单元内容
+
 ```toml
 [[units]]
 unit_id   = "linux-docker-container-stdout"
