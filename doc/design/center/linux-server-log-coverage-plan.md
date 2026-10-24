@@ -565,7 +565,7 @@ web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0
 | `wist-gateway` | 0.20.1-alpha | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对 |
 | `wist-gateway-web` | 0.14.1-alpha | W1/W2 解析与展示、导出器词表跟上 W3；**W4** `drop_if_contains` 与非默认读法展示 |
 | `wist-knowledge` | 0.5.1 | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行（`catalog_version` 10） |
-| `wist-gateway-stack` | 0.2.9-alpha | ⚠ **待跟版**：现网 stack 仍指网关 0.20 / 前端 0.14 / 知识库 0.5.0 |
+| `wist-gateway-stack` | 0.2.13-alpha | 网关 0.20.1 / 前端 0.14.1 / 出厂知识库包 0.5.1 接线（镜像已在 ghcr + TCR，包已在 COS） |
 
 **现场滚动顺序是硬约束**：**网关先于 agentd**（旧网关的 `deny_unknown_fields` 会拒收新能力上报，
 新 agentd 的能力清单才能落地），**知识库包最后**（旧网关不认识的导出器 / 读法会让**整份目录加载失败**）。
@@ -574,7 +574,8 @@ contracts 始终最先发布（所有仓的编译依赖）。
 #### 本轮发布（2026-10-24，**已发版**）
 
 五个仓的 tag 与 GitHub Release 均已产出：`v0.9.5`（contracts）、`v0.20.1-alpha`（网关）、
-`v0.9.1-alpha`（agentd）、`v0.14.1-alpha`（web）、`v0.5.1`（知识库）。
+`v0.9.1-alpha`（agentd）、`v0.14.1-alpha`（web）、`v0.5.1`（知识库）；
+部署包 `wist-gateway-stack` 跟到 **`v0.2.13-alpha`**（sha256 `203faecf…`）。
 
 | 仓 | 版本 | 改了什么 |
 |---|---|---|
@@ -633,7 +634,8 @@ contracts 始终最先发布（所有仓的编译依赖）。
 3. G5 / G6 / G7 / G12 / G13 视现场反馈排。
 
 > 发版顺序（硬约束，**2026-10-24 已执行**）：contracts 0.9.5 → 网关 0.20.1 → agentd 0.9.1 → web 0.14.1 → knowledge 0.5.1。
-> 下一个版本沿用同一顺序；`wist-gateway-stack` 要单独跟版（它不随组件 tag 自动前进）。
+> 下一个版本沿用同一顺序；`wist-gateway-stack` 要单独跟版（它不随组件 tag 自动前进）——
+> 本轮已跟到 `v0.2.13-alpha`，站点用 `gops prj upgrade -v 0.2.13-alpha` 取新包。
 
 #### 阅读注意
 
