@@ -85,8 +85,9 @@ agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
 
 - **macOS**：`ps -axo pid=,comm=` 给的是**完整可执行路径**（实测本机最长 220 字符），能看出
   `mise`/`node`/`node_modules`/`esbuild`/`Docker.app`/`Xcode` → 日常机 vs 开发机**现在就能判**。
-- **Linux**：`/proc/<pid>/comm` 是 15 字符短名、**无路径无参数** → `python3`/`java`/`node` 无法区分，
-  靠 `postgres`/`slurmd`/`kubelet` 这类守护进程名还能判，长尾要靠补采集才能提高推断率。
+- **Linux**：可执行标识取 `/proc/<pid>/exe` 的**完整路径**（`fact-v3` 起），所以 `process_path`
+  类规则在两侧同口径，内核线程/僵尸也不会混进信号。但 `python3` / `java` / `node` 的不同用途
+  仍分不出来（没有参数），长尾要靠补采集才能提高推断率。
   **已定补两个信号**（已记入 backlog `B119`）：
   1. `cmdline`（`/proc/<pid>/cmdline`）—— 直接解决 `python3 xxx.py` / `java -jar xxx.jar` 分不出来的问题；
   2. **已装包清单**（`dpkg-query` / `rpm -qa`）—— 决定性差别：**服务没在跑也能判**，`comm` 做不到；

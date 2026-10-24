@@ -15,7 +15,7 @@
 | 范围口径 | 16 类是**当前需求**，不是采集面全集：按子集处理，不重排/删除现有面；后续新增页面分类优先在数据面规则里加 |
 | 分类模型 | 16 类是**页面分类**；记录侧拆 `source_type` + `log_type`，容器三类按 `gateway` > `business` > `k8s_pod` 互斥 |
 | 解析归属 | **agentd 只搬原文**，帧协议不动；`log_type` / `auth_*` / `level` / `extra` / `date` 全部由数据面规则产出 |
-| 现状覆盖 | 16 类中 **3 类原文可采**（1–3）、**1 类部分**（6，仅 `ausearch -m execve`）、**12 类不可采**；输出语义 0 类对齐 |
+| 现状覆盖 | ~~16 类中 3 类原文可采…~~ **已被 §6.6 取代**：16 类都已有 `active` 单元可采原文（G1–G3 落地后）；输出语义仍 0 类对齐 |
 | 补齐路径 | 采集侧只补 4 种能力：派活裁剪、文件族读取、journald 导出器、记录边界；其余全在目录与数据面 |
 | 关键约束 | 同一文件只读一次；`family` 是粗载体，`log_type` 由数据面按正文分派 |
 
@@ -48,6 +48,8 @@
 ---
 
 ## 3. 现状判定
+
+> **以下判定是 2026-10-22 的快照，已被 §6.6 取代**（G1–G3 落地后，13/15/16/14 也已可采）。
 
 判据只看两处：`wist-contracts/src/work.rs::is_executable_source`（两侧同源）与
 `wist-knowledge/catalog.toml` 的 `active` 单元。当前可执行来源只有三种：
@@ -189,7 +191,8 @@ symlink 路径（`filename` 形状不变）。
 在其落地前，glob / journal 单元先保持 `draft`，机队升级验证后再单独发知识库翻 `active`。
 
 **实现状态（2026-10-23）：已落地并已发布**（contracts 0.9.4 / api 0.9.1 / gateway 0.20.0-alpha / agentd 0.9.0-alpha）。
-**尚未覆盖 `filters`（W2）—— 见 §6.6 G1，这是策展容器单元的前置。**
+**2026-10-24 补齐 `filters`（W2）与 `drop_if_contains`（W4）两条能力轴**（contracts 0.9.5 / agentd 0.9.1 /
+网关 0.20.1，待发版）—— 见 §6.6「本轮落地」。
 
 | 仓 | 改动 |
 |---|---|
@@ -207,7 +210,8 @@ symlink 路径（`filename` 形状不变）。
 **残留（已写进待决）**
 
 1. **回滚到“不报能力”的 agentd 时拦不住**：落库沿用 `local_work` 的口径（一次老报文不清清单），所以回滚后网关会拿**上一次报告**继续判 —— 它可能比回滚后的 agent 更乐观。彻底拦住需要一张「能力 → 最低版本」表（又一个真相来源），本次不做，记为待决。
-2. **目录翻 `active` 是单独一次发布**：D7 落地只是让翻牌变安全；`linux-db-service` 等靠 glob 的面仍是 `draft`，等机队上报后再发。
+2. **目录翻 `active` 是单独一次发布**：D7 落地只是让翻牌变安全；`linux-db-service` 等靠 glob 的面
+   当时仍是 `draft`。**2026-10-24：已按这个纪律另发一版目录（0.5.1，见 §6.6）**。
 3. **管理面只到接口层**：`AgentListEntry.logs_capabilities` 已随列表带出（`null` = 还没报过），
    页面还没渲染 —— web 跟进时可用来回答「为什么这个面没派给这台机器」。
 4. **部分裁剪会记一行自观测**：单元还在、但某条来源因能力被剔时记
@@ -405,8 +409,9 @@ RHEL 上反过来；裁剪后每个发行版只剩存在的两条。
 - `business` / `gateway` / `k8s_pod` 是同一批流的三种归类，采集侧只采一次。
 - label 选择列为独立能力，等 `K8sDiscoveryProbe` 落地后再评估。
 
-**实现状态（2026-10-23）：已落地并已发布**（contracts 0.9.2 / agentd 0.9.0-alpha / gateway 0.20.0-alpha / web 0.14.0-alpha）；
-**但目录里还没有任何容器单元**（见 §6.6 G2），所以 W2 的代码能力目前零使用者。
+**实现状态（2026-10-23）：代码已落地并已发布**（contracts 0.9.2 / agentd 0.9.0-alpha / gateway 0.20.0-alpha / web 0.14.0-alpha）。
+**2026-10-24：目录已落地容器单元**（`linux-container-stdout`，见 §6.6「本轮落地」），W2 不再是零使用者；
+能力轴补齐后旧 agent 上由网关裁源（§6.6「本轮落地」）。
 
 | 仓 | 改动 |
 |---|---|
@@ -524,6 +529,22 @@ web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0
   - `mysql_slow`：`# Time:` 起块，下一 `# Time:` 或空闲超时 flush；
   - `postgres_csv`：只在**引号外**的换行切记录（CSV 状态机），否则多行 SQL 被切碎。
 
+**实现状态（2026-10-24）：已落地，待发版**（contracts 0.9.5 / agentd 0.9.1 / 网关 0.20.1 / web 0.14.1 / knowledge 0.5.1）。
+
+| 仓 | 改动 |
+|---|---|
+| `wist-contracts` 0.9.5 | `WorkSpecSource.drop_if_contains`（默认空、不序列化）+ `validate_drop_if_contains`；`MULTILINE_MODES` 增两种读法；`LogsCapabilities.drop_if_contains`（`substring`） |
+| `wist-agentd` 0.9.1 | 噪音行在**进闸门之前**按整条记录丢（**不占 `seq`**），丢弃数进自观测；`mysql_slow` 走界定器（头部要求 `# Time:` 后是时间戳），`postgres_csv` 走引号状态机（跨批时从 pending 正文重算引号状态；截断长行按 `Oversized` 丢；长空闲 60s 才对"写到一半"做恢复） |
+| `wist-gateway` 0.20.1 | 装载期校验（只许 `FileGlob`、子串形状）；派活透传；能力不支持时**去掉字段降级**（不裁源，记 `event=WorkSourceDegraded`）；就绪不再把同面的 `draft` 单元一起派 |
+| `wist-gateway-web` 0.14.1 | 目录 / 派活视图展示 `drop: …` |
+| `wist-knowledge` 0.5.1 | `auth.log` / `secure` 配三条噪音子串；`linux-db-service` 翻 active（csvlog / slow log，事实门用 `path_exists`） |
+
+**遗留**：
+
+1. `systemd-logind` 是**宽子串** —— 会连带丢掉 “New session …” 这类会话事件。
+   若现场需要保留会话事件，换成更长的子串（如 `systemd-logind: New seat`），不改代码。
+2. 超限 csvlog 记录跨读批时，“丢到尾”的状态不落盘（G13）：低概率，需要 checkpoint 加字段才能根治。
+
 ### W5 明确不做
 
 - 不扩 `TelemetryRecord` / `DataFrame`；不在 agentd 内做 audit / auth / CRI / csv 字段解析；
@@ -538,35 +559,62 @@ web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0
 
 | 仓 / 制品 | 版本 | 覆盖的阶段 |
 |---|---|---|
-| `wist-contracts` | 0.9.4 | W1 glob 判据 + `exclude_globs`（0.9.1）、W2 `filters`（0.9.2）、W3 `journalctl-kernel`（0.9.3）、D7 `LogsCapabilities.exporters` + `missing_log_capabilities`（0.9.4） |
+| `wist-contracts` | 0.9.5 | W1 glob 判据 + `exclude_globs`、W2 `filters`、W3 `journalctl-kernel`、D7 能力清单；**G1** `LogsCapabilities.filters`、**G3** `drop_if_contains` + `MULTILINE_MODES` 增 `mysql_slow` / `postgres_csv`；**fact-v3** 摘要前缀 + `EPHEMERAL_PORT_START` |
 | `wist-api` | 0.9.1 | `AgentStatusReport.logs_capabilities`（D7） |
-| `wist-agentd` | 0.9.0-alpha | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报 |
-| `wist-gateway` | 0.20.0-alpha | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪 |
-| `wist-gateway-web` | 0.14.0-alpha | W1/W2 解析与展示、导出器词表跟上 W3 |
-| `wist-knowledge` | 0.5.0 | `linux-kernel-system` 换 `journalctl-kernel`（`catalog_version` 9） |
-| `wist-gateway-stack` | 0.2.9-alpha | 网关 0.20 / 前端 0.14 / 知识库 0.5.0 接线；中心信任锚可选化 |
+| `wist-agentd` | 0.9.1-alpha | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报；**G1** 上报 `filters` + `drop_if_contains`；**G3/W4** `mysql_slow` / `postgres_csv` 记录边界 + 噪音行丢弃（不占 `seq`）；**fact-v3** 进程标识取 `/proc/<pid>/exe` |
+| `wist-gateway` | 0.20.1-alpha | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对 |
+| `wist-gateway-web` | 0.14.1-alpha | W1/W2 解析与展示、导出器词表跟上 W3；**W4** `drop_if_contains` 与非默认读法展示 |
+| `wist-knowledge` | 0.5.1 | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行（`catalog_version` 10） |
+| `wist-gateway-stack` | 0.2.9-alpha | ⚠ **待跟版**：现网 stack 仍指网关 0.20 / 前端 0.14 / 知识库 0.5.0 |
 
-**部署顺序是硬约束**：contracts → agentd → gateway → web → knowledge → stack。
-旧网关会把「active + 不认识的导出器」判为装载错误、**整份目录加载失败**。
+**现场滚动顺序是硬约束**：**网关先于 agentd**（旧网关的 `deny_unknown_fields` 会拒收新能力上报，
+新 agentd 的能力清单才能落地），**知识库包最后**（旧网关不认识的导出器 / 读法会让**整份目录加载失败**）。
+contracts 始终最先发布（所有仓的编译依赖）。
+
+#### 本轮发布（2026-10-24，**已发版**）
+
+五个仓的 tag 与 GitHub Release 均已产出：`v0.9.5`（contracts）、`v0.20.1-alpha`（网关）、
+`v0.9.1-alpha`（agentd）、`v0.14.1-alpha`（web）、`v0.5.1`（知识库）。
+
+| 仓 | 版本 | 改了什么 |
+|---|---|---|
+| `wist-contracts` | 0.9.5 | **G1** `LogsCapabilities.filters`（`namespace_in` / `pod_not_in`）；**G3** `drop_if_contains`（字段 + 能力轴 + `validate_drop_if_contains`）、`MULTILINE_MODES` 增 `mysql_slow` / `postgres_csv`；`missing_log_capabilities` 改为收整条 `WorkSpecSource` |
+| `wist-agentd` | 0.9.1-alpha | 上报 `filters` + `drop_if_contains`；W4 记录边界（`mysql_slow` / `postgres_csv`）与噪音行丢弃（不占 `seq`，丢弃数进自观测）；新增真机验收脚本 + CI job |
+| `wist-gateway` | 0.20.1-alpha | 按新能力轴裁源（`drop_if_contains` 不支持时**降级**：去字段、不裁源）；装载期校验 `drop_if_contains`；同面的 `draft` 单元不再一起派；人工 `spec=` 也做能力裁剪；读法词表改为复用契约 |
+| `wist-gateway-web` | 0.14.1-alpha | 目录 / 派活视图展示 `drop_if_contains` 与非默认读法（`read: postgres_csv`） |
+| `wist-knowledge` | 0.5.1 | G2 容器单元；14 翻 `active`（事实门用 `path_exists`，绕开未实现的包探针）；auth 噪音行；`catalog_version` 10 |
+
+发布顺序（已按此执行）：**contracts 0.9.5 先发**（否则后四个仓编译不过），随后
+**网关 0.20.1 → agentd 0.9.1 → web 0.14.1 → knowledge 0.5.1** ——
+两头的报文都是 `deny_unknown_fields`：老网关会拒收新 agentd 的能力上报，老 agentd 会拒收
+新 spec 字段（如 `filters`）；目录包最后发（旧网关不认识新 `multiline` 词会整份拒载）。
+
+> **本轮怎么验**：行为的机制层已固化成 `wist-agentd/dev/verify-log-acceptance.sh`
+> （CI job `log-acceptance`，`ubuntu-24.04`，不需要 root）：轮转 / symlink / checkpoint 跨进程 /
+> 噪音行不取号 / csv 引号跨读批 / torn write。它证明不了什么、还有哪些必须上真机，见 §9.1。
+
+> ⚠ **目录包的前置条件**：新字段对旧 agent 的处置分两类：
+> * `drop_if_contains` 是**减法**：agent 不声明/没报能力时网关**去掉这个字段继续采**（上送量变大），
+>   不会再因 `deny_unknown_fields` 整份拒收；
+> * `filters` 与新**读法**是语义性的：不声明就裁源/不保证旧 agent 能正确切记录。
+> 所以机队应先升到 agentd ≥ 0.9.1 再推目录；未上报能力的 pre-D7 agent 不会拒收，但新读法会被
+> 当成一行一条（记录会被切碎），不要把它们当作可用的采集目标。
 
 #### 16 类覆盖现状
 
 | # | 类 | 现状 | 卡在哪 |
 |---|---|---|---|
-| 1–3 | auth（ssh / session / sudo） | **采集中**（`linux-auth-session` / `linux-sudo-log` active） | 噪音行丢弃要 W4（G3） |
+| 1–3 | auth（ssh / session / sudo） | **采集中**（`linux-auth-session` / `linux-sudo-log` active） | 解析侧 `auth_*` 抽取 / `log_type` 分派（噪音行已按 W4 配好） |
 | 4–11 | audit（8 类） | **采集中**（`linux-audit-log` active；整文件、不按 `type=` 丢行） | 解析侧规则（8.1.1 / 8.1.2） |
 | 12 | kernel | **采集中**（`linux-kernel-system` → `journalctl-kernel`） | 无 |
-| 13 / 15 / 16 | 容器（business / gateway / k8s_pod） | **未采集** | 目录里没有容器单元（G2），且能力轴缺 filters（G1） |
-| 14 | database | **未采集** | 单元 `draft` + 缺 W4 记录边界（G3） |
+| 13 / 15 / 16 | 容器（business / gateway / k8s_pod） | **采集中**（`linux-container-stdout` active，本轮） | 解析侧解 CRI 头 / 按 ns+service 分派 `log_type` |
+| 14 | database | **采集中**（`linux-db-service` active，本轮） | 解析侧 csvlog / slow 字段、`extra.db` |
 
 #### 缺口（按优先级）
 
 | # | 缺口 | 影响 | 位置 | 类型 |
 |---|---|---|---|---|
-| **G1** | D7 能力清单**没有 `filters` 轴** | 带 `filters` 的单元派给 agentd < 0.9 会被 `deny_unknown_fields` **整份拒收** → 容器面永远翻不了 `active` | `wist-contracts/src/work.rs::missing_log_capabilities`（现只有 `file_inputs` / `multiline_modes` / `exporters`）+ agentd 上报 | 代码（**阻塞 G2**） |
-| **G2** | 目录里**没有容器单元** | 13/15/16 一条不采；W2 的代码能力零使用者 | `wist-knowledge/catalog.toml`：`linux-compute-workload` 仍是 `/var/log/pods/*`（旧形态） | 策展 |
-| **G3** | W4 记录边界未实现 | 1–3 的噪音行、14 的 csvlog / slow 都没法正确切 | `MULTILINE_MODES` 只有 `none` / `indented`；无 `drop_if_contains` | 代码 |
-| G4 | 5 个单元仍 `draft` | misc / db / compute / backup / network 不可用 | `catalog.toml` | 策展（多数依赖 G1/G3） |
+| G4 | 4 个单元仍 `draft` | `linux-misc-system` / `linux-compute-workload`（slurm/nvidia，容器面已另立 active 单元）/ `linux-backup-job` / `linux-network-service` | `catalog.toml` | 策展（⚠ `linux-compute-workload` / `linux-backup-job` 的 `installed:` 依赖包清单探针 B119，探针落地前翻 `active` 也会永远展不开；`linux-db-service` 已改 `path_exists`） |
 | G5 | glob × glob 重叠不可检测 | 两条 active 单元写重叠 pattern 会**重复采集** | 网关装载期只对显式路径做唯一性校验（W1 遗留 4） | 代码（低优先，靠策展约束） |
 | G6 | 授权后新出现的文件不进 spec | 后装 auditd / 新日志文件要**重新授权**一次 | `work.rs::derive_spec` 只在授权时算 | 代码 |
 | G7 | 管理面不显示「被裁掉的来源」 | 运维看不出“这个面为什么少了一半” | web `sources[]` 只回目录里的来源 | 展示 |
@@ -575,22 +623,21 @@ web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0
 | G10 | `rule_ref` 大量为空 | 页面“解析就绪”轴为 0 | `catalog.toml` + 数据面 RACI（8.1.2） | 跨团队 |
 | G11 | label 选择未做 | 只能按 namespace / pod 名选 | `K8sDiscoveryProbe = NotImplemented`（8.1.5 已定 A：先不做） | 延后 |
 | G12 | **回滚到不报能力的 agentd 时拦不住** | 落库沿用 `local_work` 口径（一次老报文不清清单）→ 网关拿上一次报告继续判，可能比回滚后的 agent 更乐观 | 需要一张「能力 → 最低版本」表（又一份真相源） | 代码（D7 残留 1） |
+| G13 | 超限 csvlog 记录的「丢到尾」状态不落盘 | 一条 >1 MiB / >1000 行的记录**跨读批**时，下一批首行会被当成新记录（可能上送一条半条 CSV） | `fold_csv` 的 `discarding` 未进 `PendingMultilineState`（需 checkpoint 加字段） | 代码（低概率） |
 
 #### 建议顺序
 
-1. **G1**（filters 能力轴）→ 发 contracts / agentd；
-2. **G2**（策展容器单元：`/var/log/containers` + `namespace_in` / `pod_not_in`）→ knowledge 发版翻 `active` → 补上 13/15/16；
-3. **G3**（W4 记录边界）→ 翻 `linux-db-service`（14）与 auth 噪音行（1–3）；
-4. G4 其余三个单元逐个翻；
-5. G9 单独立项（跨 4 仓）；G5 / G6 / G7 视现场反馈排。
+1. G4 四个单元逐个翻（`linux-misc-system` / `linux-compute-workload` /
+   `linux-backup-job` / `linux-network-service`）；
+2. G9 单独立项（跨 4 仓）；
+3. G5 / G6 / G7 / G12 / G13 视现场反馈排。
 
-#### 已知的文档 / 注释不一致（清理项）
+> 发版顺序（硬约束，**2026-10-24 已执行**）：contracts 0.9.5 → 网关 0.20.1 → agentd 0.9.1 → web 0.14.1 → knowledge 0.5.1。
+> 下一个版本沿用同一顺序；`wist-gateway-stack` 要单独跟版（它不随组件 tag 自动前进）。
 
-- 本文 §6 里 W1/W2/W3/D7 的「未发布」「D7 未做」「contracts 0.9.3 待发」均为落地当时的记述，**以本节为准**；
-- `wist-knowledge/catalog.toml` 的 `linux-crash-panic`：注释写「本单元先保持 draft」，实际 `status = "active"`
-  （它含两条 glob 来源，旧 agent 上靠 D7 自动裁掉）；
-- `biz/` 与 `gateway` 的容器流归类（13/15/16 是同一批流的三种归类）在目录落地时要写成**同一单元、不同归类**，
-  不要再拆成两条 active（否则触发 G5）。
+#### 阅读注意
+
+- 本文 §6 里 W1/W2/W3/D7 的「未发布」「D7 未做」「contracts 0.9.3 待发」均为落地当时的记述，**以本节为准**。
 
 ---
 
@@ -874,6 +921,28 @@ DaemonSet 形态下 symlink 目标（`/var/log/pods/...`）在容器内不可见
    - 没有非预期的 `unsupported` 单元；
    - 延迟：文件 ≤3s，glob 新文件 ≤15s，journal ≤60s。
 
+### 9.1 可自动化的子集
+
+上面 1–3 要真环境；但 4 里有一半是**机制**问题，不依赖 16 类来源本身，已固化成
+`wist-agentd/dev/verify-log-acceptance.sh`（CI job `log-acceptance`，`ubuntu-24.04`，不需要 root）：
+
+| 用例 | 钉住的不变量 |
+|---|---|
+| 单文件轮转（mv + 新文件） | 按 inode 排空旧尾巴；`[file_offset, file_offset_end)` 与来源字节逐字一致 |
+| 重启续读 | checkpoint 跨进程不重放、不丢行 |
+| 容器 symlink 轮转 | symlink 路径不变、真实文件改名后仍按 realpath 排空旧尾巴 |
+| 噪音行丢弃 | 命中 `drop_if_contains` 的行不上送、**不占 `seq`**，`seq` 严格递增 |
+| `postgres_csv` 引号跨读批 | 半个引号块从 pending 续上，不切成两条 |
+| torn write（引号奇偶永久失衡） | 空闲 60s 后按 `Oversized` 挡下并清 pending，后续行独立成条 |
+| 自观测对账 | `records=N` 与实际落盘条数一致 |
+
+它**只证明「这套机制在这套文件系统 / 这套进程模型下成立」**，不覆盖：
+
+- 数据面解析（`log_type` / 字段抽取 / 与事实 join）—— 那是另一层；
+- 具体发行版的日志格式差异（RHEL 9 的 `audit.log` / `secure` 写法）、`logrotate` 的真实
+  `copytruncate` / `postrotate` 脚本、容器 runtime 的文件布局；
+- 50 MB/天 的预算、16 类齐全性 —— 必须在上面 1–3 的真机上跑。
+
 ---
 
 ## 10. 风险
@@ -883,7 +952,7 @@ DaemonSet 形态下 symlink 目标（`/var/log/pods/...`）在容器内不可见
 | `/var/log/containers` 文件多 | fd / 目录扫描开销 | `max_files`、15s 重扫、固定前缀扫描 |
 | audit 事件跨多行、按行提交 | 下游见到半事件 | 需求本身要求「每行一条输出」；数据面按 `msg=audit(...)` 聚合 |
 | 同路径多单元 | 重复采集、重复存储 | W0 目录校验（同一平台同路径只允许一个 active 单元） |
-| 旧 agent 遇新来源 | 面看似就绪但报 `unsupported` | 发布顺序 agentd→网关→知识库；D7 能力上报 |
+| 旧 agent 遇新来源 | 面看似就绪但报 `unsupported` | D7 能力上报 + 网关按能力裁源（§6.6「本轮落地」）；发布顺序见 §6.6 |
 | journal 游标丢失/被 vacuum | 重复或卡死 | 游标原子写 + cursor not found 回退 `--since` |
 | 事实摘要 join 滞后 | `host_ip/host_name` 非实时 | 只作展示/归属，不做时序判断（D3） |
 

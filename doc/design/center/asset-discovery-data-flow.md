@@ -76,7 +76,7 @@ flowchart TD
 | `packages` 探针未实现 | 已装包集合恒空（**空 = 没采，不是没装**，见 `B119`） |
 | 数据面接入**无鉴权** | 网关订阅端不校身份（有意接受的降级窗口，见交付计划 §9） |
 | container / k8s 探针关闭 | 容器/编排资产不在当前发现范围 |
-| Linux `/proc/<pid>/comm` 只有 basename | `process_path` 类规则目前只在 macOS 成立（见 `B119`） |
+| Linux 只有可执行路径、没有参数 | `python3` / `java` / `node` 的不同用途分不出来；`cmdline` + 包清单仍缺（见 `B119`） |
 
 ## 5. 模型落点
 

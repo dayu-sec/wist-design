@@ -38,7 +38,8 @@ variant CollectionFamily {
   PrivacyTcc GatekeeperQuarantine DevToolchain
 
   // Linux 侧重：KernelSystem 内核与系统日志（含 OOM killer）、DatabaseService 数据库服务、
-  // StorageHealth 存储与文件系统健康（fsck/RAID/SMART/容量）、ComputeWorkload 作业/调度/加速卡、
+  // StorageHealth 存储与文件系统健康（fsck/RAID/SMART/容量）、ComputeWorkload 作业/调度/加速卡
+  // （以及容器 stdout：13 business / 15 gateway / 16 k8s_pod 同属这个粗载体，归类由数据面 log_type 分派）、
   // BackupJob 备份与批处理、NetworkService 网络服务（NFS/SMB/防火墙规则）。
   KernelSystem DatabaseService StorageHealth ComputeWorkload BackupJob NetworkService
 }

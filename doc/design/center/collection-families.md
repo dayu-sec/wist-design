@@ -65,10 +65,10 @@
 | `PrivacyTcc` | 隐私授权与 Keychain | macOS | `sqlite-snapshot(TCC.db)` |
 | `GatekeeperQuarantine` | 隔离来源（Gatekeeper） | macOS | 统一日志 `syspolicyd` |
 | `DevToolchain` | 开发工具链（Homebrew/Xcode/容器/包管理器/IDE） | macOS | `~/Library/Logs/Homebrew/*`、Xcode `DerivedData/*/Logs/*` |
-| `KernelSystem` | 内核与系统日志（含 OOM killer） | Linux | `kern.log`、`messages` |
-| `DatabaseService` | 数据库服务 | Linux | `postgresql/*`、`mysql/*`、`redis/*`、`mongodb/*` |
+| `KernelSystem` | 内核与系统日志（含 OOM killer） | Linux | `journalctl-kernel`（journald 唯一来源，W3） |
+| `DatabaseService` | 数据库服务 | Linux | `postgresql/*.csv`（csvlog）、`mysql/*slow*.log`（slow log）、`redis/*`、`mongodb/*` |
 | `StorageHealth` | 存储与文件系统健康（fsck/RAID/SMART/容量） | Linux | `smartctl`、`fsck*` |
-| `ComputeWorkload` | 作业 / 调度 / 加速卡 | Linux | `slurm/*`、`pods/*`、`dmesg:nvidia-xid` |
+| `ComputeWorkload` | 作业 / 调度 / 加速卡 / 容器 stdout | Linux | `containers/*.log`（13/15/16 同一批流）、`slurm/*`、`dmesg:nvidia-xid` |
 | `BackupJob` | 备份与批处理 | Linux | `borg/*`、`restic/*` |
 | `NetworkService` | 网络服务（NFS/SMB/防火墙规则） | Linux | `nginx/*`、`samba/*` |
 

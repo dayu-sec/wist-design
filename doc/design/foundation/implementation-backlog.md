@@ -675,6 +675,12 @@ warp-insight/
 - Linux 上 `/proc/<pid>/comm` 是 15 字符短名、无路径无参数，`python3`/`java`/`node` 一律分不出来，
   用途推断的长尾判不出来（macOS 侧给的是完整可执行路径，不受影响）。
 
+当前进度（`fact-v3`）：
+
+- 可执行标识已改为 `/proc/<pid>/exe` 的**完整路径**（内核线程/僵尸在探针里滤掉、按 argv 与 comm
+  降级），因此 `process_path` 类规则在 Linux 上已经成立；
+- **仍缺**下面两项：`cmdline` 与已装包清单。
+
 建议模块：
 
 - `crates/*/src/discovery/process.rs`：补 `cmdline`（`/proc/<pid>/cmdline`）
