@@ -105,6 +105,50 @@ cri-dockerd 把 k8s 容器也放在 `/var/lib/docker/containers` —— 这时�
 `path_exists:/var/lib/docker/containers; not_path_exists:/var/log/containers`。
 现有匹配语法支持 `;` 分隔多条件与 `|` 分隔候选值，**没有否定**，需要新增一个条件 kind。
 
+### 5.6 按容器名收（`filters.name_in`，M1 的一部分）
+
+“我只关心 mysql 的 docker 日志”不能靠全量采集 + 事后筛：`/var/lib/docker/containers/*/…`
+的文件名只有容器 id，量还是主机的全部容器。正确位置是**选源层过滤** —— 与 k8s 的
+`filters = { namespace_in, pod_not_in }` 是同一个抽象：
+
+```toml
+[[units.sources]]
+kind      = "FileGlob"
+target    = "/var/lib/docker/containers/*/*-json.log*"
+multiline = "docker_json"
+filters   = { name_in = ["mysql"] }      # 新维度
+```
+
+**为什么走 `filters` 而不是新 target 形态或 exporter**：
+
+| 方案 | 优点 | 代价 |
+|---|---|---|
+| **`filters.name_in`（选）** | 复用现成的选源抽象与**能力轴**（`filters:<维度>` 已支持逐维度裁剪）；读取器不变（offset / checkpoint / 轮转全部沿用）；不碰 docker socket | 发现阶段要读 `config.v2.json`（每容器 ~1 KB，按 mtime 缓存） |
+| target 写 `docker://mysql` | 一眼看出盯哪个容器 | 新 target 形态：`is_explicit_path` / `is_glob_path` / `is_executable_source` / 网关装载校验全要加分支 |
+| exporter `docker-logs:mysql`（调 CLI） | 实现最快 | 需要 docker socket；`docker logs` 无游标，只能 `--since` + 时间戳去重；且 exporter 是“周期命令”，拿不到文件读取器的精确 offset 与轮转语义 |
+
+名字解析：读 `<id>/config.v2.json` 的 `Name`（`/mysql`）与 `Config.Labels`（compose service /
+k8s container name），在**展开时**做一次；容器重建 → id 变 → 旧文件自动退出选中集（与
+`filters` / `exclude_globs` 收紧后立即停读同一处理）。
+
+> `filters` 目前在网关里被限定“只能在 `/var/log/containers` 下用”（`container_filters_keep`）。
+> 本方案把它放宽到 `/var/lib/docker/containers`，两条路径共用同一套维度校验。
+
+> ⚠ **站点级“只收哪几个容器”今天没有配置位**：来源是**目录**（全局策展），不是站点配置；
+> 一台机跑哪些容器（`mysql` / `dm8` / `wp-station`…）只有现场知道。所以：
+> * M1 默认 **收全量 + `exclude_globs` 剔噪声**（`victoria-*` / `fluent-bit` / 编辑器副本容器）；
+> * `filters.name_in` 作为**能力**提供，供策展或站点定制知识包时收紧；
+> * 真正的“每站点选容器”需要新的配置层（记入 §10-4），不在本方案 M1 范围。
+
+### 5.7 慢日志与 stdout 是两件事（不要指望 json-file 拿到慢查询）
+
+| 想要 | 在哪 | 怎么拿 |
+|---|---|---|
+| 慢查询 / csvlog | 引擎写到**文件**（或 `mysql.slow_log` 表） | 容器把日志目录挂回宿主机 → **现有** `linux-db-service` + `mysql_slow` / `postgres_csv`，零代码 |
+| 启动 / 崩溃 / `[ERROR]` | 容器 **stdout**（json-file） | 本方案的 `docker_json` + `filters.name_in` |
+
+两者**不互相替代**：前者是结构化业务事件，后者是诊断线索。Docker 也不会把慢日志写进 stdout。
+
 ## 6. 内容（知识库侧）
 
 ### 6.1 面怎么定：**不开新面**，只加单元
@@ -228,7 +272,7 @@ multiline = "docker_json"
 
 | 阶段 | 内容 | 触及 |
 |---|---|---|
-| **M1** | `docker_json` 读法（解包 + 反转义 + 失败计数）；知识库单元（`draft` → 验完翻 `active`） | contracts（词表）→ agentd（读法）→ gateway（能力裁剪自动生效）→ knowledge |
+| **M1** | `docker_json` 读法（解包 + 反转义 + 失败计数）+ `filters.name_in`（名字解析，见 §5.6）；知识库单元（`draft` → 验完翻 `active`） | contracts（词表 + 过滤维度 + `filters` 适用范围）→ agentd（读法 + 解析）→ gateway（校验放宽，能力裁剪自动生效）→ knowledge |
 | **M1.5** | `not_path_exists` 匹配条件（k8s 混跑去重） | contracts + gateway（求值）+ 知识库 |
 | **M2** | 容器身份：读 `config.v2.json`，把 `name` / `image` / `id` 上送 | contracts（记录新字段）+ agentd + 数据面（OML 取用） |
 
@@ -271,6 +315,12 @@ M1 就能让日志进来（`source_path` 里的容器 id 可回查 `docker ps`�
    只能靠策展"别开这个单元"。
 3. **M2 的容器身份怎么进帧**：新增 `container{name,image,id}` 可选字段（推荐），
    还是塞进 `unit` / `source_path`（都会破坏既有语义，不推荐）。
+4. **站点级“只收哪几个容器”要不要一个配置位**（§5.6 末）。今天只能“全量 + 排除”或
+   给该站点单独做一份知识包。若要做成产品能力，需要在单元之外加一层**站点来源覆盖**，
+   并想清楚它跟“面/单元是全局策展”的边界。
+5. **容器 stdout 的页面归类**：`docker logs` 拿到的 mysql 报错目前会归到容器面（13/16）——
+   它的 `source_type` 是 `container_stdout`。要落到数据库页（14），得在数据面按容器名 /
+   正文加 `log_type`（D8 表扩行），或者直接用“挂日志”那条路（`source_type=mysql_slow`）。
 
 ## 11. 发布顺序与回滚
 
