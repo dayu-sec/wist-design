@@ -105,11 +105,34 @@ cri-dockerd 把 k8s 容器也放在 `/var/lib/docker/containers` —— 这时�
 `path_exists:/var/lib/docker/containers; not_path_exists:/var/log/containers`。
 现有匹配语法支持 `;` 分隔多条件与 `|` 分隔候选值，**没有否定**，需要新增一个条件 kind。
 
-### 5.6 按容器名收（`filters.name_in`，M1 的一部分）
+### 5.6 默认不在采集级筛选（`filters.name_in` 降为可选）
 
-“我只关心 mysql 的 docker 日志”不能靠全量采集 + 事后筛：`/var/lib/docker/containers/*/…`
-的文件名只有容器 id，量还是主机的全部容器。正确位置是**选源层过滤** —— 与 k8s 的
-`filters = { namespace_in, pod_not_in }` 是同一个抽象：
+**默认行为：收全量 + 每条记录带身份**。采集级只回答“能不能读懂”，不回答“值不值得看”：
+
+| 问题 | 归属 | 手段 |
+|---|---|---|
+| 这行 JSON 怎么解成正文 | **采集级**（agentd） | `docker_json` 读法 |
+| 这条来自哪个容器 | **采集级**（agentd，只是事实，不是判断） | 读 `config.v2.json` → 帧字段 `container{name,image,id}` |
+| 这个容器要不要、归哪类 | **数据面** | 按 `container.name` / 正文定 `log_type`，不要就丢 |
+
+为什么不在采集级做包含筛选：容器名是**站点事实**（`mysql` / `db` / `mysql-1`），
+写进**全局目录**必然要么漏、要么绑死一个现场；而且“要不要”是策展/业务判断，
+agentd 不应该背这个判断。
+
+**采集级仍然保留两项“量”的控制（不是业务筛选）**：
+
+- `exclude_globs` / （可选）`filters.name_not_in`：剔掉明确无价值的自身组件（`victoria-*`、
+  `fluent-bit`、编辑器副本）—— 方向是**排除噪声**，永远安全；
+- 读量预算（`max_read_bytes_per_tick` / `max_lines_per_tick`）+ 首次授权 `tail`。
+
+> 前提：无论做不做筛选，**id → name 的解析都得做**（填帧字段需要）。
+> 所以 `filters.name_in` / `name_not_in` 只是一层“顺带可选”的收紧手段，不是 M1 的必需品。
+> 真正需要“只收某个容器”时再打开它，不把它当默认。
+
+### 5.6.1 （备选，默认不开）`filters.name_in`
+
+只适用于“这个站点明确只想收一两个容器”的情况（量真的不够时），与 k8s 的
+`namespace_in` / `pod_not_in` 同层：
 
 ```toml
 [[units.sources]]
@@ -292,13 +315,15 @@ multiline = "docker_json"
 
 | 阶段 | 内容 | 触及 |
 |---|---|---|
-| **M1** | `docker_json` 读法（解包 + 反转义 + 失败计数）+ `filters.name_in`（名字解析，见 §5.6）；知识库单元（`draft` → 验完翻 `active`） | contracts（词表 + 过滤维度 + `filters` 适用范围）→ agentd（读法 + 解析）→ gateway（校验放宽，能力裁剪自动生效）→ knowledge |
-| **M1.5** | `not_path_exists` 匹配条件（k8s 混跑去重） | contracts + gateway（求值）+ 知识库 |
-| **M2** | 容器身份：读 `config.v2.json`，把 `name` / `image` / `id` 上送 | contracts（记录新字段）+ agentd + 数据面（OML 取用） |
+| **M1** | `docker_json` 读法（解包 + 反转义 + 失败计数）+ **`container{name,image,id}` 帧字段**（读 `config.v2.json`）；默认收全量，不做包含筛选 | contracts（读法词表 + 帧字段）→ agentd（解包 + 解析）→ knowledge（单元 `draft`） |
+| **M1.5** | `not_path_exists`（k8s 混跑去重）；可选 `filters.name_not_in`（剔噪声）/ `name_in`（站点收紧，默认不配） | contracts + gateway（求值 / 放宽适用范围）+ agentd |
+| **M2** | 数据面按 `container.name` / 正文分派：13/15/16 的 `log_type`，以及 DB 报错落 14（D8 表扩行） | 数据面（WPL/OML）+ 知识库 `rule_ref` |
 
-M1 就能让日志进来（`source_path` 里的容器 id 可回查 `docker ps`）；M2 才让 13/15/16 的
-**分派**在 Docker 主机上可用 —— 与 k8s 侧「文件名里带 pod/ns」等价的信息，Docker 侧只能在
-`config.v2.json` 里拿。
+M1 结束时：日志已经带着容器身份进来，采集侧不发号司令、数据面拿得到分类依据；
+M2 之前 13/15/16 仍是“容器页一锅端”（采集面 = `ComputeWorkload`），但**不再丢信息**。
+
+为什么不把 `filters.name_in` 放 M1：容器名是站点事实，全局目录写不中；而“排除噪声”
+与“站点收紧”都是可选的量控，不能当默认行为（§5.6）。
 
 ## 8. 验收
 
