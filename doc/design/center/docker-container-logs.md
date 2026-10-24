@@ -6,9 +6,9 @@
 
 ## 1. 一句话结论
 
-新增一个**读法** `docker_json`（复用 `FileGlob` + `multiline_modes` 能力轴），
-把 `/var/lib/docker/containers/*/*-json.log` 里的 Docker 容器 stdout 解包成普通日志记录；
-**不新增 source kind、不改 agent 的执行模型**。容器身份（名字 / 镜像）需要第二阶段。
+只加**一条来源** + 一个**记录元数据字段**：`FileGlob` 读 `/var/lib/docker/containers/*/*-json.log*`，
+正文**原样**上送（解码归数据面，见 §5.1），另外把 `container { name, image, id }` 带在帧上。
+**不新增 source kind、不新增读法、不改 agent 的正文处理模型**。
 
 ## 2. 问题与范围
 
@@ -50,43 +50,47 @@
 
 ## 5. 能力设计（轨道 B 的产出是能力，面只是它的用户）
 
-### 5.1 能力维度：加一个读法，不加 source kind
+### 5.1 关键修正：**不加读法** —— 解码归数据面
+
+原先打算加一个 `multiline: docker_json`。想清楚 k8s 那一侧后，这个读法是**错的层**：
+
+- 现有设计原则是「**正文原样，头部由数据面拆**」（plan §6 W1：「CRI 头不拆：正文原样，
+  `stream` 与 pod/ns/container 由下游从正文头和 `source_path` 取」）；
+- k8s 节点上的日志格式**取决于 CRI 运行时**（见 §5.9），docker 运行时的节点上
+  `/var/log/containers/*.log` 指向的就是 docker json 文件；
+- 若在 agentd 解包，同一个数据面规则要同时面对「已解包的纯文本」与「CRI 头」两种形态；
+  不解包反而让两条路径（k8s-on-docker / 纯 docker）的**字节形态一致**，数据面一条规则通吃。
+
+所以采集侧的能力变化只有两项：
 
 | 轴 | 变化 |
 |---|---|
-| 来源机制 | **不变**：`FileGlob`（单层 glob） |
-| 处理/解析 | 新增 `multiline: docker_json`（进 `MULTILINE_MODES` 闭集） |
-| 运行条件 | `platform:linux`、`privilege:root` |
+| 来源机制 | **不变**：`FileGlob`（多层 glob，读取器已支持） |
+| 读法 | **不变**：`multiline = none`（一行一条，不解包） |
+| 记录元数据 | **新增** `container { name, image, id }`（从 `config.v2.json` 读，不是正文） |
 
-为什么放在 `multiline` 里而不是新 kind：
-`multiline_modes` **已经是能力轴**（D7）。老 agentd 不声明 `docker_json` → 网关按既有规则
-**裁掉这条来源**（`missing_log_capabilities`），不会出现「整份 spec 被拒收」。
-新增 source kind 则要动 `SOURCE_KINDS` / `is_executable_source` / 表单闭集，收益没有。
+> 副产品：**零代码就能先把日志采进来**（§7 的 M0）—— 目录里加一个单元即可，
+> 因为读取器本来就是「按 glob 展开 → 逐文件 tail」；代价是正文暂时是原始 JSON 行，
+> 等数据面规则（M2）才好看。
 
-### 5.2 记录边界与正文（关键决策）
+### 5.2 记录边界与正文
 
-**一条 JSON 行 = 一条记录。** 正文 = `log` 字段**反转义后**的文本，去掉行尾那一个 `\n`。
+**一条物理行 = 一条记录，正文原样**（不反转义、不拆 `log` 字段）。
 
-理由（不按内嵌换行再切）：
+- `[file_offset, file_offset_end)` 与来源字节一致的不变量自然成立；
+- 不需要跨行状态、不需要空闲封口；
+- JSON 解包、多行 chunk 的切分全部在**数据面**（与 CRI 头同层）。
 
-- `[file_offset, file_offset_end)` 与来源字节一致是**已承诺的不变量**（验收脚本逐字比对、
-  去重与续读都依赖它）。按内嵌换行切分时，同一条物理行会产出 N 条记录，各条对应**不连续**
-  的源字节（`log` 是转义的），这个不变量就没法维持；
-- 与 `none` 同构：一行进、一条出，不需要跨行状态、不需要空闲封口，不会引入「最后一条悬着」；
-- 多行文本（应用一次写入写了 3 行）交给**数据面**：WPL 拿到的 `body` 里本来就可以有 `\n`。
+### 5.3 坏行与半条记录
 
-**已知代价**：多行 chunk 在数据面看起来是"一条记录含多行"。若后续确认 WPL 处理不了，
-再加 `docker_json_lines`（按内嵌换行切，offset 记为整行范围，并在文档里标注该读法**不满足**
-字节级不变量）—— 作为显式退路，不默认开启。
+| 情形 | 采集侧（agentd） | 数据面 |
+|---|---|---|
+| 整行不是合法 JSON | 照搬（它就是一行的字节） | 规则不命中 → 归泛化类，可记告警 |
+| `log` 字段含内嵌换行 | 照搬（一条记录里就带多个换行字符） | 按需再切 |
+| `partial: true` | 照搬 | 视现场再定是否拼接 |
+| 半行 JSON（写入中途被读） | 与截断行同一处置：不拼进下一条；下一轮整行重读 | — |
 
-### 5.3 解包失败与半条记录
-
-| 情形 | 处置 |
-|---|---|
-| 整行不是合法 JSON | **不静默丢**：计入自观测 `docker_json decode failed`（按签名去重），跳过该物理行，下一轮从新行开始 |
-| JSON 合法但缺 `log` | 同上（当解码失败计） |
-| `partial: true`（部分版本把超长消息拆成多条） | M1：**忽略该标记**，每条各成一条记录；M2 视现场再决定是否拼接 |
-| 半行 JSON（写入中途被读） | 与截断行同一处置：按 `Oversized`/截断挡下，**不拼进下一条**；下一轮整行重新解码 |
+采集侧因此**没有新的失败模式**：不懂内容，只保证字节与偏移对得上。
 
 ### 5.4 轮转与预算
 
@@ -111,7 +115,7 @@ cri-dockerd 把 k8s 容器也放在 `/var/lib/docker/containers` —— 这时�
 
 | 问题 | 归属 | 手段 |
 |---|---|---|
-| 这行 JSON 怎么解成正文 | **采集级**（agentd） | `docker_json` 读法 |
+| 这行 JSON 怎么解成正文 | **数据面** | 规则解包（与 CRI 头同层） |
 | 这条来自哪个容器 | **采集级**（agentd，只是事实，不是判断） | 读 `config.v2.json` → 帧字段 `container{name,image,id}` |
 | 这个容器要不要、归哪类 | **数据面** | 按 `container.name` / 正文定 `log_type`，不要就丢 |
 
@@ -138,8 +142,8 @@ agentd 不应该背这个判断。
 [[units.sources]]
 kind      = "FileGlob"
 target    = "/var/lib/docker/containers/*/*-json.log*"
-multiline = "docker_json"
-filters   = { name_in = ["mysql"] }      # 新维度
+multiline = "none"
+filters   = { name_in = ["mysql"] }      # 新维度（可选）
 ```
 
 **为什么走 `filters` 而不是新 target 形态或 exporter**：
@@ -168,13 +172,13 @@ k8s container name），在**展开时**做一次；容器重建 → id 变 → 
 | 想要 | 在哪 | 怎么拿 |
 |---|---|---|
 | 慢查询 / csvlog | 引擎写到**文件**（或 `mysql.slow_log` 表） | 容器把日志目录挂回宿主机 → **现有** `linux-db-service` + `mysql_slow` / `postgres_csv`，零代码 |
-| 启动 / 崩溃 / `[ERROR]` | 容器 **stdout**（json-file） | 本方案的 `docker_json` + `filters.name_in` |
+| 启动 / 崩溃 / `[ERROR]` | 容器 **stdout**（json-file） | 本方案（来源 + 数据面解 JSON） |
 
 两者**不互相替代**：前者是结构化业务事件，后者是诊断线索。Docker 也不会把慢日志写进 stdout。
 
 ### 5.8 记录怎么区分“来自哪个容器”（三层，按粒度选）
 
-`docker_json` 只决定“怎么把 JSON 行解成正文”，**不携带容器身份**。能区分的是三层：
+采集侧**不解正文**（§5.1），所以“这是哪个容器”必须单独带。能区分的是三层：
 
 | 层 | 手段 | 拿到什么 | 要改什么 |
 |---|---|---|---|
@@ -190,6 +194,30 @@ k8s container name），在**展开时**做一次；容器重建 → id 变 → 
 
 > 为什么“每个容器一条来源”不放大成“每个容器一个单元”：单元是**载体**（路径 + 读法 + 权限），
 > 与具体容器名无关；一个单元下多来源是允许的（与 `auth.log` / `secure` 同理）。
+
+### 5.9 k8s 节点上的格式取决于 **CRI 运行时**，不是 k8s 本身
+
+| 运行时 | 日志实际落盘 | `/var/log/containers/*.log` 看到的内容 |
+|---|---|---|
+| containerd / CRI-O | `/var/log/pods/<ns>_<pod>_<uid>/<container>/<n>.log`（CRI 文本） | `<时间> stdout F <正文>` |
+| **Docker**（dockershim ≤1.23 / cri-dockerd） | Docker 的 `/var/lib/docker/containers/<id>/<id>-json.log`；kubelet 的 pod 日志路径与 `/var/log/containers` 的符号链接最终指向它 | **`{"log":"…\n","stream":"stdout","time":"…"}`** |
+
+所以「k8s + docker」与「纯 docker 主机」是**同一种字节格式**，只差路径。
+
+现场用一条命令确认集群是哪种：
+
+```bash
+head -n1 /var/log/containers/*.log | head -3
+#  <时间> stdout F …  → containerd / CRI-O
+#  {"log":…}          → Docker 运行时
+```
+
+两个推论：
+
+1. **采集侧不解包**（§5.1）：两条路径的字节形态一致，数据面一条规则通吃；
+2. 现有 `linux-container-stdout`（`multiline = none`）在 **cri-dockerd 节点上采到的正文就是 JSON** ——
+   不是新 bug（数据面解析本来就还没做），但 **M2 的规则必须同时覆盖两种形态**，
+   否则那些节点永远归不了类。
 
 ## 6. 内容（知识库侧）
 
@@ -219,7 +247,7 @@ k8s container name），在**展开时**做一次；容器重建 → id 变 → 
 | 判据 | k8s（已有） | docker（本方案） |
 |---|---|---|
 | 路径 | `/var/log/containers/*.log` | `/var/lib/docker/containers/*/*-json.log*` |
-| 读法 | `none`（CRI 前缀，一行一条） | `docker_json`（解包） |
+| 读法 | `none`（一行一条） | `none`（同样不解包，解码在数据面） |
 | 目录是否存在 | kubelet 建的 | 只有装了 docker 才有 |
 
 **读法不同就应该是不同单元**（同单元多来源的前提是「同一读法 + 同一权限 + 同一匹配前提」，
@@ -257,7 +285,7 @@ Docker 侧文件名只有容器 id，**没有名字** ⇒ M1 阶段这三个类�
 |---|---|---|---|
 | 单元 | `linux-db-service` | `linux-docker-container-stdout` | `linux-db-service`（**不变**） |
 | `match` | `path_exists:/var/log/mysql` | `path_exists:/var/lib/docker/containers` | `path_exists:/var/log/mysql`（容器内挂出） |
-| 读法 | `mysql_slow` | `docker_json` | `mysql_slow` |
+| 读法 | `mysql_slow` | `none`（数据面解 JSON） | `mysql_slow` |
 | 记录身份 | `source_path=/var/log/mysql/slow.log` | `<id>-json.log`（M2 才加容器名） | 同 host |
 | `source_type`（D8 目标态） | `mysql_slow` | `container_stdout` | `mysql_slow` |
 | 页面归类 | 14 数据库 | 13/15/16 容器（要落 14 需新规则） | 14 数据库 |
@@ -277,7 +305,7 @@ Docker 侧文件名只有容器 id，**没有名字** ⇒ M1 阶段这三个类�
 |---|---|---|
 | **A（推荐）** | 容器把 slow log / csvlog 写到**宿主机标准路径**（bind-mount + 容器参数），
 读法仍是 `mysql_slow` / `postgres_csv` | 无 —— 在采集语义上“退化成 host 形态”，`source_type` 天然是 `mysql_slow` |
-| **B** | 走 `docker_json`，M2 带容器身份，数据面新增 `log_type`（如 `db_mysql_error`） | 有 —— D8 的两层词表要扩一行，且 M2 还没做 |
+| **B** | 走容器 stdout（`multiline = none` + `container` 身份），数据面新增 `log_type`（如 `db_mysql_error`） | 有 —— D8 的两层词表要扩一行，且 M1/M2 还没做 |
 
 Docker 容器的 **stdout 通常不是慢日志 / csvlog**（那是两件东西：前者是错误输出，后者是引擎
 写到文件里的结构化日志），所以 B 路拿到的是“数据库报错”，不是“慢查询”。两者不互相替代。
@@ -303,7 +331,7 @@ status     = "draft"                 # M1 落地后翻 active
 [[units.sources]]
 kind      = "FileGlob"
 target    = "/var/lib/docker/containers/*/*-json.log*"
-multiline = "docker_json"
+multiline = "none"          # 正文原样，JSON 由数据面解
 ```
 
 `catalog_version` +1；`linux-workload` 包与 `linux-compute` 模板加入该单元。
@@ -315,33 +343,34 @@ multiline = "docker_json"
 
 | 阶段 | 内容 | 触及 |
 |---|---|---|
-| **M1** | `docker_json` 读法（解包 + 反转义 + 失败计数）+ **`container{name,image,id}` 帧字段**（读 `config.v2.json`）；默认收全量，不做包含筛选 | contracts（读法词表 + 帧字段）→ agentd（解包 + 解析）→ knowledge（单元 `draft`） |
-| **M1.5** | `not_path_exists`（k8s 混跑去重）；可选 `filters.name_not_in`（剔噪声）/ `name_in`（站点收紧，默认不配） | contracts + gateway（求值 / 放宽适用范围）+ agentd |
-| **M2** | 数据面按 `container.name` / 正文分派：13/15/16 的 `log_type`，以及 DB 报错落 14（D8 表扩行） | 数据面（WPL/OML）+ 知识库 `rule_ref` |
+| **M0（零代码，可今天就做）** | 知识库加单元 `linux-docker-container-stdout`（glob + `multiline = none`），真机验证「字节到了」。正文是原始 JSON 行 | 只改 `wist-knowledge`（+ stack 跟版发初始包） |
+| **M1** | `container { name, image, id }` 帧字段（读 `<id>/config.v2.json`） | contracts（帧字段）+ agentd |
+| **M1.5** | `not_path_exists`（k8s + cri-dockerd 去重）；可选 `filters.name_not_in` / `name_in`（量控） | contracts + gateway + agentd |
+| **M2** | 数据面：解 docker JSON（与 CRI 头同层，按行首或 `unit` 判定），按 `container.name` 分派 13/15/16，DB 报错落 14 | 数据面（WPL/OML）+ 知识库 `rule_ref` |
 
-M1 结束时：日志已经带着容器身份进来，采集侧不发号司令、数据面拿得到分类依据；
-M2 之前 13/15/16 仍是“容器页一锅端”（采集面 = `ComputeWorkload`），但**不再丢信息**。
-
-为什么不把 `filters.name_in` 放 M1：容器名是站点事实，全局目录写不中；而“排除噪声”
-与“站点收紧”都是可选的量控，不能当默认行为（§5.6）。
+M0 就能回答「日志到底有没有进来」，M1 让每行带身份，M2 让页面/分类正确。
+M2 之前 13/15/16 仍是「容器页一锅端」，但**信息不丢**（字节 + 身份都在）。
 
 ## 8. 验收
 
-单测（agentd）：
+**M0（零代码）**：真机上看三个东西就够：
 
-- 合法 JSON 行 → 正文反转义正确（`\n` / `\"` / `\uXXXX`）；
-- 非法 JSON / 缺 `log` → 计入失败、不产出记录、不污染下一条；
-- 与 `none` 一致：无跨行状态、无空闲封口延迟；
-- `file_offset`/`file_offset_end` 恒等于整条物理 JSON 行的范围。
+- `probe_paths` 里出现 `/var/lib/docker/containers`，且能授权；
+- 帧里 `source_path` 指向 `<id>/<id>-json.log`，`file_offset` 递增；
+- 正文是**原始 JSON 行**（预期如此，M2 才解包）。
 
-真机验收脚本（扩 `dev/verify-log-acceptance.sh`，新增 phase）：
+**M1（帧字段）** 单测（agentd）：
 
-- 造一个假的 `containers/<id>/<id>-json.log`，写合法/非法/多行 chunk/`partial` 四类行；
-- 断言记录集合逐字（含内嵌换行）；半行 JSON 不拼进下一条；轮转（`.1`）后旧尾巴被排空。
+- `config.v2.json` → `container{name, image, id}`：`Name` 去前导 `/`、缺文件/坏 JSON 时的降级（整字段 `None`，不影响采）；
+- 容器重建（id 变、name 不变）后新帧带新 id。
 
-能力协商：
+真机验收脚本（扩 `dev/verify-log-acceptance.sh`）：
 
-- 老 agentd（不声明 `docker_json`）→ 网关**裁掉该来源**并说明缺什么（不能整份拒收）。
+- 造 `containers/<id>/<id>-json.log` + `config.v2.json`，断言帧里身份正确；
+- 轮转（`-json.log.1`）后旧尾巴被排空；半行 JSON 不拼进下一条。
+
+**能力协商**：来源本身是普通 `FileGlob` + `none`，老 agentd **本来就能执行**（字节能搬）；
+只是拿不到 `container` 身份（旧数据面忽略该字段）。
 
 ## 9. 与"部署改造"的对照（不建议混用）
 
@@ -350,7 +379,7 @@ M2 之前 13/15/16 仍是“容器页一锅端”（采集面 = `ComputeWorkload
 | 让容器把日志挂到 `/var/log/{mysql,postgresql}` | 改 compose + 容器参数，**零代码** | 只有该容器；采到 csvlog / slow log，能走现有 `postgres_csv` / `mysql_slow` 读法 |
 | 本方案（M1） | 一个能力项目 | 主机上**所有** `json-file` 容器；正文是应用原文，不带容器名（M1） |
 
-两者可以并存：DB 挂出来后走结构化读法，其余容器走 `docker_json`。
+两者可以并存：DB 挂出来后走结构化读法，其余容器走容器 stdout 来源。
 
 ## 10. 未决问题（评审时请拍板）
 
