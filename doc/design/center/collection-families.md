@@ -68,7 +68,7 @@
 | `KernelSystem` | 内核与系统日志（含 OOM killer） | Linux | `journalctl-kernel`（journald 唯一来源，W3） |
 | `DatabaseService` | 数据库服务 | Linux | `postgresql/*.csv`（csvlog）、`mysql/*slow*.log`（slow log）、`redis/*`、`mongodb/*` |
 | `StorageHealth` | 存储与文件系统健康（fsck/RAID/SMART/容量） | Linux | `smartctl`、`fsck*` |
-| `ComputeWorkload` | 作业 / 调度 / 加速卡 / 容器 stdout | Linux | `containers/*.log`（13/15/16 同一批流）、`slurm/*`、`dmesg:nvidia-xid` |
+| `ComputeWorkload` | 作业 / 调度 / 加速卡 / 容器 stdout | Linux | k8s：`/var/log/containers/*.log`；纯 Docker：`/var/lib/docker/containers/*/*-json.log*`（13/15/16 同一批流）、`slurm/*`、`dmesg:nvidia-xid` |
 | `BackupJob` | 备份与批处理 | Linux | `borg/*`、`restic/*` |
 | `NetworkService` | 网络服务（NFS/SMB/防火墙规则） | Linux | `nginx/*`、`samba/*` |
 

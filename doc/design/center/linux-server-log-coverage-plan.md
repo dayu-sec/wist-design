@@ -564,8 +564,8 @@ web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0
 | `wist-agentd` | 0.9.3-alpha | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报；**G1** 上报 `filters` + `drop_if_contains`；**G3/W4** `mysql_slow` / `postgres_csv` 记录边界 + 噪音行丢弃（不占 `seq`）；**fact-v3** 进程标识取 `/proc/<pid>/exe`；**0.9.2 修**探测白名单被丢 |
 | `wist-gateway` | 0.20.2-alpha | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对；0.20.2 诊断补全 |
 | `wist-gateway-web` | 0.14.1-alpha | W1/W2 解析与展示、导出器词表跟上 W3；**W4** `drop_if_contains` 与非默认读法展示 |
-| `wist-knowledge` | 0.5.1 | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行（`catalog_version` 10） |
-| `wist-gateway-stack` | 0.2.14-alpha | 网关 0.20.2 / 前端 0.14.1 / 出厂知识库包 0.5.1 接线（镜像已在 ghcr + TCR，包已在 COS） |
+| `wist-knowledge` | 0.5.2 | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行；**M0** `linux-docker-container-stdout`（纯 Docker 主机，`catalog_version` 11） |
+| `wist-gateway-stack` | 0.2.15-alpha | 网关 0.20.2 / 前端 0.14.1 / 出厂知识库包 0.5.2 接线（镜像已在 ghcr + TCR，包已在 COS） |
 
 **现场滚动顺序是硬约束**：**网关先于 agentd**（旧网关的 `deny_unknown_fields` 会拒收新能力上报，
 新 agentd 的能力清单才能落地），**知识库包最后**（旧网关不认识的导出器 / 读法会让**整份目录加载失败**）。
@@ -580,6 +580,14 @@ contracts 始终最先发布（所有仓的编译依赖）。
 紧接着的补丁系列（真机反馈触发，已发版）：`v0.9.2`（api，策略表唯一转换）→
 **`v0.9.2-alpha` / `v0.9.3-alpha`（agentd，探测白名单被丢的修复）** →
 `v0.20.2-alpha`（网关，拒绝文案带条件 + 管理面回真实白名单）→ **`v0.2.14-alpha`**（stack）。
+
+再往后是 **M0（纯 Docker 主机容器日志，已发版）**：知识库 **0.5.2**（`linux-docker-container-stdout`，
+`catalog_version` 11）+ stack **0.2.15-alpha**。采集端零代码；正文原样上送，docker JSON 信封留给
+数据面解（见 [`docker-container-logs.md`](./docker-container-logs.md)）。
+
+> ⚠ **现场生效要“激活”**：已激活过知识包的站点，网关会优先用那个包（`source_dir` 被忽略）——
+> 只升 stack **不会**换目录。必须把 0.5.2 的包在「知识库」页**录入并激活**（热加载），再
+> **重新授权 `ComputeWorkload`**，并等一轮策略拉取（≤5 分钟）让新探测路径进入白名单。
 
 | 仓 | 版本 | 改了什么 |
 |---|---|---|
@@ -624,7 +632,7 @@ contracts 始终最先发布（所有仓的编译依赖）。
 | 1–3 | auth（ssh / session / sudo） | **采集中**（`linux-auth-session` / `linux-sudo-log` active） | 解析侧 `auth_*` 抽取 / `log_type` 分派（噪音行已按 W4 配好） |
 | 4–11 | audit（8 类） | **采集中**（`linux-audit-log` active；整文件、不按 `type=` 丢行） | 解析侧规则（8.1.1 / 8.1.2） |
 | 12 | kernel | **采集中**（`linux-kernel-system` → `journalctl-kernel`） | 无 |
-| 13 / 15 / 16 | 容器（business / gateway / k8s_pod） | **采集中**（`linux-container-stdout` active，本轮） | 解析侧解 CRI 头 / 按 ns+service 分派 `log_type` |
+| 13 / 15 / 16 | 容器（business / gateway / k8s_pod） | **采集中**（`linux-container-stdout` 与 `linux-docker-container-stdout` 两个载体，后者 0.5.2 起） | 解析侧解 CRI 头 / docker JSON 信封，按 ns+service / `container.name` 分派 `log_type` |
 | 14 | database | **采集中**（`linux-db-service` active，本轮） | 解析侧 csvlog / slow 字段、`extra.db` |
 
 #### 缺口（按优先级）
