@@ -896,6 +896,12 @@ DaemonSet 形态下 symlink 目标（`/var/log/pods/...`）在容器内不可见
 
 **推荐 A**：本方案只承诺 k8s 节点。纯 Docker 主机作为独立能力项（B）另开，不与 W1 混。
 
+**决策（2026-10-24 改判为 B）**：现场出现在纯 Docker 主机上部署数据库 / 业务容器的需求，
+且这些容器**普遍不把日志挂回宿主机**（实测一台机 14 个容器全 `json-file`，三个 DB 容器零日志挂载），
+于是“不承诺”等于这个大类永久空白。已立项，设计见
+[`docker-container-logs.md`](./docker-container-logs.md)：读法 `docker_json` 复用现有
+`FileGlob` + `multiline_modes` 能力轴，**不新增 source kind**；W1–W5 仍只承诺 k8s 节点。
+
 #### 8.3.3 SELinux / AppArmor
 
 **事实**
