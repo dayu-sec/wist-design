@@ -559,13 +559,13 @@ web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0
 
 | 仓 / 制品 | 版本 | 覆盖的阶段 |
 |---|---|---|
-| `wist-contracts` | **0.9.7** | W1 glob 判据 + `exclude_globs`、W2 `filters`、W3 `journalctl-kernel`、D7 能力清单；**G1** `LogsCapabilities.filters`、**G3** `drop_if_contains` + `MULTILINE_MODES` 增 `mysql_slow` / `postgres_csv`；**fact-v3** 摘要前缀 + `EPHEMERAL_PORT_START`；**M1** `ContainerRef` + 帧字段；**M1.5** `name_in` / `name_not_in`（`CONTAINER_FILTERS` 4 维） |
+| `wist-contracts` | **0.9.8** | W1 glob 判据 + `exclude_globs`、W2 `filters`、W3 `journalctl-kernel`、D7 能力清单；**G1** `LogsCapabilities.filters`、**G3** `drop_if_contains` + `MULTILINE_MODES` 增 `mysql_slow` / `postgres_csv`；**fact-v3** 摘要前缀 + `EPHEMERAL_PORT_START`；**M1** `ContainerRef` + 帧字段；**M1.5** `name_in` / `name_not_in`（`CONTAINER_FILTERS` 4 维）；**修订** `is_container_log_target` 共享判据 |
 | `wist-api` | 0.9.2 | `AgentStatusReport.logs_capabilities`（D7）；`DiscoveryPoliciesReturned → DiscoveryAspectPolicySet` 的**唯一转换** |
-| `wist-agentd` | **0.9.5-alpha** | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报；**G1** 上报 `filters` + `drop_if_contains`；**G3/W4** `mysql_slow` / `postgres_csv` 记录边界 + 噪音行丢弃（不占 `seq`）；**fact-v3** 进程标识取 `/proc/<pid>/exe`；**M1** 帧带 `container{name,image,id}`；**M1.5** 容器名过滤 |
-| `wist-gateway` | **0.20.3-alpha** | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对；**M1.5** `not_path_exists` 三态 + 进探测白名单，`filters` 校验按维度分开 |
-| `wist-gateway-web` | 0.14.1-alpha | W1/W2 解析与展示、导出器词表跟上 W3；**W4** `drop_if_contains` 与非默认读法展示 |
-| `wist-knowledge` | **0.5.3** | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行；**M0** `linux-docker-container-stdout`（纯 Docker 主机）；**M1.5** 加 `not_path_exists:/var/log/containers` 去重（`catalog_version` 12） |
-| `wist-gateway-stack` | **0.2.16-alpha** | 网关 0.20.3 / 前端 0.14.1 / 出厂知识库包 0.5.3 接线（镜像已在 ghcr + TCR，包已在 COS） |
+| `wist-agentd` | **0.9.6-alpha** | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报；**G1** 上报 `filters` + `drop_if_contains`；**G3/W4** `mysql_slow` / `postgres_csv` 记录边界 + 噪音行丢弃（不占 `seq`）；**fact-v3** 进程标识取 `/proc/<pid>/exe`；**M1** 帧带 `container{name,image,id}`；**M1.5** 容器名过滤；**修订** 本机配置校验按维度拆分 + 验收脚本两个 name 过滤 phase |
+| `wist-gateway` | **0.20.4-alpha** | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对；**M1.5** `not_path_exists` 三态 + 进探测白名单；**修订** `match` 装载期 fail-closed、减法维度改降级 |
+| `wist-gateway-web` | 0.14.1-alpha | W1/W2 解析与展示、导出器词表跟上 W3；**W4** `drop_if_contains` 与非默认读法展示（`name_in` / `name_not_in` 展示已在 `alpha` 分支待发） |
+| `wist-knowledge` | **0.5.4** | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行；**M0** `linux-docker-container-stdout`；**M1.5** 加 `not_path_exists:/var/log/containers` 去重（`catalog_version` 12）；**修订** `purpose_version` 3：`dockerd` / `containerd` → `LinuxCompute` |
+| `wist-gateway-stack` | **0.2.17-alpha** | 网关 0.20.4 / 前端 0.14.1 / 出厂知识库包 0.5.4 接线（镜像已在 ghcr + TCR，包已在 COS） |
 
 **现场滚动顺序是硬约束**：**网关先于 agentd**（旧网关的 `deny_unknown_fields` 会拒收新能力上报，
 新 agentd 的能力清单才能落地），**知识库包最后**（旧网关不认识的导出器 / 读法会让**整份目录加载失败**）。
@@ -604,10 +604,28 @@ contracts 始终最先发布（所有仓的编译依赖）。
 > **否定条件的三态**：没探过 ≠ 不存在。所以网关必须把 `/var/log/containers` 也放进探测白名单
 > —— 与 0.9.2 修过的“探测白名单被丢”是同一类坑（表现同样是 `fact_not_collected`）。
 
+**修订批次（2026-10-24，五轮审查后已发版）**：`contracts 0.9.8` / `网关 0.20.4-alpha` /
+`agentd 0.9.6-alpha` / `知识库 0.5.4` / `stack 0.2.17-alpha`。修的是“能力能用”与“出错时看得见”两件事：
+
+| # | 问题 | 修法 |
+|---|---|---|
+| 1 | `match` 写坏会**静默**：漏 `:` 让否定条件消失（→ 双采），漏 `;` 把下一条件并进第一个值（→ 永不展开） | 装载期逐片段校验：必须 `kind:value`、kind 在闭集、值不能空或含空白 |
+| 2 | 单来源单元碰到旧 agent 缺一维能力 → **整条来源被裁** → 面不可授权（少采变不采） | `pod_not_in` / `name_not_in` 是减法：**去掉该维度继续采**；包含式维度仍然裁源 |
+| 3 | 本机配置（`file_inputs` / 任务清单）的 `filters` 校验没按维度拆，Docker 载体的 `name_in` 启动即拒 | 与网关共用 `is_container_log_target`，按维度分开判 |
+| 4 | **纯 Docker 业务机派不到容器单元**：无 k8s/DB 进程 → 落 `LinuxHost` → 模板不带 `linux-workload` | 知识库新增 `dockerd` / `containerd` → `LinuxCompute` 判据（各 15 分，压在数据库 40 分之下） |
+| 5 | 验收脚本没覆盖 M1.5；网关对 `name` 维度装载校验零测试 | 脚本加 `name_in` / `name_not_in` 两个 phase（含身份未知的不对称语义）；网关补装载/降级/畸形表达式测试 |
+
+> ⚠ **审核后仍存的两条（已入缺口表）**：`not_path_exists` 是**整机级代理信号**（混跑 /
+> 残留目录两类现场会少采，G14）；手工 `spec=` 绕开 `match`，可人为重现双采（G15，当前也是
+> 混跑现场的逃生口）。
+
 > ⚠ **现场生效要“激活”**：已激活过知识包的站点，网关会优先用那个包（`source_dir` 被忽略）——
-> 只升 stack **不会**换目录。必须把 **0.5.3** 的包（或更早的 0.5.2，若还没激活）在「知识库」页
-> **录入并激活**（热加载），再 **重新授权 `ComputeWorkload`**，并等一轮策略拉取（≤5 分钟）
-> 让新探测路径进入白名单。`catalog_version` 从 11 → 12 可用来确认激活生效。
+> 只升 stack **不会**换目录。把 **0.5.4** 的包（或更早 0.5.3）在「知识库」页**录入并激活**
+> （热加载），再 **重新授权 `ComputeWorkload`**。`catalog_version = 12`（M1.5 起）+ 
+> `purpose_version = 3`（0.5.4 起）可用来确认激活生效。
+>
+> 不需要“为新条件等白名单”：`/var/log/containers` 从 0.5.1 的 k8s 单元起就在探测白名单里。
+> 要确认的只有“agent 已上报过这条 `probed_paths`”——spec 在授权那一刻固化，缺了就再授权一次。
 
 | 仓 | 版本 | 改了什么 |
 |---|---|---|
@@ -653,7 +671,7 @@ contracts 始终最先发布（所有仓的编译依赖）。
 | 1–3 | auth（ssh / session / sudo） | **采集中**（`linux-auth-session` / `linux-sudo-log` active） | 解析侧 `auth_*` 抽取 / `log_type` 分派（噪音行已按 W4 配好） |
 | 4–11 | audit（8 类） | **采集中**（`linux-audit-log` active；整文件、不按 `type=` 丢行） | 解析侧规则（8.1.1 / 8.1.2） |
 | 12 | kernel | **采集中**（`linux-kernel-system` → `journalctl-kernel`） | 无 |
-| 13 / 15 / 16 | 容器（business / gateway / k8s_pod） | **采集中**（`linux-container-stdout` 与 `linux-docker-container-stdout` 两个载体，后者 0.5.2 起；0.5.3 用 `not_path_exists` 把 `k8s + cri-dockerd` 的重采去掉） | 解析侧解 CRI 头 / docker JSON 信封，按 ns+service / `container.name` 分派 `log_type`（身份从 M1.5 起已在帧里） |
+| 13 / 15 / 16 | 容器（business / gateway / k8s_pod） | **采集中**（`linux-container-stdout` 与 `linux-docker-container-stdout` 两个载体，后者 0.5.2 起；0.5.3 用 `not_path_exists` 把 `k8s + cri-dockerd` 的重采去掉；0.5.4 的用途规则让**纯 Docker 业务机**也能拿到这个面） | 解析侧解 CRI 头 / docker JSON 信封，按 ns+service / `container.name` 分派 `log_type`（身份从 M1.5 起已在帧里） |
 | 14 | database | **采集中**（`linux-db-service` active，本轮） | 解析侧 csvlog / slow 字段、`extra.db` |
 
 #### 缺口（按优先级）
@@ -670,6 +688,8 @@ contracts 始终最先发布（所有仓的编译依赖）。
 | G11 | label 选择未做 | 只能按 namespace / pod 名选 | `K8sDiscoveryProbe = NotImplemented`（8.1.5 已定 A：先不做） | 延后 |
 | G12 | **回滚到不报能力的 agentd 时拦不住** | 落库沿用 `local_work` 口径（一次老报文不清清单）→ 网关拿上一次报告继续判，可能比回滚后的 agent 更乐观 | 需要一张「能力 → 最低版本」表（又一份真相源） | 代码（D7 残留 1） |
 | G13 | 超限 csvlog 记录的「丢到尾」状态不落盘 | 一条 >1 MiB / >1000 行的记录**跨读批**时，下一批首行会被当成新记录（可能上送一条半条 CSV） | `fold_csv` 的 `discarding` 未进 `PendingMultilineState`（需 checkpoint 加字段） | 代码（低概率） |
+| G14 | `not_path_exists` 是**整机级代理信号** | `k8s(containerd) + 独立 dockerd` 的混跑主机、以及 `/var/log/containers` 残留目录的主机会**少采 / 不采** docker 容器 stdout（0.5.2 下可采） | 探针只能答“在/不在”；需一个“目录里有没有 `*.log` 符号链接”的事实（新能力轴） | 代码（跨 contracts / agentd / 网关） |
+| G15 | 手工 `spec=` 绕开 `match` | 授权时显式点名两个容器单元可人为重现双采（同时这也是 G14 现场的**逃生口**，所以是刻意保留） | `validate_spec` 拿不到 facts | 代码（默认保留；若要拦，需 `spec=` + facts 求值 + 显式覆盖开关） |
 
 #### 建议顺序
 

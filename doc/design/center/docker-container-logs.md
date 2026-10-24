@@ -94,11 +94,12 @@
 
 ### 5.4 轮转与预算
 
-- 来源 glob：`/var/lib/docker/containers/*/*-json.log*`（覆盖 `-json.log.1` 等轮转产物；
-  `.1` 是更深一层的同一个目录，仍是单层 glob 的范围）。
+- 来源 glob：`/var/lib/docker/containers/*/*-json.log*`（覆盖 `-json.log.1` 等轮转产物）。
 - 首次授权 `startup_position = tail`（既有规则）——**必须**：未设 `max-size` 的容器文件可达 GB 级。
-- 读量上限沿用 `max_read_bytes_per_tick` / `max_lines_per_tick`；过滤靠 `exclude_globs`
-  （现场噪声容器：`victoria-logs` / `fluent-bit` / `wp-editor` 各副本）。
+- 读量上限沿用 `max_read_bytes_per_tick` / `max_lines_per_tick`。
+
+> **噪声剔除今天默认没开**：容器目录名是随机 id，`exclude_globs` 选不中“哪个容器”；
+> 要按名字剔只能用 `filters.name_not_in`（可选，见 §5.6）。出厂目录两者都没启用。
 
 ### 5.5 与 k8s 混跑
 
@@ -116,6 +117,17 @@ match = "path_exists:/var/lib/docker/containers;not_path_exists:/var/log/contain
 * 网关把否定条件里的路径也放进**探测白名单**（`probe_paths`），否则这个单元永远展不开；
 * 旧网关不认识这个 kind → 该单元不展开（保守：不会重复采，只是纯 Docker 主机上少采）。
 
+⚠ **已知限制：用“目录在不在”做代理信号，区分不了两种现场。**
+
+| 现场 | 旧行为（0.5.2） | M1.5 之后 |
+|---|---|---|
+| k8s 用 **containerd**，同机另装 docker 跑非 k8s 容器 | docker 容器 stdout 可采 | `/var/log/containers` 存在 → docker 单元被排除 → **不采**（回退） |
+| k8s 卸掉但 `/var/log/containers` **目录残留** | 纯 Docker 单元命中 | k8s 单元展开为 0 个文件、docker 单元又被排除 → **完全不采** |
+
+根治要等探针能回答“目录里有没有 `*.log` 符号链接”（新能力轴），不在 M1.5 范围。
+**逃生口**：人工授权时直接点名 `spec=linux-docker-container-stdout` —— 这是显式覆盖，
+不再保证去重，需现场确认不会与 k8s 路径双采。
+
 ### 5.6 默认不在采集级筛选（`filters.name_in` 降为可选）
 
 **默认行为：收全量 + 每条记录带身份**。采集级只回答“能不能读懂”，不回答“值不值得看”：
@@ -132,9 +144,14 @@ agentd 不应该背这个判断。
 
 **采集级仍然保留两项“量”的控制（不是业务筛选）**：
 
-- `exclude_globs` / （可选）`filters.name_not_in`：剔掉明确无价值的自身组件（`victoria-*`、
-  `fluent-bit`、编辑器副本）—— 方向是**排除噪声**，永远安全；
+- `filters.name_not_in`（**可选，默认不开**）：剔掉明确无价值的自身组件（`fluent-bit`、
+  编辑器副本）。容器目录名是随机 id，`exclude_globs` 选不中容器名 —— 要按名字剔只能用它；
+  方向是**排除噪声**，永远安全；
 - 读量预算（`max_read_bytes_per_tick` / `max_lines_per_tick`）+ 首次授权 `tail`。
+
+> **旧 agent 上的行为**：`pod_not_in` / `name_not_in` 是减法维度 —— 缺能力时网关**去掉该维度
+> 继续采**（上送量变大）；包含式维度（`namespace_in` / `name_in`）缺能力时仍然**裁源**
+> （去掉就是全收，不能替策展决定）。这与 `drop_if_contains` 同一档取舍。
 
 > 前提：无论做不做筛选，**id → name 的解析都得做**（填帧字段需要）。
 > 所以 `filters.name_in` / `name_not_in` 只是一层“顺带可选”的收紧手段，不是 M1 的必需品。
@@ -174,12 +191,15 @@ k8s container name），在**展开时**做一次；容器重建 → id 变 → 
 | Docker（`…/containers/<id>/*-json.log`） | 同目录 `config.v2.json` 的 `Name`（去前导 `/`） | `name_in` **不命中**（要求“证明确实是它”）；`name_not_in` **保留**（排除式不能因读不到配置就丢日志） |
 
 网关装载期的目标校验按维度分开：`namespace_in` / `pod_not_in` 仍要求来源在
-`/var/log/containers` 下；`name_in` / `name_not_in` 只要求目标里含 `containers/`
-（不写死 data-root，改过 `data-root` 的现场照样能用）。
+`/var/log/containers` 下；`name_in` / `name_not_in` 只要求目标是**容器日志来源的形状**
+（路径里有 `containers` 段；不写死 data-root，改过 `data-root` 的现场照样能用）。
+同一个判据在契约里只有一份（`wist_contracts::work::is_container_log_target`），
+网关与 agentd 本机配置校验共用。
 
 > ⚠ **站点级“只收哪几个容器”今天没有配置位**：来源是**目录**（全局策展），不是站点配置；
 > 一台机跑哪些容器（`mysql` / `dm8` / `wp-station`…）只有现场知道。所以：
-> * M1 默认 **收全量 + `exclude_globs` 剔噪声**（`victoria-*` / `fluent-bit` / 编辑器副本容器）；
+> * M1 默认 **收全量**；噪声剔除今天默认没开 —— 按容器名只能靠 `filters.name_not_in`，
+>   按目录名（随机 id）`exclude_globs` 选不中；
 > * `filters.name_in` 作为**能力**提供，供策展或站点定制知识包时收紧；
 > * 真正的“每站点选容器”需要新的配置层（记入 §10-4），不在本方案 M1 范围。
 
@@ -204,9 +224,9 @@ k8s container name），在**展开时**做一次；容器重建 → id 变 → 
 
 选型：
 
-- **只关心少数几个容器** → 来源级就够（M1）；
+- **只关心少数几个容器** → 来源级就够（M1.5）；
 - **要收全量、且要下游按容器分派**（13/15/16） → 需要记录级（已落地；下游分派属 M2）；
-- 两者可共存：M1 先把来源挂到正确的面上（`filters` 已把不同容器隔开），M2 再把身份补到帧上。
+- 两者可共存：来源级的 `filters` 把不同容器隔开，记录级的 `container` 字段让一条来源也能区分。
 
 > 为什么“每个容器一条来源”不放大成“每个容器一个单元”：单元是**载体**（路径 + 读法 + 权限），
 > 与具体容器名无关；一个单元下多来源是允许的（与 `auth.log` / `secure` 同理）。
@@ -315,9 +335,9 @@ Docker 侧文件名只有容器 id，名字在 `config.v2.json` —— 采集端
 - **机器级（今天就成立）**：两台机分别命中不同单元；派下去的 spec 里 `unit_id` 不同，
   管理面与 `local_work` 都看得见“这台机走的是哪个载体”。一台机上两种都有（宿主机服务 + 容器）
   → 两个单元都命中，路径不同，**都采、不重**。
-- **记录级**：只有 docker 的 json-file 形态需要区分“这条是哪介容器的” —— 文件名只有容器 id，
-  所以必须靠 **M2 的 `config.v2.json` 身份**；M1 阶段只能拿 `source_path` 里的 id 去
-  `docker ps` 回查。
+- **记录级**：只有 docker 的 json-file 形态需要区分“这条是哪个容器的” —— 文件名只有容器 id，
+  所以靠**帧里的 `container{name,image,id}`**（M1 已落地，采集端读 `config.v2.json`）；
+  数据面按名字分派 13/15/16 是 M2 的事。
 
 **如果要把“容器里的数据库”归到数据库页（14）**，有两条路，性质不同：
 
@@ -335,7 +355,25 @@ Docker 容器的 **stdout 通常不是慢日志 / csvlog**（那是两件东西�
 > **M1 起可以例外**：同一面下建一条带 `filters.name_in` 的 docker 来源（只选
 > `mysql` / `postgres` 等），选源层已经把“不是数据库的容器”剔掉了，面归属就是真的。
 
-### 6.5 单元内容
+#### 6.4.1 纯 Docker 业务机怎么拿到容器面（用途分类）
+
+容器单元属于 `ComputeWorkload` 面，只在 `linux-compute` / `linux-data` 模板里；
+`linux-host` 基线模板**只挂** `linux-base`。所以“能不能采到”先取决于机器被分到哪个类别。
+
+旧规则只认 slurm / nvidia / kubelet / 数据库守护进程 —— 一台**只跑业务容器**的机器
+（nginx / 应用容器）一条都不命中 → 落 `LinuxHost` → 容器单元**根本派不到**。
+
+**知识库 0.5.4 起**（`purpose_version = 3`）补了两条弱判据：`dockerd` / `containerd` →
+`LinuxCompute`，各 15 分（合计 30，正好让 `min_support = 2` 生效）。
+
+* 权重刻意压在 40 以下：同一台机跑 mysql/postgres 时（40 分）仍归 `LinuxData`，
+  而 `linux-data` 模板本就包含 `linux-workload`，不会被抢成计算类；
+* 只有 `containerd` 的纯主机（15 分）会因信号弱被打折，但那类机器通常也跑着 kubelet（已是 25 分）。
+
+> 这是**策展决策**（改的是“怎么判用途”，影响全机队）；站点觉得分错了就改 `machine_class`
+> 或手写 `spec=`，不必等目录。
+
+### 6.5 单元内容（现行，0.5.3+）
 
 ```toml
 [[units]]
@@ -343,18 +381,20 @@ unit_id   = "linux-docker-container-stdout"
 family    = "ComputeWorkload"        # 与 linux-container-stdout 同一批容器 stdout
 platform  = "linux"
 capability = "collect_logs"
-match      = "path_exists:/var/lib/docker/containers"   # + not_path_exists:/var/log/containers（§10-2）
-rule_ref   = ""
+match      = "path_exists:/var/lib/docker/containers;not_path_exists:/var/log/containers"
+rule_ref   = ""                      # 解析未就绪 = M2 的活
 requires_privilege = "root"
-status     = "draft"                 # M1 落地后翻 active
+status     = "active"
 
 [[units.sources]]
 kind      = "FileGlob"
 target    = "/var/lib/docker/containers/*/*-json.log*"
 multiline = "none"          # 正文原样，JSON 由数据面解
+# filters 默认不写（= 全采）；要收窄时用 { name_in = [...] } / { name_not_in = [...] }
 ```
 
-`catalog_version` +1；`linux-workload` 包与 `linux-compute` 模板加入该单元。
+`linux-workload` 包已经引用该单元，`linux-compute` / `linux-data` 模板通过这个包拿到它
+（纯 Docker 业务机的用途分类见 §6.4.1）。
 
 13 / 15 / 16 的**归类仍然靠正文**（与 k8s 路径同一策略，D8）：解包后的原文与 CRI 解出来的
 原文形态一致，数据面规则复用。
@@ -366,6 +406,7 @@ multiline = "none"          # 正文原样，JSON 由数据面解
 | **M0（零代码，可今天就做）** | 知识库加单元 `linux-docker-container-stdout`（glob + `multiline = none`），真机验证「字节到了」。正文是原始 JSON 行 | 只改 `wist-knowledge`（+ stack 跟版发初始包） |
 | **M1（已发：contracts 0.9.6 / agentd 0.9.4）** | `container { name, image, id }` 帧字段（读 `<id>/config.v2.json`）；已用真实 wparse 验证多出该键不影响解析 | contracts + agentd |
 | **M1.5（已发：contracts 0.9.7 / agentd 0.9.5-alpha / gateway 0.20.3-alpha）** | `not_path_exists`（k8s + cri-dockerd 去重）；`filters.name_in` / `name_not_in`（量控，默认不开） | contracts + gateway + agentd + 知识库 |
+| **M1.5 修订（已发：contracts 0.9.8 / agentd 0.9.6-alpha / gateway 0.20.4-alpha / 知识库 0.5.4）** | 审查后的硬化：`match` 装载期 fail-closed、减法维度改降级、共享容器来源判据、容器主机用途规则、验收脚本覆盖 name 过滤 | 同 M1.5 |
 | **M2** | 数据面：解 docker JSON（与 CRI 头同层，按行首或 `unit` 判定），按 `container.name` 分派 13/15/16，DB 报错落 14 | 数据面（WPL/OML）+ 知识库 `rule_ref` |
 
 M0 就能回答「日志到底有没有进来」，M1 让每行带身份，M2 让页面/分类正确。
@@ -387,7 +428,9 @@ M2 之前 13/15/16 仍是「容器页一锅端」，但**信息不丢**（字节
 真机验收脚本（扩 `dev/verify-log-acceptance.sh`）：
 
 - 造 `containers/<id>/<id>-json.log` + `config.v2.json`，断言帧里身份正确；
-- 轮转（`-json.log.1`）后旧尾巴被排空；半行 JSON 不拼进下一条。
+- 同一 glob 覆盖 `-json.log.1`（轮转产物在**启动时就存在**；rename 轮转由 symlink 那个 phase 覆盖）；
+- **M1.5**：`name_in` 只采指定容器、身份读不到的不收；`name_not_in` 剔掉指定容器、
+  身份读不到的要**保留**（两个 phase 共用同一份 fixture，正好钉住这个不对称）。
 
 **能力协商**：来源本身是普通 `FileGlob` + `none`，老 agentd **本来就能执行**（字节能搬）；
 只是拿不到 `container` 身份（旧数据面忽略该字段）。
@@ -397,7 +440,7 @@ M2 之前 13/15/16 仍是「容器页一锅端」，但**信息不丢**（字节
 | 做法 | 代价 | 覆盖 |
 |---|---|---|
 | 让容器把日志挂到 `/var/log/{mysql,postgresql}` | 改 compose + 容器参数，**零代码** | 只有该容器；采到 csvlog / slow log，能走现有 `postgres_csv` / `mysql_slow` 读法 |
-| 本方案（M1） | 一个能力项目 | 主机上**所有** `json-file` 容器；正文是应用原文，不带容器名（M1） |
+| 本方案（M1 起） | 一个能力项目 | 主机上**所有** `json-file` 容器；正文是应用原文，帧里带容器身份（M1） |
 
 两者可以并存：DB 挂出来后走结构化读法，其余容器走容器 stdout 来源。
 
@@ -419,28 +462,38 @@ M2 之前 13/15/16 仍是「容器页一锅端」，但**信息不丢**（字节
 
 ## 11. 发布顺序与回滚
 
-**M0（已发：知识库 0.5.2 / stack 0.2.15）**：只改知识库 + stack 的初始包，采集端零代码。
+| 阶段 | 组件 | 知识库 / stack |
+|---|---|---|
+| **M0** | 采集端零代码 | 0.5.2 / 0.2.15 |
+| **M1** | contracts 0.9.6 / agentd 0.9.4-alpha | —— |
+| **M1.5** | contracts 0.9.7 / 网关 0.20.3-alpha / agentd 0.9.5-alpha | **0.5.3** / 0.2.16-alpha |
+| **M1.5 修订** | contracts 0.9.8 / 网关 0.20.4-alpha / agentd 0.9.6-alpha | **0.5.4** / 0.2.17-alpha |
 
 ⚠ **生效路径要注意“生效优先级”**：网关装载知识内容时，**管理面已激活的包优先于
 启动期 `source_dir`**（`LoadedKnowledge::resolve`）。所以：
 
 - 现场已激活过知识包的站点，**只升级 stack 不会换目录** —— 必须把知识包 tar.gz（+ `.sig`）
   在「知识库」页**录入并激活**，网关热加载（不重启），`catalog_version` 才会变 12；
+  M1.5 修订包（0.5.4）抬的是 `purpose_version = 3`（目录内容没变）。
 - 从未激活过包的站点，`source_dir`（localize 下载的初始包）就生效，升级 stack 即可。
 
-之后：**重新授权 `ComputeWorkload`** —— 已有授权是旧 `catalog_version` 的 spec，
-新单元不会自动加进去；同时 agent 需要一轮策略拉取（≤5 分钟）才能拿到新的探测白名单
-（M1.5 起白名单多了一条 `/var/log/containers`，供 `not_path_exists` 判定）。
+之后：**重新授权 `ComputeWorkload`** —— 已有授权是旧 `catalog_version` 的 spec，新单元不会
+自动加进去。注意 spec 在**授权那一刻**固化的：`/var/log/containers` 从 0.5.1 的 k8s 单元起
+就已经在探测白名单里，所以**不需要“为新条件等白名单”**；要确认的只有“agent 已经上报过这条
+`probed_paths`”，否则 `not_path_exists` 会落 `fact_not_collected`，补一次重新授权即可。
 
 后续阶段：M1（帧带 `container`，已发）→ M1.5（`not_path_exists` + 容器名过滤，已发）→
 M2（数据面解包 + 分派）。
 
-回滚：把单元 `status` 改回 `draft` 发一份新包并激活（已授权的工作会因下次授权不再选它而停）；
-采集端没有新代码，不需要回滚能力。
+回滚：把单元 `status` 改回 `draft` 发一份新包并激活（已授权的工作不会自动停 —— 旧 spec 锁定在
+旧目录上；还要 **revoke / 重新授权** 才会换 spec），并且**改内容必须 bump 版本**
+（`catalog_version` 或 `purpose_version`），否则网关分不清新旧包。采集端没有新代码，不需要
+回滚能力。
 
-> M1.5 的组件回滚注意：`filters.name_in` / `name_not_in` 是**语义性**字段，旧 agentd
-> 不认识 → 网关注册时会按能力轴裁掉（不派、不报错）；`not_path_exists` 旧网关不认识 →
-> 该单元整条不展开（保守，不会重采）。两者都不需要回滚采集端。
+> M1.5 的组件回滚注意：`filters.name_in` / `name_not_in` 是**语义性**字段，旧 agentd 不认识 →
+> 网关按能力轴处理：包含式维度仍然裁源；**减法维度（`pod_not_in` / `name_not_in`）去掉该维度
+> 继续采**（与 `drop_if_contains` 同一档，宁可多采，不少采变成不采）。`not_path_exists`
+> 旧网关不认识 → 该单元整条不展开（保守，不会重采）。两者都不需要回滚采集端。
 
 ## 12. 相关文档
 
