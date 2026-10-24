@@ -163,7 +163,44 @@ Docker 侧文件名只有容器 id，**没有名字** ⇒ M1 阶段这三个类�
 `Config.Labels`（compose 的 `com.docker.compose.service`、k8s 的 `io.kubernetes.container.name`）
 拿到身份后，数据面才能像 k8s 那样分派。
 
-### 6.4 单元内容
+### 6.4 `host + mysql` 与 `host + docker + mysql` 靠什么区分
+
+不是平台差别，是**同一台 linux 上哪条采集载体命中**的差别。三个维度分开看：
+
+| 维度 | host 形态 | docker 形态（json-file） | docker 形态（把日志挂出来） |
+|---|---|---|---|
+| 单元 | `linux-db-service` | `linux-docker-container-stdout` | `linux-db-service`（**不变**） |
+| `match` | `path_exists:/var/log/mysql` | `path_exists:/var/lib/docker/containers` | `path_exists:/var/log/mysql`（容器内挂出） |
+| 读法 | `mysql_slow` | `docker_json` | `mysql_slow` |
+| 记录身份 | `source_path=/var/log/mysql/slow.log` | `<id>-json.log`（M2 才加容器名） | 同 host |
+| `source_type`（D8 目标态） | `mysql_slow` | `container_stdout` | `mysql_slow` |
+| 页面归类 | 14 数据库 | 13/15/16 容器（要落 14 需新规则） | 14 数据库 |
+
+**所以“区分”分两层：**
+
+- **机器级（今天就成立）**：两台机分别命中不同单元；派下去的 spec 里 `unit_id` 不同，
+  管理面与 `local_work` 都看得见“这台机走的是哪个载体”。一台机上两种都有（宿主机服务 + 容器）
+  → 两个单元都命中，路径不同，**都采、不重**。
+- **记录级**：只有 docker 的 json-file 形态需要区分“这条是哪介容器的” —— 文件名只有容器 id，
+  所以必须靠 **M2 的 `config.v2.json` 身份**；M1 阶段只能拿 `source_path` 里的 id 去
+  `docker ps` 回查。
+
+**如果要把“容器里的数据库”归到数据库页（14）**，有两条路，性质不同：
+
+| 路 | 做法 | 需要新概念 |
+|---|---|---|
+| **A（推荐）** | 容器把 slow log / csvlog 写到**宿主机标准路径**（bind-mount + 容器参数），
+读法仍是 `mysql_slow` / `postgres_csv` | 无 —— 在采集语义上“退化成 host 形态”，`source_type` 天然是 `mysql_slow` |
+| **B** | 走 `docker_json`，M2 带容器身份，数据面新增 `log_type`（如 `db_mysql_error`） | 有 —— D8 的两层词表要扩一行，且 M2 还没做 |
+
+Docker 容器的 **stdout 通常不是慢日志 / csvlog**（那是两件东西：前者是错误输出，后者是引擎
+写到文件里的结构化日志），所以 B 路拿到的是“数据库报错”，不是“慢查询”。两者不互相替代。
+
+> ⚠ 不要把 docker 单元塞进 `DatabaseService` 面来“让数据库页有数据”：
+> `/var/lib/docker/containers/*/*-json.log*` 无法按容器名过滤，那样会把**所有容器**的 stdout
+> 都算成数据库。要分派只能靠 M2 的身份（或数据面按正文定型）。
+
+### 6.5 单元内容
 
 ```toml
 [[units]]
