@@ -594,6 +594,12 @@ contracts 始终最先发布（所有仓的编译依赖）。
 > 于是 agent 从不探测任何路径，`path_exists:` 判定的面（auth / sudo / audit / kernel /
 > 数据库 / 容器 stdout）在真机上**永远授不了权**（`work_conflict: … fact_not_collected`）。
 > 现场表现只有“授不了权”，日志采集本身正常 —— 是最容易误判成“目录/网关配置错”的一类。
+>
+> **升级后为什么要等一会儿**：agentd 拉策略表的间隔是 **5 分钟**，而且**失败也按 5 分钟节流**
+> （避免网关宕机时每 3 s 重试）。升级/重启 agent 正好撞上网关重启时，第一次拉取会失败，
+> 白名单最多晚 5 分钟才生效。授权报 `fact_not_collected` 时先看
+> `GET /api/v1/admin/agents/<id>/purpose` 的 `probed_paths`：**为空 = 还在等重新探测**，
+> 非空则是真实的三态结论（`match_unsatisfied` = 探测了、确实不存在）。
 
 发布顺序（已按此执行）：**contracts 0.9.5 先发**（否则后四个仓编译不过），随后
 **网关 0.20.1 → agentd 0.9.1 → web 0.14.1 → knowledge 0.5.1** ——
