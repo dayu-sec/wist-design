@@ -694,7 +694,9 @@ contracts 始终最先发布（所有仓的编译依赖）。
 
 **现状（已核实）**
 
-- 帧信封是 `{schema, agent, ts, seq, family?, unit?}`（`wist-contracts/src/telemetry_record.rs:86`）。
+- 帧信封是 `{schema, agent, ts, seq, family?, unit?, container?}`
+  （`wist-contracts/src/telemetry_record.rs`；`container{name,image,id}` 自 contracts 0.9.6 起，
+  纯 Docker 主机的容器日志才有）。
 - **`rule_ref` 不进帧**：它只存在 `WorkSpecUnit`，agentd 写记录时只带 `family` / `unit`
   （`wist-agentd/src/runtime/daemon_telemetry.rs:257`）。
 - WPL `agent_uplink/log_frame` 把 `family` / `unit` 当**可选**字段读出
