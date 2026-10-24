@@ -344,7 +344,7 @@ multiline = "none"          # 正文原样，JSON 由数据面解
 | 阶段 | 内容 | 触及 |
 |---|---|---|
 | **M0（零代码，可今天就做）** | 知识库加单元 `linux-docker-container-stdout`（glob + `multiline = none`），真机验证「字节到了」。正文是原始 JSON 行 | 只改 `wist-knowledge`（+ stack 跟版发初始包） |
-| **M1** | `container { name, image, id }` 帧字段（读 `<id>/config.v2.json`） | contracts（帧字段）+ agentd |
+| **M1（已发：contracts 0.9.6 / agentd 0.9.4）** | `container { name, image, id }` 帧字段（读 `<id>/config.v2.json`）；已用真实 wparse 验证多出该键不影响解析 | contracts + agentd |
 | **M1.5** | `not_path_exists`（k8s + cri-dockerd 去重）；可选 `filters.name_not_in` / `name_in`（量控） | contracts + gateway + agentd |
 | **M2** | 数据面：解 docker JSON（与 CRI 头同层，按行首或 `unit` 判定），按 `container.name` 分派 13/15/16，DB 报错落 14 | 数据面（WPL/OML）+ 知识库 `rule_ref` |
 

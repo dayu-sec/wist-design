@@ -585,6 +585,10 @@ contracts 始终最先发布（所有仓的编译依赖）。
 `catalog_version` 11）+ stack **0.2.15-alpha**。采集端零代码；正文原样上送，docker JSON 信封留给
 数据面解（见 [`docker-container-logs.md`](./docker-container-logs.md)）。
 
+接着是 **M1（容器身份）**：contracts **0.9.6**（`ContainerRef` + 帧字段）+ agentd **0.9.4-alpha**
+（从 `config.v2.json` 读 `name`/`image`/`id`，只读元数据不碰正文）。已用真实 `wparse` 验证帧里多出
+`container` 键不影响旧数据面的解析；分类（M2）仍待数据面按名字分派。
+
 > ⚠ **现场生效要“激活”**：已激活过知识包的站点，网关会优先用那个包（`source_dir` 被忽略）——
 > 只升 stack **不会**换目录。必须把 0.5.2 的包在「知识库」页**录入并激活**（热加载），再
 > **重新授权 `ComputeWorkload`**，并等一轮策略拉取（≤5 分钟）让新探测路径进入白名单。
