@@ -1,6 +1,7 @@
 # Linux 服务器日志采集覆盖与支持方案（16 类）
 
-> 状态：**设计（D0–D13 已锁定；§8.1 待外部确认；§8.3 明确延后；W0/W1 已实现（未发布，W1 的 D7 能力上报遗留），W2–W4 待实现评审）**
+> 状态：**设计已锁定（D0–D13）；W0–W3 已实现并发布（2026-10-23）；W4 未做；§8.1 待外部确认；§8.3 明确延后。**
+> **接手先读 §6.6「交付现状与缺口」** —— 那是当前口径；§6 各 W 里的「未发布 / D7 未做」是落地当时的记述。
 > 需求基线：`server-file-scope.md`（工作区根，对齐链路页「主机日志」16 类，
 > `collect-stat-service/catalog/pipeline_catalog.json` 的 `origin=host_systems`）
 > 范围：Linux 服务器上的 **16 个页面分类**（记录级 `log_type` 与映射见 D8）。CWP / 流量探针 / 云产品属设备日志与云平台日志，不在本文。
@@ -176,7 +177,7 @@ symlink 路径（`filename` 形状不变）。
 实现必须处理「游标被 vacuum」：`--after-cursor` 报 cursor not found 时回退
 `--since=-<2×period>` 并记一条自观测，否则采集卡死。
 
-### D7 能力上报（已定：随 W1 落地）
+### D7 能力上报（已定；2026-10-23 落地）
 
 `CapabilityReport` / `LogsCapabilities` 在契约里已存在但**零引用**
 （`wist-contracts/src/capability_report.rs:78`，能力契约文档 §12 第 9 项标为「待做」）。
@@ -186,6 +187,31 @@ symlink 路径（`filename` 形状不变）。
 `file_inputs: ["absolute-path", "glob"]`、`multiline_modes`、`exporters`；网关把「目标 agent 是否声明该能力」
 并入 `collect_ready`。词表由 `is_executable_source` 同一组常量派生，避免两侧漂移。
 在其落地前，glob / journal 单元先保持 `draft`，机队升级验证后再单独发知识库翻 `active`。
+
+**实现状态（2026-10-23）：已落地并已发布**（contracts 0.9.4 / api 0.9.1 / gateway 0.20.0-alpha / agentd 0.9.0-alpha）。
+**尚未覆盖 `filters`（W2）—— 见 §6.6 G1，这是策展容器单元的前置。**
+
+| 仓 | 改动 |
+|---|---|
+| `wist-contracts` 0.9.4 | `LogsCapabilities` 增 `exporters`；`missing_log_capabilities(kind, target, multiline, declared)` 把「一条来源还缺哪些能力」收敛成**一处判定**（`file_inputs:*` / `multiline_modes:*` / `exporters:*`，空 = 齐了）；常量 `FILE_INPUT_ABSOLUTE_PATH` / `FILE_INPUT_GLOB` / `MULTILINE_MODES` 与 `is_file_target` / `WorkSpecSource::multiline` 同源 |
+| `wist-api` 0.9.1 | `AgentStatusReport.logs_capabilities`（可选）：`None` = 旧 agentd 没报 |
+| `wist-gateway` | 迁移 `0031_agent_logs_capabilities.sql`（TEXT 列，与 `local_work` / `uplink_state` 同口径：**没带就不清**）；`derive_spec` / `materialize_spec` 在 agent **报过**能力清单时裁剪来源，并在拒绝文案里点名缺了哪项（`agent does not declare capabilities for (...)`）；**没报（`None`）不做裁剪**，退回契约判据 |
+| `wist-agentd` | 状态上报带 `logs_capabilities`：`file_inputs` = `absolute-path` + `glob`，`multiline_modes` = `MULTILINE_MODES`，`exporters` = `EXPORTER_IDS`（与 `telemetry::exporters::EXPORTERS` 的一致性由单测钉住 —— 不手抄名单）；`parsers` / `watcher_modes` 不声明（本版真没有，多报比不报更糟）|
+
+**验收 / 行为**
+
+- 报过清单 → 缺能力的面在**派活时**就被拦住，文案说清缺什么；不再出现「网关派下去、agent 回 `unsupported`」。
+- 没报（旧机队）→ 与 D7 之前完全一致（不裁剪），否则会一夜之间把旧机队的所有采集面停掉。
+- 同一单元里混着可采/不可采的两条来源 → 只剔后者（新增用例覆盖）。
+
+**残留（已写进待决）**
+
+1. **回滚到“不报能力”的 agentd 时拦不住**：落库沿用 `local_work` 的口径（一次老报文不清清单），所以回滚后网关会拿**上一次报告**继续判 —— 它可能比回滚后的 agent 更乐观。彻底拦住需要一张「能力 → 最低版本」表（又一个真相来源），本次不做，记为待决。
+2. **目录翻 `active` 是单独一次发布**：D7 落地只是让翻牌变安全；`linux-db-service` 等靠 glob 的面仍是 `draft`，等机队上报后再发。
+3. **管理面只到接口层**：`AgentListEntry.logs_capabilities` 已随列表带出（`null` = 还没报过），
+   页面还没渲染 —— web 跟进时可用来回答「为什么这个面没派给这台机器」。
+4. **部分裁剪会记一行自观测**：单元还在、但某条来源因能力被剔时记
+   `event=WorkSourceDropped reason=capability`，否则“这个面怎么少一半数据”无处可查。
 
 ### D8 分类模型：两层词表（页面分类 ≠ 记录类型）
 
@@ -293,7 +319,7 @@ RHEL 上反过来；裁剪后每个发行版只剩存在的两条。
 `only_the_absent_sources_are_dropped_from_a_multi_source_unit`；`a_hand_written_spec_is_not_filtered_by_path_facts`；
 `the_real_catalog_dispatches_only_the_auth_file_that_exists`。
 
-**实现状态（2026-10-22）**：已落地，未发布。
+**实现状态（2026-10-22）**：已落地并**已发布**（随 `wist-gateway` 0.20.0-alpha / `wist-knowledge` 0.5.0 现场可用）。
 
 - 网关：`content.rs::probe_paths` 纳入显式来源、新增 `validate_unique_active_paths`；
   `work.rs::materialize_spec` 按事实裁剪（`derive_spec` 传 facts，`validate_spec` 不过滤）；
@@ -329,7 +355,8 @@ RHEL 上反过来；裁剪后每个发行版只剩存在的两条。
 
 **验收**：2 ns × 3 pod；新 pod 即采；改名轮转不重放；重启不丢不重；超过 `max_files` 有明确上报。
 
-**实现状态（2026-10-22）：代码已落地，未发布；D7 能力上报未做（见下）。**
+**实现状态（2026-10-22）：已落地并已发布**（contracts 0.9.1 / agentd 0.9.0-alpha / gateway 0.20.0-alpha / web 0.14.0-alpha）；
+**D7 能力上报已随 0.9.4 落地**（见 D7），下方「1. D7 未落地」为落地当时记述。
 
 | 仓 | 改动 |
 |---|---|
@@ -378,7 +405,8 @@ RHEL 上反过来；裁剪后每个发行版只剩存在的两条。
 - `business` / `gateway` / `k8s_pod` 是同一批流的三种归类，采集侧只采一次。
 - label 选择列为独立能力，等 `K8sDiscoveryProbe` 落地后再评估。
 
-**实现状态（2026-10-23）：代码已落地，未发布；D7 能力上报仍未做（同 W1）。**
+**实现状态（2026-10-23）：已落地并已发布**（contracts 0.9.2 / agentd 0.9.0-alpha / gateway 0.20.0-alpha / web 0.14.0-alpha）；
+**但目录里还没有任何容器单元**（见 §6.6 G2），所以 W2 的代码能力目前零使用者。
 
 | 仓 | 改动 |
 |---|---|
@@ -427,9 +455,66 @@ RHEL 上反过来；裁剪后每个发行版只剩存在的两条。
 ### W3 journald 内核导出器
 
 - 契约 / agentd / web 增 `journalctl-kernel`：`/usr/bin/journalctl -k -p 4 -o json`，周期 60s；
-  有 `state/exporters/journalctl-kernel.cursor` 用 `--after-cursor`，否则 `--since=-5m`；
+  有 `state/exporters/<run_id>.cursor` 用 `--after-cursor`，否则 `--since=-5m`；
   每次取输出最后一行的 `__CURSOR` 原子落盘；cursor not found 回退 `--since`。
 - 目录：`linux-kernel-system` 改为 journal 唯一来源（删除文件来源）。
+
+**实现状态（2026-10-23）：已落地并已发布**（contracts 0.9.3，后续 0.9.4 并入了 D7；agentd 0.9.0-alpha / knowledge 0.5.0）。**
+
+| 仓 | 改动 |
+|---|---|
+| `wist-contracts` 0.9.3（已发） | `EXPORTER_IDS` 增 `KERNEL_LOG_EXPORTER = "journalctl-kernel"`（词表只增不改名）。它是词表里第一个**有状态**的导出器，但契约只承诺「这个 ID 可执行」——游标怎么存、失效怎么回退留在采集端 |
+| `wist-agentd` | 导出器定义：周期 60s / 超时 30s；`argv_for` 给**无状态的「首读 / 回退」**命令（`-k -p 4 -o json --no-pager --quiet --since -5m`）；`argv_for_run` 在有游标时用 `--after-cursor=<cursor>` **替换**时间窗口（两者同时给时 journalctl 从较晚的那个开始，游标就形同虚设）；游标取自 `-o json` 最后一条 `__CURSOR`；落 `state/exporters/<run_id>.cursor`（临时文件 + rename）；`cursor not found` / `Failed to seek to cursor` → 回退一次 `--since` 并记 `event=ExporterCursorFallback`；回退后仍无新游标则**清掉死游标**（否则每轮失败一次再回退一次）|
+| `wist-gateway` | 无逻辑改动（`EXPORTER_IDS` 自动跟随契约）；真实目录用例补 `/run/systemd/journal` 的探测事实 |
+| `wist-gateway-web` | 契约词表的手抄件 `EXPORTER_IDS` 补 `journalctl-kernel`（判据同口径），并加一条「内核导出器可采」的契约测试 —— 漏了的话页面会把内核面显示成「未接」，而 agent 其实采得到 |
+| `wist-knowledge` 0.5.0 | `linux-kernel-system` 换成 `Exporter journalctl-kernel`，加 `match = "path_exists:/run/systemd/journal"`，删 `/var/log/kern.log`、`/var/log/messages`；`catalog_version` 8 → 9（目录 / 包 / 模板同步）|
+
+**与本文的差异 / 遗留**
+
+1. **游标从 `-o json` 最后一条的 `__CURSOR` 取**（即本文原写法）：这是 D1（采集侧只搬原文）的
+   **唯一例外**，而且只取这一个**传输层**字段 —— 它只决定「下次从哪接着读」，不进记录、
+   不改 body、不参与归类。
+   为什么不用 `--show-cursor`：它输出到哪个流、空窗口时会不会输出，随版本/输出模式变；
+   一旦它写进 stdout，游标行就会变成一条**假的内核日志**；而取不到游标会让每轮重读同一段
+   （**每 60s 重复上送一次**）。两个失败都是“看起来在正常工作”。
+2. **回退窗口是 `--since=-5m`**（D6 写的是 `--since=-<2×period>`）：首读与回退用同一个常量，
+   少一个「为什么是 120s」的猜测；5m 足够覆盖一次 vacuum 之后的时间缺口。
+3. **超时不回退重跑**：只有「带着游标 + 错误明说游标没了」才重跑一次。超时/缺权限重跑一次
+   只会让一轮 tick 的耗时翻倍，下一轮还会撞同一面墙。
+4. **实测的 journalctl 语义（systemd 259，Ubuntu 26.04）**，比本文的假设多两种情形：
+   - 畸形游标（`garbage` / 空串）→ 退出码 1，stderr `Failed to seek to cursor`；
+   - **格式合法但已不存在的游标**（vacuum 掉了）→ **退出码 0，静默从 journal 起点重读**；
+   - `--since` 与 `--after-cursor` 同时给 → **直接报错**（`Please specify only one of …`）。
+   推论：(a) 用**替换**而不是追加时间窗口是必须的（否则每轮都失败）；
+   (b) 「回退 `--since`」只覆盖畸形形态（我们自己的游标都过了形状校验，所以这条路主要是兜底）；
+   (c) 旧游标导致的无界重读**无法在命令行上加窗口上限**，改用「**超时 → 清游标**」自愈：
+   宁可下一轮从 `--since` 重读（可能跳过一段），也不让该面永久卡在超时里。
+5. **游标按 `input_id`（运行标识）存，不按导出器 ID**（修正本文原先的 `journalctl-kernel.cursor`）：
+   两个单元盯同一个导出器时，共享游标会让**后跑的那个永远读到空窗口** —— 表现是
+   “其中一边静默没有数据”。各读各的位置，最差是重复，不会丢；键与 `last_run_ms` 同一把。
+6. **旧 agentd 的降级是「报 unsupported」，不是「改读文件」**：`journalctl-kernel` 在旧机队的
+   `EXPORTER_IDS` 里不存在 → 该单元被报成 `WorkUnitUnsupported`（C5 = A 的自然降级），
+   不做文件回退（D6）。这意味着**先升 agentd，再推新目录包**。
+7. **旧网关会拒绝这份目录**：`active` 单元的唯一来源是它不认识的导出器 ID → 装载期校验报错、
+   整份目录加载失败。所以发布顺序是 **contracts → agentd → 网关 → 知识库包**。
+8. **D7 能力上报仍未做**（同 W1/W2）：本单元不依赖 manifest —— 没有新增 wire 字段，降级路径是
+   「未知 ID → unsupported」。D7 落地后应把 `exporters` 词表并进 `collect_ready`。
+9. **上送失败时游标不推进**（至少一次）：那一段会被下一轮重读，代价是可能重复、但不会丢。
+   这与快照型导出器「失败也推进周期」不同——快照丢了下一轮会重新生成，游标丢了就永远丢了。
+10. **`CrashPanic` 仍用 `dmesg:panic` 快照**（本次不改）：它与 `journalctl -k` 在内容上有重叠
+    （同一个内核 ring buffer 的两条通道），但面不同（崩溃 vs 内核/系统）。要合并得先定
+    “panic/OOM 归哪个 `log_type`”，那是数据面的事（§7 的 16 类落点里本来就分在两行）。
+11. **已真机验证**（Ubuntu 26.04 / systemd 259 / 内核 7.2.9，OrbStack）：
+    `dev/verify-journal-exporter.sh` 验了一行一条 JSON、`__CURSOR` 可取、空窗口 stdout 为空、
+    续读不重放、畸形游标报错且措辞匹配 `is_cursor_error`、`-p 4` 真的滤掉 info。
+    该脚本已挂到 **CI**（`build-and-test.yml` 的 `journal-contract` job，ubuntu-24.04，不需要编译）；
+    环境采不到内核日志时退 77 → CI 当**明确 SKIP**（step summary + 告警），不硬红也不假绿。
+
+**验证**：contracts 87 个 lib 测试、agentd 699 个 lib 测试（其中 `telemetry::exporters` 19 个，
+含 10 个内核游标 / argv 用例）+ 全部集成用例、网关 686 个 lib 测试（含真实目录用例）、
+web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0、`fmt` 干净。
+**真机**（Ubuntu 26.04 / systemd 259 / 内核 7.2.9）：`dev/verify-journal-exporter.sh` 全部 PASS，
+包括「续读不重放」与「`-p 4` 滤掉 info」；同一脚本已进 CI（`journal-contract` job）。
 
 ### W4 记录边界与行丢弃
 
@@ -443,6 +528,69 @@ RHEL 上反过来；裁剪后每个发行版只剩存在的两条。
 
 - 不扩 `TelemetryRecord` / `DataFrame`；不在 agentd 内做 audit / auth / CRI / csv 字段解析；
 - 不做 Windows 与云产品日志。
+
+### 6.6 交付现状与缺口（2026-10-23 交接）
+
+> **接手先读这一节。** §6 各 W 下的「实现状态」是落地当时的记述（多数写着“未发布”“D7 未做”），
+> 那些结论**已被本节取代**。
+
+#### 已发布（线上可装）
+
+| 仓 / 制品 | 版本 | 覆盖的阶段 |
+|---|---|---|
+| `wist-contracts` | 0.9.4 | W1 glob 判据 + `exclude_globs`（0.9.1）、W2 `filters`（0.9.2）、W3 `journalctl-kernel`（0.9.3）、D7 `LogsCapabilities.exporters` + `missing_log_capabilities`（0.9.4） |
+| `wist-api` | 0.9.1 | `AgentStatusReport.logs_capabilities`（D7） |
+| `wist-agentd` | 0.9.0-alpha | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报 |
+| `wist-gateway` | 0.20.0-alpha | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪 |
+| `wist-gateway-web` | 0.14.0-alpha | W1/W2 解析与展示、导出器词表跟上 W3 |
+| `wist-knowledge` | 0.5.0 | `linux-kernel-system` 换 `journalctl-kernel`（`catalog_version` 9） |
+| `wist-gateway-stack` | 0.2.9-alpha | 网关 0.20 / 前端 0.14 / 知识库 0.5.0 接线；中心信任锚可选化 |
+
+**部署顺序是硬约束**：contracts → agentd → gateway → web → knowledge → stack。
+旧网关会把「active + 不认识的导出器」判为装载错误、**整份目录加载失败**。
+
+#### 16 类覆盖现状
+
+| # | 类 | 现状 | 卡在哪 |
+|---|---|---|---|
+| 1–3 | auth（ssh / session / sudo） | **采集中**（`linux-auth-session` / `linux-sudo-log` active） | 噪音行丢弃要 W4（G3） |
+| 4–11 | audit（8 类） | **采集中**（`linux-audit-log` active；整文件、不按 `type=` 丢行） | 解析侧规则（8.1.1 / 8.1.2） |
+| 12 | kernel | **采集中**（`linux-kernel-system` → `journalctl-kernel`） | 无 |
+| 13 / 15 / 16 | 容器（business / gateway / k8s_pod） | **未采集** | 目录里没有容器单元（G2），且能力轴缺 filters（G1） |
+| 14 | database | **未采集** | 单元 `draft` + 缺 W4 记录边界（G3） |
+
+#### 缺口（按优先级）
+
+| # | 缺口 | 影响 | 位置 | 类型 |
+|---|---|---|---|---|
+| **G1** | D7 能力清单**没有 `filters` 轴** | 带 `filters` 的单元派给 agentd < 0.9 会被 `deny_unknown_fields` **整份拒收** → 容器面永远翻不了 `active` | `wist-contracts/src/work.rs::missing_log_capabilities`（现只有 `file_inputs` / `multiline_modes` / `exporters`）+ agentd 上报 | 代码（**阻塞 G2**） |
+| **G2** | 目录里**没有容器单元** | 13/15/16 一条不采；W2 的代码能力零使用者 | `wist-knowledge/catalog.toml`：`linux-compute-workload` 仍是 `/var/log/pods/*`（旧形态） | 策展 |
+| **G3** | W4 记录边界未实现 | 1–3 的噪音行、14 的 csvlog / slow 都没法正确切 | `MULTILINE_MODES` 只有 `none` / `indented`；无 `drop_if_contains` | 代码 |
+| G4 | 5 个单元仍 `draft` | misc / db / compute / backup / network 不可用 | `catalog.toml` | 策展（多数依赖 G1/G3） |
+| G5 | glob × glob 重叠不可检测 | 两条 active 单元写重叠 pattern 会**重复采集** | 网关装载期只对显式路径做唯一性校验（W1 遗留 4） | 代码（低优先，靠策展约束） |
+| G6 | 授权后新出现的文件不进 spec | 后装 auditd / 新日志文件要**重新授权**一次 | `work.rs::derive_spec` 只在授权时算 | 代码 |
+| G7 | 管理面不显示「被裁掉的来源」 | 运维看不出“这个面为什么少了一半” | web `sources[]` 只回目录里的来源 | 展示 |
+| G8 | `CrashPanic` 与 `journalctl -k` 内容重叠 | 同一 ring buffer 两条通道 | 保留 `dmesg:panic` | 先由数据面定 panic/OOM 的 `log_type` |
+| G9 | RHEL 无年份时间行 + facts 里没有时区 | **RHEL 上 1–3 无法结构化**（即使推年份也算不出 epoch） | 8.1.4：facts 加 `timezone` / `utc_offset_seconds` + 年份推断 | 跨 contracts / agentd / 数据面 |
+| G10 | `rule_ref` 大量为空 | 页面“解析就绪”轴为 0 | `catalog.toml` + 数据面 RACI（8.1.2） | 跨团队 |
+| G11 | label 选择未做 | 只能按 namespace / pod 名选 | `K8sDiscoveryProbe = NotImplemented`（8.1.5 已定 A：先不做） | 延后 |
+| G12 | **回滚到不报能力的 agentd 时拦不住** | 落库沿用 `local_work` 口径（一次老报文不清清单）→ 网关拿上一次报告继续判，可能比回滚后的 agent 更乐观 | 需要一张「能力 → 最低版本」表（又一份真相源） | 代码（D7 残留 1） |
+
+#### 建议顺序
+
+1. **G1**（filters 能力轴）→ 发 contracts / agentd；
+2. **G2**（策展容器单元：`/var/log/containers` + `namespace_in` / `pod_not_in`）→ knowledge 发版翻 `active` → 补上 13/15/16；
+3. **G3**（W4 记录边界）→ 翻 `linux-db-service`（14）与 auth 噪音行（1–3）；
+4. G4 其余三个单元逐个翻；
+5. G9 单独立项（跨 4 仓）；G5 / G6 / G7 视现场反馈排。
+
+#### 已知的文档 / 注释不一致（清理项）
+
+- 本文 §6 里 W1/W2/W3/D7 的「未发布」「D7 未做」「contracts 0.9.3 待发」均为落地当时的记述，**以本节为准**；
+- `wist-knowledge/catalog.toml` 的 `linux-crash-panic`：注释写「本单元先保持 draft」，实际 `status = "active"`
+  （它含两条 glob 来源，旧 agent 上靠 D7 自动裁掉）；
+- `biz/` 与 `gateway` 的容器流归类（13/15/16 是同一批流的三种归类）在目录落地时要写成**同一单元、不同归类**，
+  不要再拆成两条 active（否则触发 G5）。
 
 ---
 
