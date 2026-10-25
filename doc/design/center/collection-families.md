@@ -34,7 +34,7 @@
 
 ## 2. 闭集与维护规矩
 
-**共 18 个**（清单见 §3）。三条规矩：
+**共 19 个**（清单见 §3）。三条规矩：
 
 1. **只增不改名。** 面名一旦进入协议（数据帧 / 记录 / 接口），改名就是**破坏性变更**：
    历史数据里那个值会变成"不存在的面"，按面统计与回溯都会断。
@@ -46,7 +46,7 @@
 **谁校验**：网关装载采集目录时按词表拒未知面 —— 面名写错会**报错**，不会被静默收下；
 词表本身还要过**追加式校验**（不得删除 / 改名 / 复用已退场 ID）。
 
-## 3. 18 个面一览
+## 3. 19 个面一览
 
 > 「载体」一列只是让你知道**大概从哪来**，会随系统版本与策展变；**以 `catalog.toml` 为准**。
 > 同一个面也可能有多个载体（如 `NetworkFirewall` 的 macOS 侧 = `wifi.log` + 统一日志 `com.apple.alf`）。
@@ -68,7 +68,8 @@
 | `KernelSystem` | 内核与系统日志（含 OOM killer） | Linux | `journalctl-kernel`（journald 唯一来源，W3） |
 | `DatabaseService` | 数据库服务 | Linux | `postgresql/*.csv`（csvlog）、`mysql/*slow*.log`（slow log）、`redis/*`、`mongodb/*` |
 | `StorageHealth` | 存储与文件系统健康（fsck/RAID/SMART/容量） | Linux | `smartctl`、`fsck*` |
-| `ComputeWorkload` | 作业 / 调度 / 加速卡 / 容器 stdout | Linux | k8s：`/var/log/containers/*.log`；纯 Docker：`/var/lib/docker/containers/*/*-json.log*`（13/15/16 同一批流）、`slurm/*`、`dmesg:nvidia-xid` |
+| `ComputeWorkload` | 作业调度与加速卡 | Linux | `slurm/*`、`dmesg:nvidia-xid`（容器 stdout **不在这个面**，见下） |
+| `ContainerWorkload` | 容器 stdout（business / gateway / k8s_pod） | Linux | k8s：`/var/log/containers/*.log`；纯 Docker：`/var/lib/docker/containers/*/*-json.log*`（13/15/16 同一批流） |
 | `BackupJob` | 备份与批处理 | Linux | `borg/*`、`restic/*` |
 | `NetworkService` | 网络服务（NFS/SMB/防火墙规则） | Linux | `nginx/*`、`samba/*` |
 

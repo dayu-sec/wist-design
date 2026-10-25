@@ -23,7 +23,7 @@ variant CollectionFamily {
   meta {
     label zh "采集面"
     label en "Collection Family"
-    summary zh "工作内容的分类面（**闭集**，共 18 个）：登录、提权、软件变更、服务、崩溃、网络、重启、系统杂项、指标，以及 macOS 侧重与 Linux 侧重的面。面描述**需求**（要看见什么类别的事件），不是**载体**（从哪个文件/接口拿）；只增不改名，改名即新面 + 旧面 deprecated。"
+    summary zh "工作内容的分类面（**闭集**，共 19 个）：登录、提权、软件变更、服务、崩溃、网络、重启、系统杂项、指标、容器日志，以及 macOS 侧重与 Linux 侧重的面。面描述**需求**（要看见什么类别的事件），不是**载体**（从哪个文件/接口拿）；只增不改名，改名即新面 + 旧面 deprecated。"
     tags "control", "collection", "content"
   }
 
@@ -38,8 +38,10 @@ variant CollectionFamily {
   PrivacyTcc GatekeeperQuarantine DevToolchain
 
   // Linux 侧重：KernelSystem 内核与系统日志（含 OOM killer）、DatabaseService 数据库服务、
-  // StorageHealth 存储与文件系统健康（fsck/RAID/SMART/容量）、ComputeWorkload 作业/调度/加速卡
-  // （以及容器 stdout：13 business / 15 gateway / 16 k8s_pod 同属这个粗载体，归类由数据面 log_type 分派）、
+  // StorageHealth 存储与文件系统健康（fsck/RAID/SMART/容量）、ContainerWorkload 容器 stdout
+  // （13 business / 15 gateway / 16 k8s_pod 同一批粗载体，归类由数据面 log_type 分派；
+  // 它是**主机普遍能力**，所以挂在平台基线包里，不按机器用途分发）、
+  // ComputeWorkload 作业/调度/加速卡（slurm 作业、GPU Xid —— 描述计算节点的需求，与容器无关）、
   // BackupJob 备份与批处理、NetworkService 网络服务（NFS/SMB/防火墙规则）。
-  KernelSystem DatabaseService StorageHealth ComputeWorkload BackupJob NetworkService
+  KernelSystem DatabaseService StorageHealth ContainerWorkload ComputeWorkload BackupJob NetworkService
 }

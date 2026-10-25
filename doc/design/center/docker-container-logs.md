@@ -257,7 +257,7 @@ head -n1 /var/log/containers/*.log | head -3
 
 ## 6. 内容（知识库侧）
 
-### 6.1 面怎么定：**不开新面**，只加单元
+### 6.1 面怎么定：**容器 stdout 独立成 `ContainerWorkload`**（2026-10-25 修正）
 
 三层职责先分清（见 [`collection-family-capability-contract.md`](./collection-family-capability-contract.md) §4–§6）：
 
@@ -267,16 +267,26 @@ head -n1 /var/log/containers/*.log | head -3
 | **单元（unit）** | 某个平台上的一个**采集载体**：匹配条件 + 来源 + 读法 + 权限 | 中：随载体变，可 `draft`/`active` 独立开关 |
 | **来源（source）** | 具体路径 / 导出器 / 周期 | 低：随部署变 |
 
-判据（按顺序问）：
+**原判断（M0/M1 时）：不开新面** —— 理由当时是“容器 stdout 的语义没变，变的只是这个机器怎么拿到它”，
+于是两个容器单元都挂在 `ComputeWorkload` 下。
 
-1. **现有面能不能表达这个语义？** 能 ⇒ 不加面。
-   容器 stdout 的语义没变（13 business / 15 gateway / 16 k8s_pod 仍是「容器里的应用在说什么」），
-   变的只是**这个机器怎么拿到它**（kubelet 符号链接目录 vs docker 日志目录）。⇒ **不开新面**。
-2. **现有读法 / source kind 能不能采？** 不能 ⇒ 轨道 B（先定能力，再建单元）。
-3. **什么时候才加面？** 当「用户要**单独看**这一类」且「数据面要**单独分派**」同时成立。
-   容器**应用**日志不满足（它与 k8s 容器日志是同一类）；
-   真正的「容器运行时」面（docker/containerd 的启停、镜像拉取、运行时错误）**才**是另一类，
-   它今天没有单元，也不需要本方案。
+**修正原因（M1.5 现场暴露）：面不仅是“语义”，还是“谁拿得到”。** `ComputeWorkload` 只写进
+`linux-compute` / `linux-data` 模板，是按**机器用途**分发的；而容器 stdout 是**主机普遍能力**
+（有 docker / kubelet 就有）。后果：
+
+* 只跑业务容器的机器落 `LinuxHost`（模板只有基线包）→ **根本没有容器面**（现场：`cb282a`，
+  docker 根明明存在）；
+* 展示名也在误导：两个 `active` 单元都是容器，“作业/加速卡”反而只有 `draft`。
+
+**现结论**：新增面 `ContainerWorkload`（**只增不改名**），两个容器单元迁过去，并把它们挂进
+**`linux-base` 基线包** —— 所有 Linux 模板（含 `LinuxHost`）都自动带上这个面；
+`ComputeWorkload` 回归 `slurm` / `dsec:nvidia-xid`，干它本来的事。
+
+> 13 / 15 / 16 仍是**页面分类**，与本改动无关：面回答“要看见什么”，页面分类由数据面按
+> `log_type` 分派（D8）。
+>
+> 0.5.4 曾用“把 `dockerd` / `containerd` 判成 `LinuxCompute`”绕开这个问题；面拆分后那条路
+> 已撤回（`purpose_version` 4）—— 把业务容器主机标成计算节点是错的。
 
 ### 6.2 为什么必须是两个单元，而不是一个单元两条来源
 
@@ -293,7 +303,7 @@ head -n1 /var/log/containers/*.log | head -3
 - 无法分环境回退：Docker 单元可以先在几台机器上翻 `active`，出问题只回退它。
 
 命名沿用现有约定（平台前缀 + 载体）：`linux-docker-container-stdout`，
-与 `linux-container-stdout`（k8s）并列，同属 `ComputeWorkload`。
+与 `linux-container-stdout`（k8s）并列，同属 `ContainerWorkload`（挂 `linux-base`）。
 
 > **已知限制一：`data-root` 非默认**。docker 可被改成 `--data-root /data/docker`，
 > 而目录里的 `match` / `target` 是**字面路径**（不支持双层 glob）。目前只认 `/var/lib/docker`；
@@ -355,23 +365,22 @@ Docker 容器的 **stdout 通常不是慢日志 / csvlog**（那是两件东西�
 > **M1 起可以例外**：同一面下建一条带 `filters.name_in` 的 docker 来源（只选
 > `mysql` / `postgres` 等），选源层已经把“不是数据库的容器”剔掉了，面归属就是真的。
 
-#### 6.4.1 纯 Docker 业务机怎么拿到容器面（用途分类）
+#### 6.4.1 纯 Docker 业务机怎么拿到容器面（0.5.5 起：不再靠用途分类）
 
-容器单元属于 `ComputeWorkload` 面，只在 `linux-compute` / `linux-data` 模板里；
-`linux-host` 基线模板**只挂** `linux-base`。所以“能不能采到”先取决于机器被分到哪个类别。
+**现状：容器面在基线包里，与机器用途无关。** 两个容器单元属于 `ContainerWorkload` 面，
+而它们被引在 **`linux-base`** 里 —— 所有 Linux 模板（含 `LinuxHost`）都自动带上这个面，
+单元再用 `match` 自己决定展不展开。
 
-旧规则只认 slurm / nvidia / kubelet / 数据库守护进程 —— 一台**只跑业务容器**的机器
-（nginx / 应用容器）一条都不命中 → 落 `LinuxHost` → 容器单元**根本派不到**。
+历史两个阶段（都已被 0.5.5 取代，保留下来解释现场差异）：
 
-**知识库 0.5.4 起**（`purpose_version = 3`）补了两条弱判据：`dockerd` / `containerd` →
-`LinuxCompute`，各 15 分（合计 30，正好让 `min_support = 2` 生效）。
+| 版本 | 机制 | 后果 |
+|---|---|---|
+| ≤ 0.5.3 | 容器单元挂在 `linux-workload`（只在 compute/data 模板） | 纯 Docker 业务机落 `LinuxHost` → **没有容器面** |
+| 0.5.4 | 加 `dockerd` / `containerd` → `LinuxCompute` 的弱判据来骗过模板 | 能拿到面，但把业务容器主机标成了“计算节点”，且依赖人工采纳建议 |
+| **0.5.5+** | **面拆分 + 挂基线包** | 与分类无关；`purpose_version` 4 已**撤回**那两条判据 |
 
-* 权重刻意压在 40 以下：同一台机跑 mysql/postgres 时（40 分）仍归 `LinuxData`，
-  而 `linux-data` 模板本就包含 `linux-workload`，不会被抢成计算类；
-* 只有 `containerd` 的纯主机（15 分）会因信号弱被打折，但那类机器通常也跑着 kubelet（已是 25 分）。
-
-> 这是**策展决策**（改的是“怎么判用途”，影响全机队）；站点觉得分错了就改 `machine_class`
-> 或手写 `spec=`，不必等目录。
+> 这也说明“用一个代理信号（进程）去决定另一个能力（容器日志）该不该有”是错的层：
+> 容器面自己能用 `path_exists` 判断该不该展开。
 
 ### 6.5 单元内容（现行，0.5.3+）
 
@@ -393,8 +402,8 @@ multiline = "none"          # 正文原样，JSON 由数据面解
 # filters 默认不写（= 全采）；要收窄时用 { name_in = [...] } / { name_not_in = [...] }
 ```
 
-`linux-workload` 包已经引用该单元，`linux-compute` / `linux-data` 模板通过这个包拿到它
-（纯 Docker 业务机的用途分类见 §6.4.1）。
+`linux-workload` 包已不再引用容器单元；`ContainerWorkload` 面通过 **`linux-base`** 进模板
+（含 `LinuxHost`），所以与机器类别无关。
 
 13 / 15 / 16 的**归类仍然靠正文**（与 k8s 路径同一策略，D8）：解包后的原文与 CRI 解出来的
 原文形态一致，数据面规则复用。
