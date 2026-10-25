@@ -3,7 +3,8 @@
 把「发现」到「清单 / 用途」的落地路径画清楚：**一次上报，多个消费者**。本文只描述**当前已通**的链路与缺口，不描述待做形态。
 
 > 两个词别混：**「发现」**是 agentd 的探针（本机事实）；**「资产清单」**是网关对事实摘要做的 **L1a 机械归并**。
-> 发现侧**只压摘要、不建清单**；清单完全在网关算，且**只有摘要这一条通道**（原文通道待做）。
+> 发现侧同时产出**摘要**（控制面，喂用途推断/L1a）与**原文快照**（数据面，喂 `wist-atlas`）；
+> 清单仍完全在网关算，不因原文通道而改变。
 
 ## 1. 全链路
 
@@ -14,6 +15,7 @@ flowchart TD
     SN["快照 combine：按周期刷新，未到期沿用上次"]
     FS["事实摘要 build_summary：去重 + 只留推断/展示字段"]
     PR --> SN --> FS
+    SN -->|"DSNAP: 帧 · 原文快照"| WPL2
   end
 
   FS -->|"OBSFACT: 帧 · TCP :9000"| WPL
@@ -23,11 +25,18 @@ flowchart TD
     WPL["WPL agent_uplink/obs_fact：拆信封，正文透传"]
     OML["OML agent_obs_fact"]
     SG["sink_group agent-facts"]
+    WPL2["WPL agent_uplink/discovery_frame"]
+    OML2["OML agent_discovery_snapshot"]
+    SG2["sink_group agent-discovery"]
     WPL --> OML --> SG
+    WPL2 --> OML2 --> SG2
   end
 
   SG -->|"file sink"| F1[("agent-facts.jsonl（肉眼验证）")]
   SG -->|"http_sink POST · 明文 127.0.0.1:3001"| ING
+  SG2 -->|"file sink"| F2[("agent-discovery.jsonl")]
+  F2 --> AD["atlas 适配器：ReportDiscoverySnapshot → atlas.in.edge.v1"]
+  AD --> AT["wist-atlas import-jsonl / 后续 HTTP ingest"]
 
   subgraph GW["wist-gateway"]
     ING["内部端点 POST /api/v1/ingest/agent-facts"]
@@ -50,16 +59,41 @@ flowchart TD
 | 发现 | `wist-agentd/src/discovery/` | 探针 `host / network / endpoint / process`（`[discovery] *_enabled` 控制；container/k8s 当前关闭），产出 `DiscoveredResource` |
 | 快照 | `discovery/runtime.rs`、`cache.rs` | 把各探针输出拼成 `DiscoverySnapshot`；**只刷到期的探针**，未到期沿用上次输出（少交一个探针等于把它上次的资源删掉） |
 | 摘要 | `reporting/fact_summary.rs` | `build_summary()`：去重压成 `process_executables` / `listen_ports` / `packages`（探针未实现，恒空）+ `os/arch/process_count`；另带 `host_id/host_name/network_addresses`（仅留痕，不进摘要） |
-| 上行 | `runtime/daemon.rs::report_fact_summary` | 组 `{schema, agent, ts, seq} OBSFACT: <json>` 帧，走数据面 TCP sink |
-| 解析 | `data-plane/models/wpl/agent_uplink/parse.wpl` | `rule obs_fact`：`symbol(OBSFACT:)` + `chars:body\0`，**正文不拆字段**（契约可演进） |
-| 建模 | `data-plane/models/oml/agent_obs_fact.oml` | 只把信封拆成 `schema/agent_id/observed_at/seq/category/body` |
-| 分流 | `data-plane/topology/sinks/business.d/agent_facts.toml` | `sink_group agent-facts`，`oml=["agent_obs_fact"]` |
-| 落两处 | 同上 | ① `file_json_sink` → `agent-facts.jsonl`（肉眼验证）；② `gateway_facts_sink`（`sink.d/22-gateway_facts_sink.toml`）POST 到网关 |
+| 上行（摘要） | `runtime/daemon.rs::report_fact_summary` | 组 `{schema, agent, ts, seq} OBSFACT: <json>` 帧，走数据面 TCP sink |
+| 原文快照 | `discovery/runtime.rs` 的 `latest_snapshot` | `ReportDiscoverySnapshot`（`kind=report_discovery_snapshot`，`report_mode=full_snapshot`）；周期由 `discovery.snapshot_uplink_interval_seconds` 控制（默认 300s，最低 60s） |
+| 上行（原文） | `runtime/daemon.rs::report_discovery_snapshot` | 组 `{schema, agent, ts, seq} DSNAP: <json>` 帧；与摘要共用 TCP sink 与全局 `seq` |
+| 解析（摘要） | `data-plane/models/wpl/agent_uplink/parse.wpl` | `rule obs_fact`：`symbol(OBSFACT:)` + `chars:body\0`，**正文不拆字段**（契约可演进） |
+| 解析（原文） | 同一 WPL + `models/oml/agent_discovery_snapshot.oml` | `rule discovery_frame`：`symbol(DSNAP:)` + `chars:body\0`；只拆信封，正文原样透传 |
+| 建模（摘要） | `data-plane/models/oml/agent_obs_fact.oml` | 只把信封拆成 `schema/agent_id/observed_at/seq/category/body` |
+| 分流（摘要） | `data-plane/topology/sinks/business.d/agent_facts.toml` | `sink_group agent-facts`，`oml=["agent_obs_fact"]` |
+| 落两处（摘要） | 同上 | ① `file_json_sink` → `agent-facts.jsonl`（肉眼验证）；② `gateway_facts_sink`（`sink.d/22-gateway_facts_sink.toml`）POST 到网关 |
+| 分流（原文） | `data-plane/topology/sinks/business.d/agent_discovery.toml` | `sink_group agent-discovery`，`oml=["agent_discovery_snapshot"]` → `agent-discovery.jsonl` |
+| 原文消费 | `wist-atlas/scripts/wist-snapshot-to-atlas.py`（P0）| `ReportDiscoverySnapshot` → `atlas.in.edge.v1`（hosts/interfaces/processes）→ `import-jsonl` |
 | 校验 | `wist-gateway/src/api/ingest.rs` | 只做两件正确性检查：`agent_id`/`instance_id` 对得上登记表、**信封自称 == 正文自称**（**不是认证**） |
 | 派生 | `src/api/agent_ops.rs` | `ingest_fact_summary`：网关**自算** `content_digest` → 判重 → 覆盖写 `agent_fact_summary`；内容变才 `refresh_software_inventory`（`app/inventory.rs::derive_inventory`）+ 重跑用途推断 |
 | 展示 | `src/api/software_ops.rs` 等 | 「按机器看软件」「按软件看机器」「用途」三类视图 |
 
 **控制面**（与上行无关，只给周期）：agentd 拉 `POST /api/v1/agent/discovery-policies:poll` 拿各方向观测周期；网关未配表回 503，agentd 用内建默认值。它**不接管探针开关**。
+
+### 2.1 发现面 → 资源 kind → atlas 模型
+
+原文快照里的对象不是都能进 atlas。当前消费子集：
+
+| 发现方向 | probe | resource kind | atlas 目标 | 平台覆盖 | 阶段 |
+|---|---|---|---|---|---|
+| host | `host` | `host` | `HostInventory` | macOS / Linux | P0 |
+| network | `network` | `network_interface` / `ip_address` | `NetworkSegment` / `HostNetAssoc` | Linux 全；macOS 只有地址（无默认网关） | P0 |
+| process | `process` | `process` | `ProcessRuntimeState` | macOS / Linux | P0 |
+| endpoint | `endpoint` | `service_endpoint` | `SvcEp` / `EpRes` | Linux；macOS 空实现 | P2 |
+| container | `container` | `container` | `ContainerRuntime` | 默认关 | P2 |
+| k8s | `k8s` | —（`NotImplemented`） | `PodInventory` | 未实现 | P2 |
+| package | 无探针 | — | `SoftwareEvidence` | Linux（待实现） | P2 |
+
+约束：
+
+- 原文快照是**全量**的，atlas 只取上表子集；未消费的 kind 仍保留在 `agent-discovery.jsonl` 中供回放。
+- `targets[]` 不直接落 atlas 的服务/端点对象；它只作为采集提示，P0 忽略。
+- `host.id` 形如 `hostname:<name>` 时映射为 `external_ref`，**不能**当 `machine_id`。
 
 ## 3. 关键性质（设计意图，非巧合）
 
@@ -72,9 +106,10 @@ flowchart TD
 
 | 缺口 | 影响 |
 |---|---|
-| **原文快照**（`ReportDiscoverySnapshot`）**没有 receiver** | 「资产原文 → 中心整理」这条路还没通，目前只有摘要这一条 |
+| **原文快照的实时接收** | 已有 `DSNAP:` → `agent-discovery.jsonl` → 适配器 → `wist-atlas import-jsonl`；缺 atlas 内部 HTTP ingest、Rust 适配器、快照替换（`removed/stale`） |
+| **原文消费子集有限** | endpoint / container / k8s / package 暂不进 atlas，容器与编排资产仍不可见 |
 | `packages` 探针未实现 | 已装包集合恒空（**空 = 没采，不是没装**，见 `B119`） |
-| 数据面接入**无鉴权** | 网关订阅端不校身份（有意接受的降级窗口，见交付计划 §9） |
+| 数据面接入**无鉴权** | 网关/atlas 订阅端不校身份（有意接受的降级窗口，见交付计划 §9） |
 | container / k8s 探针关闭 | 容器/编排资产不在当前发现范围 |
 | Linux 只有可执行路径、没有参数 | `python3` / `java` / `node` 的不同用途分不出来；`cmdline` + 包清单仍缺（见 `B119`） |
 
@@ -86,10 +121,11 @@ flowchart TD
 - 边：`write`（agentd→数据面）、`trigger`（数据面→ingest flow）、三条 `write`（flow→三张派生表）、`emit`（flow→数据面，回 `FactSummaryAccepted`）。
 - **为什么不用 `topology.mju` 的 `link<data>`**：那要求两端是**主机节点**，而本链路要表达的是「什么数据经哪一步变成什么」，端点是 message/flow/struct。二者不是同一件事，故分列（`link<data>` 仍无法以拓扑 `node` 为端点）。
 - **为什么声明 `domain Reporting`**：端点多在 Reporting 域，未限定名按 Reporting 解析，`node<flow>` 与其 interface 输出（`FactSummaryAccepted`）才同域对得上。
+- **原文快照（`DSNAP:`）是同一条 dataflow 的第二条 write 边**：agentd → `WarpParseDataPlane`，消费端是 `wist-atlas`。当前模型只画了摘要这条；DSNAP 的 `node<message> ReportDiscoverySnapshot` 与 atlas 端点待 P1 稳定后补入（避免把未定型的 ingest 写成模型契约）。
 
 ## 6. 关联文档
 
 - [`./agent-purpose-inference.md`](./agent-purpose-inference.md) §3：事实从哪来（摘要/原文两条载荷）。
 - [`./agent-work-delivery-plan.md`](./agent-work-delivery-plan.md) §4.1：事实上报统一走数据面；§8.2：资产清单按层归属；§9：数据面接入无鉴权风险行。
-- [`./report-discovery-snapshot-schema.md`](./report-discovery-snapshot-schema.md)：原文快照（待做的哪条路）的 schema。
+- [`./report-discovery-snapshot-schema.md`](./report-discovery-snapshot-schema.md)：原文快照（`DSNAP:` body）的 schema。
 - [`../foundation/jumo-verification-model.md`](../foundation/jumo-verification-model.md)：把模型做成机器可检规约（本条 dataflow 是其中一个可检端点）。

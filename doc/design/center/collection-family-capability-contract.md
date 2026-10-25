@@ -290,6 +290,20 @@ Debian 要在 sudoers 里配 `logfile`）。这不是能力问题，而是**事�
 
 ---
 
+### 6.6 边界：原文发现快照（`DSNAP:`）暂不进能力契约
+
+- `DSNAP:` 是**发现方向**（host / network / process / endpoint / container / k8s / package）的原文上行，
+  不属于 `CollectionFamily`（采集面 = 日志/指标的内容分类）。数据面 `log_type = agent.discovery`
+  是**信号类别**，不要写进 `[[families]]` 词表。
+- 它也不是 §6.2 三个执行轴里的既有能力；当前**不在** `CapabilityManifest` 中声明。
+- 原因：原文快照通道还在 P1 落地（atlas 尚无 HTTP ingest、适配器仍是 P0 脚本），
+  过早写进 `requires.agentd.capabilities` 会让知识包依赖一个未稳定的面。
+- 待 P1 稳定后，再决定是否增加 `collect/discovery:snapshot`（或 `source/discovery:local-runtime`），
+  并补上 `requires` 校验与知识库 CI 检查。
+- 在此之前，平台侧判断「这台 agent 是否发原文快照」只能看状态上报/日志，不能看能力清单。
+
+---
+
 ## 7. 校验链：谁判断、何时判断
 
 ```mermaid

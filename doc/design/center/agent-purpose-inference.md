@@ -25,23 +25,24 @@
 **冲突时以判定为准，但并列展示推断**（`推断：LinuxData（命中 postgres、5432 在听）｜已确认：LinuxCompute（张三 09-20）`）。
 不是谁盖掉谁 —— 差异本身就是有用信息（可能机器改用途了，也可能规则该调了）。
 
-## 3. 事实从哪来：**统一走数据面**（摘要已实现，原文待做）
+## 3. 事实从哪来：**统一走数据面**（摘要 + 原文均已走数据面）
 
-事实上报只有**一条上行通道**（2026-09-22 定，取代原先的“摘要走控制面 / 原文走数据面”分流）：
+事实上报只有**一条上行通道**（2026-09-22 定，取代原先的“摘要走控制面 / 原文走数据面”分流）；
+两类载荷用**不同帧标记**区分：
 
 ```
 agentd ──OBSFACT: <摘要> ──────▶ 数据面（warp-parse 作发布/订阅中枢）
-                                 └─ 订阅：网关 → 入库（覆盖式）→ 规则推断 → 页面
-agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
-                                 └─ 订阅：中心 → 明细入库 → 资产整理（目录归并/软件归一化/漏洞关联）
+                                 └─ sink agent-facts → 网关 → 入库（覆盖式）→ 规则推断 → 页面
+agentd ──DSNAP: <原文快照> ────▶ 同一条 TCP，不同帧标记
+                                 └─ sink agent-discovery → atlas 适配器 → wist-atlas → 资产目录
 ```
 
 | | 摘要 | 原文快照 |
 |---|---|---|
 | 内容 | 去重后的进程可执行/包名/监听端口（10~30 KB） | 完整 resources + targets（一台几百 KB） |
-| 帧 | `OBSFACT: <ReportAgentFactSummary>` | `OBSFACT: <ReportDiscoverySnapshot>`（待做） |
-| 订阅方 | 网关 | 中心 |
-| 幂等键 | `content_digest`（网关自算） | `(agent_id, revision)` |
+| 帧 | `OBSFACT: <ReportAgentFactSummary>` | `DSNAP: <ReportDiscoverySnapshot>` |
+| 订阅方 | 网关 | `wist-atlas`（中心资产目录） |
+| 幂等键 | `content_digest`（网关自算） | `snapshot_id + revision`（消费端） |
 | 存储 | 网关 SQLite，覆盖式一台一条 | 中心库，需历史 |
 
 - envelope：`Reporting.ReportDiscoverySnapshot` + `DiscoveryIngestAck`（原文）与
@@ -53,11 +54,13 @@ agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
 - **网关只接摘要，原文快照不进网关库**（架构级约束）：摘要是 10~30 KB 的状态、覆盖式写；
   原文是一台几百 KB 的明细、要历史 —— 访问模式相反（见 `agent-work-delivery-plan.md` §8.1）。
 
-> 现状（已落地，2026-09）：agentd 侧聚合与上报已实现（`reporting/fact_summary.rs` +
-> `report_fact_summary_if_changed`），摘要以 `OBSFACT:` 帧走数据面；网关侧入库与推断已实现
+> 现状（2026-10）：agentd 侧聚合与上报已实现（`reporting/fact_summary.rs` +
+> `report_fact_summary`），摘要以 `OBSFACT:` 帧走数据面；网关侧入库与推断已实现
 > （`app/purpose.rs` + 内部订阅端点 `POST /api/v1/ingest/agent-facts` +
 > `GET /api/v1/admin/agents/{id}/purpose`），控制面直报端点 `POST /api/v1/agent/facts` **已删除**。
-> 仍欠的是**原文快照那条路**：数据面的 discovery receiver 尚未实现。
+> **原文快照**已落地基础链路：agentd 以 `DSNAP:` 帧周期上送 `ReportDiscoverySnapshot`，
+> wparse `discovery_frame` + `agent-discovery` sink，wist-atlas 适配器/导入；
+> 仍缺 atlas HTTP ingest 与快照替换（`removed/stale`）。
 
 ## 4. 上送什么（聚合，不是明细）
 
@@ -132,7 +135,7 @@ agentd ──OBSFACT: <原文快照> ──▶（同一条通道，待做）
 | # | 缺什么 | 状态 |
 |---|---|---|
 | 1 | **摘要**上报链路：agentd 聚合 + 控制面端点 + 网关入库/推断/页面 | **已实现**（2026-09） |
-| 2 | **原文快照**链路：数据面 discovery receiver + 中心订阅 | 待做 |
+| 2 | **原文快照**链路：数据面 `DSNAP:` 帧 + `agent-discovery` sink + atlas 适配器/导入 | **基础链路已落地**；缺 atlas HTTP ingest、Rust 适配器、快照替换（`removed/stale`） |
 | 3 | Linux 补采集：`cmdline` + 已装包清单 | **已记需求 `B119`** |
 | 4 | 确定的资源画像（核数/内存/磁盘/GPU）+ macOS `machine_id`/`ip_addresses` | **已记需求 `B118`** |
 | 5 | 中心侧模型推断（`method = model`，需建议表支持多条 + `model_version`） | 待做 |

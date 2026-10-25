@@ -1,4 +1,9 @@
-# warp-insight ReportDiscoverySnapshot Schema 草案
+# warp-insight ReportDiscoverySnapshot Schema
+
+> 状态：**Current** —— 与 `wist-contracts::ingest::DiscoveryReport` 对齐；数据面帧为 `DSNAP:`。
+> 当前实现与 telemetry **共用数据面 TCP**，用 `DSNAP:` 帧标记区分，落 `agent-discovery` sink；
+> 不另开 discovery 端口/receiver。
+> 历史草案中的 OTel `attributes[]` / `runtime_facts` 已废弃（见 §13 注）。
 
 ## 1. 文档目的
 
@@ -580,6 +585,9 @@ DiscoveryIngestAck {
 
 ## 13. 最小示例
 
+> 数据面传输：`{schema,agent,ts,seq} DSNAP: <本对象 JSON>\0`。
+> 下面是 `wist-contracts::ingest::DiscoveryReport` 的**实际形状**（扁平 `attributes`、单 `resource_ref`、无 `runtime_facts`）。
+
 ```json
 {
   "api_version": "v1",
@@ -598,37 +606,39 @@ DiscoveryIngestAck {
     "snapshot_id": "discovery:42:2026-04-19T08:00:00Z",
     "revision": 42,
     "generated_at": "2026-04-19T08:00:00Z",
+    "origins": [
+      {
+        "origin_id": "local_runtime:host:2026-04-19T08:00:00Z",
+        "probe": "host",
+        "source": "local_runtime",
+        "observed_at": "2026-04-19T08:00:00Z"
+      }
+    ],
     "resources": [
       {
-        "resource_id": "host:host-01",
+        "resource_id": "hostname:host-01",
         "kind": "host",
-        "attributes": [
-          {
-            "key": "host.id",
-            "value": "host-01"
-          }
-        ],
-        "runtime_facts": [],
+        "origin_idx": 0,
+        "attributes": {
+          "host.id": "hostname:host-01",
+          "host.name": "host-01"
+        },
         "discovered_at": "2026-04-19T08:00:00Z",
         "last_seen_at": "2026-04-19T08:00:00Z",
         "health": "healthy",
-        "source": "local_runtime"
+        "source": "host"
       }
     ],
     "targets": [
       {
-        "target_id": "host:host-01:host",
+        "target_id": "hostname:host-01:host",
         "kind": "host",
-        "resource_refs": [
-          "host:host-01"
-        ],
-        "endpoint": null,
-        "labels": [],
-        "runtime_facts": [],
-        "discovered_at": "2026-04-19T08:00:00Z",
-        "last_seen_at": "2026-04-19T08:00:00Z",
-        "state": "active",
-        "source": "local_runtime"
+        "origin_idx": 0,
+        "resource_ref": "hostname:host-01",
+        "execution_hints": {
+          "host.name": "host-01"
+        },
+        "state": "active"
       }
     ]
   }
@@ -657,5 +667,7 @@ DiscoveryIngestAck {
   与 `Observed.Snapshot` 全模块。
 - 待补：
   1. discovery receiver 的**身份校验**（事实是资产清单，现状接入层无鉴权）；
-  2. 本文 §13 的示例与 `wist-contracts` 实际契约不一致（`targets[]` 是 `resource_ref` +
-     `execution_hints`，`attributes` 线上是 key/value 列表，不是 map）。
+  2. 本文 §13 的示例已按 `wist-contracts` 实际契约修正：`attributes` 是**扁平 map**，
+     `targets[]` 是 `resource_ref` + `execution_hints`，**没有** `runtime_facts` / `resource_refs[]`。
+  3. `DSNAP:` 帧标记与 `agent-discovery` sink 已落地；消费端（wist-atlas）的导入链路见
+     [`asset-discovery-data-flow.md`](./asset-discovery-data-flow.md)。

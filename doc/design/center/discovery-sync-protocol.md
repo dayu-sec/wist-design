@@ -1,5 +1,9 @@
 # warp-insight Discovery Sync 协议设计
 
+> 实现注（2026-10）：当前落地**不开独立 discovery 端口/receiver**，而是与 telemetry 共用数据面 TCP，
+> 用 `DSNAP:` 帧标记区分，由 `agent-discovery` sink 分流；本文章的“discovery receiver”
+> 应读作“数据面里处理 DSNAP 的那条规则/订阅”。
+
 ## 1. 文档目的
 
 本文档定义边缘 `warp-insightd` 通过 `warp-parse` discovery receiver 向中心同步 discovery 本地快照时的协议行为。

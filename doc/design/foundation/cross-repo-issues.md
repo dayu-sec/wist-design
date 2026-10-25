@@ -7,7 +7,7 @@
 
 ## CR-001 进程 RSS 指标单位随平台漂移，消费侧按 KiB 直读导致量级偏大
 
-**涉及仓**：`wist/wist-metrics`（生产者）/ `dayu-topology`（消费者）
+**涉及仓**：`wist/wist-metrics`（生产者）/ `wist-atlas`（消费者）
 
 ### 现象
 
@@ -22,10 +22,10 @@ procfs 采集，单位是**内存页（pages）**；在其它 unix 上由 `ps -o
   - L102-108：`process.memory.rss_kb` → `process.memory.rss`，`unit = "KiBy"`
   - L117-129：`container.memory.rss` 同样两组
   - `unit` 本身是规范字段（`MetricSpec.unit`），即单位是随指标一起下发的。
-- 消费侧：`dayu-topology/crates/topology-api/src/service/materialize/telemetry.rs`
+- 消费侧：`wist-atlas/crates/atlas-api/src/service/materialize/telemetry.rs`
   - L60-64 与 L119-123：`"process.memory.rss" => process.memory_rss_kib = candidate.value_i64;`
   - 只按 `metric_name` 匹配，**完全不读 `unit`**，直接当作 KiB 存入 `memory_rss_kib`。
-  - 佐证：`dayu-topology/crates/topology-api/src/service/tests/process.rs` L288-316，
+  - 佐证：`wist-atlas/crates/atlas-api/src/service/tests/process.rs` L288-316，
     输入 `value: 7456` 不经换算即断言 `memory_rss_kib == Some(7456)`。
 
 ### 影响
@@ -42,8 +42,8 @@ Linux 主机（page size 通常 4 KiB，arm64 上可达 16/64 KiB）上 RSS 会�
 
 - **A 生产侧统一成字节/KiB**：Linux 采集时按 page size 换算（`rss_pages * page_size`），
   只保留一个单位。改动集中在 `wist-metrics`。
-- **B 消费侧尊重 `unit`**：`dayu` 按 `unit` 换算到 KiB 后再入库（保留两来源）。改动集中在
-  `dayu-topology`。
+- **B 消费侧尊重 `unit`**：`atlas` 按 `unit` 换算到 KiB 后再入库（保留两来源）。改动集中在
+  `wist-atlas`。
 - **C 拆分指标名**：不再共用 `process.memory.rss`，改为带单位/来源的独立名。破坏性，
   需两侧同步改并迁移历史数据。
 
