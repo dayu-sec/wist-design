@@ -94,6 +94,8 @@ flowchart TD
 - 原文快照是**全量**的，atlas 只取上表子集；未消费的 kind 仍保留在 `agent-discovery.jsonl` 中供回放。
 - `targets[]` 不直接落 atlas 的服务/端点对象；它只作为采集提示，P0 忽略。
 - `host.id` 形如 `hostname:<name>` 时映射为 `external_ref`，**不能**当 `machine_id`。
+- host 资源的 `os.name` / `os.version` 映射为 `HostInventory.os_name` / `os_version`。`os.name` 是**产品名**（`macOS` / `Ubuntu`），不是 sysinfo 的内核名（`Darwin`）；Linux 上 `os.version` 是内核版本。
+- 主机退役（`host_inventory` 的 stale）**未做**：一轮探针失败不等于机器没了，需要单独策略；与 `processes[]` 的清扫不是同一类问题。
 
 ## 3. 关键性质（设计意图，非巧合）
 
@@ -106,7 +108,7 @@ flowchart TD
 
 | 缺口 | 影响 |
 |---|---|
-| **原文快照的实时接收** | 已有 `DSNAP:` → `agent-discovery.jsonl` → 适配器 → `wist-atlas import-jsonl`；缺 atlas 内部 HTTP ingest、Rust 适配器、快照替换（`removed/stale`） |
+| **原文快照的实时接收** | 已落地：`DSNAP:` → `agent-discovery.jsonl` → `atlas-wist-ingest`（增量读 + 偏移检查点）→ `wist-atlas`。**没有**做 atlas 内部 HTTP ingest：网关的 `http_sink` 重试 3 次后就丢帧，而 sink 文件是追加写的，停机期间帧还在长；也不需要为写入口设计鉴权。快照替换（stale）已做，限 `processes[]`。 |
 | **原文消费子集有限** | endpoint / container / k8s / package 暂不进 atlas，容器与编排资产仍不可见 |
 | `packages` 探针未实现 | 已装包集合恒空（**空 = 没采，不是没装**，见 `B119`） |
 | 数据面接入**无鉴权** | 网关/atlas 订阅端不校身份（有意接受的降级窗口，见交付计划 §9） |
