@@ -94,8 +94,9 @@ flowchart TD
 - 原文快照是**全量**的，atlas 只取上表子集；未消费的 kind 仍保留在 `agent-discovery.jsonl` 中供回放。
 - `targets[]` 不直接落 atlas 的服务/端点对象；它只作为采集提示，P0 忽略。
 - `host.id` 形如 `hostname:<name>` 时映射为 `external_ref`，**不能**当 `machine_id`。
-- host 资源的 `os.name` / `os.version` 映射为 `HostInventory.os_name` / `os_version`。`os.name` 是**产品名**（`macOS` / `Ubuntu`），不是 sysinfo 的内核名（`Darwin`）；Linux 上 `os.version` 是内核版本。
-- 主机退役（`host_inventory` 的 stale）**未做**：一轮探针失败不等于机器没了，需要单独策略；与 `processes[]` 的清扫不是同一类问题。
+- host 资源的 `os.name` / `os.version` / `host.arch` 映射为 `HostInventory.os_name` / `os_version` / `arch`。`os.name` 是**产品名**（`macOS` / `Ubuntu`），不是 sysinfo 的内核名（`Darwin`）；Linux 上 `os.version` 是内核版本。
+- **进程与主机的退役判据不同**：进程按「一份快照没出现」算（churn 是常态）；主机按「连续 N 份完整快照都没出现」算（`HOST_STALE_AFTER_MISSES`，默认 3）—— 主机消失可能只是一轮探针失败。
+- 主机退役要**多主机快照**才触发。当前适配器一台机一个信封，所以这条清扫实际上要等网关侧聚合 / CMDB 同步这类多主机输入；机制已就位，单主机输入下是空操作。
 
 ## 3. 关键性质（设计意图，非巧合）
 
