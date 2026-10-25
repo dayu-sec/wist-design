@@ -562,10 +562,10 @@ web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0
 | `wist-contracts` | **0.9.8** | W1 glob 判据 + `exclude_globs`、W2 `filters`、W3 `journalctl-kernel`、D7 能力清单；**G1** `LogsCapabilities.filters`、**G3** `drop_if_contains` + `MULTILINE_MODES` 增 `mysql_slow` / `postgres_csv`；**fact-v3** 摘要前缀 + `EPHEMERAL_PORT_START`；**M1** `ContainerRef` + 帧字段；**M1.5** `name_in` / `name_not_in`（`CONTAINER_FILTERS` 4 维）；**修订** `is_container_log_target` 共享判据 |
 | `wist-api` | 0.9.2 | `AgentStatusReport.logs_capabilities`（D7）；`DiscoveryPoliciesReturned → DiscoveryAspectPolicySet` 的**唯一转换** |
 | `wist-agentd` | **0.9.7-alpha** | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报；**G1** 上报 `filters` + `drop_if_contains`；**G3/W4** `mysql_slow` / `postgres_csv` 记录边界 + 噪音行丢弃（不占 `seq`）；**fact-v3** 进程标识取 `/proc/<pid>/exe`；**M1** 帧带 `container{name,image,id}`；**M1.5** 容器名过滤；**修订** 本机配置校验按维度拆分 + 验收脚本两个 name 过滤 phase；**自观测** `telemetry selection filtered … excluded=N identity_unknown=M` |
-| `wist-gateway` | **0.20.4-alpha** | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对；**M1.5** `not_path_exists` 三态 + 进探测白名单；**修订** `match` 装载期 fail-closed、减法维度改降级 |
+| `wist-gateway` | **0.20.5-alpha** | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对；**M1.5** `not_path_exists` 三态 + 进探测白名单；**修订** `match` 装载期 fail-closed、减法维度改降级；**面拆分** 词表新增 `ContainerWorkload` |
 | `wist-gateway-web` | **0.14.2-alpha** | W1/W2 解析与展示、导出器词表跟上 W3；**W4** `drop_if_contains` 与非默认读法展示；**M1.5** `name_in` / `name_not_in` 渲染成 `container in/not in`；Gateway 信息页按用途重组 |
-| `wist-knowledge` | **0.5.4** | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行；**M0** `linux-docker-container-stdout`；**M1.5** 加 `not_path_exists:/var/log/containers` 去重（`catalog_version` 12）；**修订** `purpose_version` 3：`dockerd` / `containerd` → `LinuxCompute` |
-| `wist-gateway-stack` | **0.2.18-alpha** | 网关 0.20.4 / 前端 0.14.2 / 出厂知识库包 0.5.4 接线（镜像已在 ghcr + TCR，包已在 COS） |
+| `wist-knowledge` | **0.5.5** | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行；**M0** `linux-docker-container-stdout`；**M1.5** `not_path_exists` 去重；**面拆分** 容器 stdout 独立成 `ContainerWorkload` 并挂基线包（`catalog_version` 13 / `purpose_version` 4） |
+| `wist-gateway-stack` | **0.2.19-alpha** | 网关 0.20.5 / 前端 0.14.2 / 出厂知识库包 0.5.5 接线（镜像已在 ghcr + TCR，包已在 COS） |
 
 **现场滚动顺序是硬约束**：**网关先于 agentd**（旧网关的 `deny_unknown_fields` 会拒收新能力上报，
 新 agentd 的能力清单才能落地），**知识库包最后**（旧网关不认识的导出器 / 读法会让**整份目录加载失败**）。
@@ -619,6 +619,20 @@ contracts 始终最先发布（所有仓的编译依赖）。
 > 残留目录两类现场会少采，G14）；手工 `spec=` 绕开 `match`，可人为重现双采（G15，当前也是
 > 混跑现场的逃生口）。
 
+**面拆分（2026-10-25，已发版）**：`网关 0.20.5-alpha` / `知识库 0.5.5` / `stack 0.2.19-alpha`。
+
+容器 stdout 从 `ComputeWorkload` 独立成 **`ContainerWorkload`**（新增面，只增不改名）：
+两个容器单元迁入，并改由 **`linux-base`** 引用 —— 所有 Linux 模板（含 `LinuxHost`）都带上容器面。
+`ComputeWorkload` 回归作业/加速卡（`slurm/*` + `dmesg:nvidia-xid`，仍 `draft`），
+展示名从「作业、加速卡与容器」改为「作业与加速卡」。
+
+* **归因**：`ComputeWorkload` 是**按机器用途**分发的面，而容器 stdout 是**主机普遍能力**；
+  混在一起就必然出现“纯 Docker 业务机没有容器面”（现场 `cb282a`：docker 根存在、面不存在）。
+  拆分后 **B2 根治**，0.5.4 的 `dockerd` / `containerd` → `LinuxCompute` 判据随之撤回
+  （`purpose_version` 4）—— 不再把业务容器主机标成计算节点。
+* ⚠ **站点动作**：激活 0.5.5 后**先 `revoke` 旧的 `ComputeWorkload` 工作，再授权 `ContainerWorkload`**。
+  直接两者共存会让同一批容器日志被两条工作、两个 input 各采一遍（各自 checkpoint，不去重）。
+
 > ⚠ **现场生效要“激活”**：已激活过知识包的站点，网关会优先用那个包（`source_dir` 被忽略）——
 > 只升 stack **不会**换目录。把 **0.5.4** 的包（或更早 0.5.3）在「知识库」页**录入并激活**
 > （热加载），再 **重新授权 `ComputeWorkload`**。`catalog_version = 12`（M1.5 起）+ 
@@ -671,7 +685,7 @@ contracts 始终最先发布（所有仓的编译依赖）。
 | 1–3 | auth（ssh / session / sudo） | **采集中**（`linux-auth-session` / `linux-sudo-log` active） | 解析侧 `auth_*` 抽取 / `log_type` 分派（噪音行已按 W4 配好） |
 | 4–11 | audit（8 类） | **采集中**（`linux-audit-log` active；整文件、不按 `type=` 丢行） | 解析侧规则（8.1.1 / 8.1.2） |
 | 12 | kernel | **采集中**（`linux-kernel-system` → `journalctl-kernel`） | 无 |
-| 13 / 15 / 16 | 容器（business / gateway / k8s_pod） | **采集中**（`linux-container-stdout` 与 `linux-docker-container-stdout` 两个载体，后者 0.5.2 起；0.5.3 用 `not_path_exists` 把 `k8s + cri-dockerd` 的重采去掉；0.5.4 的用途规则让**纯 Docker 业务机**也能拿到这个面） | 解析侧解 CRI 头 / docker JSON 信封，按 ns+service / `container.name` 分派 `log_type`（身份从 M1.5 起已在帧里） |
+| 13 / 15 / 16 | 容器（business / gateway / k8s_pod） | **采集中**（`ContainerWorkload` 面：`linux-container-stdout` 与 `linux-docker-container-stdout`，后者 0.5.2 起；0.5.3 用 `not_path_exists` 把 `k8s + cri-dockerd` 的重采去掉；0.5.5 面拆分后进基线包，与机器分类无关） | 解析侧解 CRI 头 / docker JSON 信封，按 ns+service / `container.name` 分派 `log_type`（身份从 M1.5 起已在帧里） |
 | 14 | database | **采集中**（`linux-db-service` active，本轮） | 解析侧 csvlog / slow 字段、`extra.db` |
 
 #### 缺口（按优先级）
