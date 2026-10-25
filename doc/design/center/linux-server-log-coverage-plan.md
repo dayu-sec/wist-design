@@ -561,11 +561,11 @@ web `tsc -b` 与 `test:agent-work` / `test:family-text`；`clippy -D warnings` 0
 |---|---|---|
 | `wist-contracts` | **0.9.8** | W1 glob 判据 + `exclude_globs`、W2 `filters`、W3 `journalctl-kernel`、D7 能力清单；**G1** `LogsCapabilities.filters`、**G3** `drop_if_contains` + `MULTILINE_MODES` 增 `mysql_slow` / `postgres_csv`；**fact-v3** 摘要前缀 + `EPHEMERAL_PORT_START`；**M1** `ContainerRef` + 帧字段；**M1.5** `name_in` / `name_not_in`（`CONTAINER_FILTERS` 4 维）；**修订** `is_container_log_target` 共享判据 |
 | `wist-api` | 0.9.2 | `AgentStatusReport.logs_capabilities`（D7）；`DiscoveryPoliciesReturned → DiscoveryAspectPolicySet` 的**唯一转换** |
-| `wist-agentd` | **0.9.6-alpha** | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报；**G1** 上报 `filters` + `drop_if_contains`；**G3/W4** `mysql_slow` / `postgres_csv` 记录边界 + 噪音行丢弃（不占 `seq`）；**fact-v3** 进程标识取 `/proc/<pid>/exe`；**M1** 帧带 `container{name,image,id}`；**M1.5** 容器名过滤；**修订** 本机配置校验按维度拆分 + 验收脚本两个 name 过滤 phase |
+| `wist-agentd` | **0.9.7-alpha** | W1 文件族 / W2 filters / W3 journalctl-kernel / D7 上报；**G1** 上报 `filters` + `drop_if_contains`；**G3/W4** `mysql_slow` / `postgres_csv` 记录边界 + 噪音行丢弃（不占 `seq`）；**fact-v3** 进程标识取 `/proc/<pid>/exe`；**M1** 帧带 `container{name,image,id}`；**M1.5** 容器名过滤；**修订** 本机配置校验按维度拆分 + 验收脚本两个 name 过滤 phase；**自观测** `telemetry selection filtered … excluded=N identity_unknown=M` |
 | `wist-gateway` | **0.20.4-alpha** | W0 派活修正、W1/W2 装载校验与透传、D7 按能力裁剪；**G1/G3** 按新能力轴裁源 + `drop_if_contains` 降级；同面 `draft` 单元不再一起派；**fact-v3** `listen_port` 规则按数值比对；**M1.5** `not_path_exists` 三态 + 进探测白名单；**修订** `match` 装载期 fail-closed、减法维度改降级 |
-| `wist-gateway-web` | 0.14.1-alpha | W1/W2 解析与展示、导出器词表跟上 W3；**W4** `drop_if_contains` 与非默认读法展示（`name_in` / `name_not_in` 展示已在 `alpha` 分支待发） |
+| `wist-gateway-web` | **0.14.2-alpha** | W1/W2 解析与展示、导出器词表跟上 W3；**W4** `drop_if_contains` 与非默认读法展示；**M1.5** `name_in` / `name_not_in` 渲染成 `container in/not in`；Gateway 信息页按用途重组 |
 | `wist-knowledge` | **0.5.4** | `linux-kernel-system` 换 `journalctl-kernel`；**G2** `linux-container-stdout`；**W4** `linux-db-service` 翻 `active` + auth 噪音行；**M0** `linux-docker-container-stdout`；**M1.5** 加 `not_path_exists:/var/log/containers` 去重（`catalog_version` 12）；**修订** `purpose_version` 3：`dockerd` / `containerd` → `LinuxCompute` |
-| `wist-gateway-stack` | **0.2.17-alpha** | 网关 0.20.4 / 前端 0.14.1 / 出厂知识库包 0.5.4 接线（镜像已在 ghcr + TCR，包已在 COS） |
+| `wist-gateway-stack` | **0.2.18-alpha** | 网关 0.20.4 / 前端 0.14.2 / 出厂知识库包 0.5.4 接线（镜像已在 ghcr + TCR，包已在 COS） |
 
 **现场滚动顺序是硬约束**：**网关先于 agentd**（旧网关的 `deny_unknown_fields` 会拒收新能力上报，
 新 agentd 的能力清单才能落地），**知识库包最后**（旧网关不认识的导出器 / 读法会让**整份目录加载失败**）。

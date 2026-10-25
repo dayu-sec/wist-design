@@ -431,6 +431,8 @@ M2 之前 13/15/16 仍是「容器页一锅端」，但**信息不丢**（字节
 - 同一 glob 覆盖 `-json.log.1`（轮转产物在**启动时就存在**；rename 轮转由 symlink 那个 phase 覆盖）；
 - **M1.5**：`name_in` 只采指定容器、身份读不到的不收；`name_not_in` 剔掉指定容器、
   身份读不到的要**保留**（两个 phase 共用同一份 fixture，正好钉住这个不对称）。
+- **自观测**：两个 phase 同时断言 `telemetry selection filtered … magnitude=excluded=N identity_unknown=M` ——
+  没有它，“排除式静默 no-op”与“配置真生效”在现场无法区分。
 
 **能力协商**：来源本身是普通 `FileGlob` + `none`，老 agentd **本来就能执行**（字节能搬）；
 只是拿不到 `container` 身份（旧数据面忽略该字段）。
@@ -468,6 +470,7 @@ M2 之前 13/15/16 仍是「容器页一锅端」，但**信息不丢**（字节
 | **M1** | contracts 0.9.6 / agentd 0.9.4-alpha | —— |
 | **M1.5** | contracts 0.9.7 / 网关 0.20.3-alpha / agentd 0.9.5-alpha | **0.5.3** / 0.2.16-alpha |
 | **M1.5 修订** | contracts 0.9.8 / 网关 0.20.4-alpha / agentd 0.9.6-alpha | **0.5.4** / 0.2.17-alpha |
+| **展示与自观测** | agentd 0.9.7-alpha（选源过滤计数） / web **0.14.2-alpha** | 0.2.18-alpha |
 
 ⚠ **生效路径要注意“生效优先级”**：网关装载知识内容时，**管理面已激活的包优先于
 启动期 `source_dir`**（`LoadedKnowledge::resolve`）。所以：
