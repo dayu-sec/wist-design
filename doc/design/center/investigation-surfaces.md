@@ -82,6 +82,9 @@ Linux 上是完全不同的文件，但都是同一类需求。调查面描述�
 > * `variant InvestigationSurface` —— 题的闭集（Disk / Load / Accounts / Persistence / Exposure / TelemetryHealth）；
 > * `variant InvestigationSection` —— 节的闭集（`disk.filesystems`、`accounts.passwords`、`telemetry.sources`…），
 >   `finding.id` 就是它的协议形态；
+>   **例外**：节前缀通常等于面 id，但 `telemetry-health` 的节前缀是 `telemetry.`
+>   （`telemetry.sources`，不是 `telemetry-health.sources`）—— 已登记在
+>   `investigation/redaction-policy.toml` 的 `id_prefixes` 里，别按约定“修正”它；
 > * `variant InvestigationVerdict` / `Sensitivity` / `Cost` / `Privilege` —— 元数据的闭集；
 > * `struct InvestigationSurfacePolicy` —— 每题元数据的**形状**；
 > * `struct InvestigationReport` / `InvestigationFinding` / `InvestigationCoverage` —— 报告契约

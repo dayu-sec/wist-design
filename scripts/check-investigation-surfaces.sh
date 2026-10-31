@@ -76,7 +76,9 @@ code_ids() {
   local file=$1
   [ -f "$file" ] || return 1
   local block names
-  block=$(sed -n '/const TOPICS/,/];/p' "$file")
+  # 结束条件写成“以 `]` 开头的行”：agentd / 网关是 `];`，web 是 `] as const;`。
+  # 用 `/];/` 在 web 上匹配不到，会一路读到文件尾，把正文里的字符串也当成 id。
+  block=$(awk '/const TOPICS/{inside=1} inside{print} inside && /^\]/{exit}' "$file")
   names=$(printf '%s\n' "$block" | grep -oE 'TOPIC_[A-Z0-9_]+' | sort -u)
   if [ -z "$names" ]; then
     printf '%s\n' "$block" | grep -oE '"[a-z0-9_-]+"' | tr -d '"' | sort -u
