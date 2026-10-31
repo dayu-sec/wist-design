@@ -7,10 +7,10 @@
 - `execution/`
   动作 DSL、`ActionPlan IR`、执行 schema、opcode schema、`run.gxl` 相关文档
 - `edge/`
-  `wist-exec` / 本地状态 / 故障处理 / 资源发现 / 磁盘容量采集（按挂载点）/ Gateway 业务身份（customer_id 绑定、下发与 wparse `.env` 注入）（agentd 专属设计文档已移至
+  `wist-exec` / 本地状态 / 故障处理 / 资源发现 / 磁盘容量采集（按挂载点）/ **动态日志源定位（服务证据 + 本机解析 + 人工覆盖，解决“日志不在标准目录”）** / Gateway 业务身份（customer_id 绑定、下发与 wparse `.env` 注入）（agentd 专属设计文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
 - `center/`
-  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、发现上报的模式与规则、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板（含采集内容与工作总览·通俗版）、Agent 工作体系交付计划、资产发现数据流、采集面与采集能力契约、WarpStation 规则管理下发（Git Proxy + gwlinkd 命令通道）、Linux 服务器日志采集覆盖与支持方案（16 类 `log_type` 的现状、决策与分阶段落地）
+  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、发现上报的模式与规则、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板（含采集内容与工作总览·通俗版）、Agent 工作体系交付计划、资产发现数据流、采集面与采集能力契约、**调查面与调查授权（一次性只读证据，与采集面分开的授权轴）**、WarpStation 规则管理下发（Git Proxy + gwlinkd 命令通道）、Linux 服务器日志采集覆盖与支持方案（16 类 `log_type` 的现状、决策与分阶段落地）
 - `telemetry/`
   metrics 集成、discovery、resource mapping、uplink 设计、数据防丢失与 Batch A 规格（logs file input / macOS 采集文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
@@ -63,5 +63,9 @@
 40. [edge/disk-capacity-collection.md](./edge/disk-capacity-collection.md)（磁盘容量采集：按挂载点/文件系统、Linux/macOS 过滤、标签与逐挂载点告警）
 41. [center/warpstation-rule-publishing.md](./center/warpstation-rule-publishing.md)（WarpStation 规则管理下发：CNB git-only、Center Git Proxy、Center `wparse-proxy` + gwlinkd 短轮询命令通道、Gateway 零入站；含安全风险登记与 Hardening Checklist）
 42. [center/linux-server-log-coverage-plan.md](./center/linux-server-log-coverage-plan.md)（Linux 服务器 16 类主机日志的采集覆盖：现状判定、决策 D0–D13（原文直送 / audit 单单元 / host 信息 join / 容器 containers+realpath / journal 唯一源 60s / 能力上报 / 两层分类 / 首装 tail / 重启 seen-set / 前置条件 / 50MB 预算 / 旧 agent 兼容）、W0–W5 工作分解、跨团队待确认项（规则分派 / 归属 / 重复 / 时区 / label；范围与 SELinux 延后）与验收）
-43. [edge/gateway-business-identity.md](./edge/gateway-business-identity.md)（Gateway 业务身份：Center 绑定 customer_id → gwlinkd 下发/落盘 → wparse `.env` + sink tag → 上报回显；含 wparse `.env` 实测、tag 4 项上限、幂等 revision 与离线补偿）
+43. [edge/gateway-business-identity.md](./edge/gateway-business-identity.md)（Gateway 业务身份：Center 绑定 customer_id → 映射 tenant_id → gwlinkd 下发/落盘 → wparse `.env` + sink tag → 上报回显；含 wparse 0.34.0-alpha 基线及 `[admin_api.auth].mode` 迁移、开发态/发布态两套生效方式、`.env` 实测、tag 4 项上限、tag-safe 校验、不解绑与幂等 revision）
 44. [foundation/stack-config-check.md](./foundation/stack-config-check.md)（栈级配置检查 `wist-stackcheck`：栈 / 组件的校验边界、17 项判据与阻断语义、生效值 vs 默认值、Flow Result 输出、闸门退出码优先级、多平台单包分发、已知限制，以及移植到 center-stack 的 `StackProfile` 参数化方案）
+45. [edge/log-source-resolution.md](./edge/log-source-resolution.md)（**设计稿**：日志源从“目录写死”改为“服务证据 + 本机解析 + 人工覆盖”；含解析规则、roots 边界、发布顺序与未决问题）
+46. [foundation/upgrade-resilience.md](./foundation/upgrade-resilience.md)（**设计稿**：可续跑升级 / Resumable upgrade —— 多组件、跨多版本升级的失败隔离与前向修复：Upgrade Step、主机版本向量、按主机求解的升级路径、组件发布自带的兼容/升级 manifest（不是人工维护的全局 Release Train）、`degraded/blocked` 与按步 retry/supersede/pin；无 train 时仍可探针门禁续跑）
+47. [foundation/upgrade-compat-mode.md](./foundation/upgrade-compat-mode.md)（**设计稿**：升级兼容模式 / Mixed-version compatibility —— 先升 B 后仍能把 A/C/D 升完：`compat=mixed`、`coexists_with`/`bridge`/`control_compat` 发布契约、兼容顺序求解、已卡住的救援路径与混合版本 CI 矩阵；Gateway/Center 包入库/发布/计划批准/包列表的兼容检查与报告）
+48. [center/investigation-surfaces.md](./center/investigation-surfaces.md)（**设计稿**：调查面 `InvestigationSurface` —— 与采集面共用“面”的词表纪律、但**另开一道授权轴**：只读契约 R1/R2/R3、三道闸 G1 授权 / G2 能力协商 / G3 资源，明确不参与面就绪度与数据面上送闸门；含报告回传 vs 留本机的取舍、敏感度与脱敏、首版清单与分阶段落地）

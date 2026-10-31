@@ -186,6 +186,11 @@ sequenceDiagram
 **不做自动回滚**：新二进制起不来时，旧版备份在 `state_dir/tool-backups/`，人工恢复后重启服务；
 中心会因收不到回执停在「已下发」，需人工重派。
 
+> 这是当前已知的**锁死点**：gwlinkd 是唯一的中心对话者，它起不来等于全机队失去远程修复入口。
+> 执行器自保（bootguard 槽位、断电收敛、破窗 CLI）见
+> [`../foundation/upgrade-resilience.md`](../foundation/upgrade-resilience.md) §4.3 / §11；
+> 多组件、跨版本的“失败不整体卡死”则见同篇 §2–§7（步骤化 + 续跑 + 前向修复）。
+
 因此安装布局把真实二进制放 `/usr/local/lib/wist-gwlinkd/wist-gwlinkd`（**目录与文件都归运行用户**），
 `/usr/local/bin/wist-gwlinkd` 只是符号链接；`id -u == 0` 的安装两者本来就都可写。
 旧部署（root 拥有 `/usr/local/bin` + 非 root 运行）重跑一次中心「只装 gwlinkd」命令即完成迁移。

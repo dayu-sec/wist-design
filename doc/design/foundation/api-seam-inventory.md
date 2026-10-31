@@ -44,20 +44,28 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 | PollAgentUplink | `POST /api/v1/agent/uplink:poll` | `PollAgentUplink` | `AgentUplinkGrant` |
 | ReportAgentFactSummary | （走数据面，不建 entry） | — | — |
 | PollDiscoveryPolicies | `POST /api/v1/agent/discovery-policies:poll` | `Reporting.PollDiscoveryPolicies` | `Reporting.DiscoveryPoliciesReturned` |
+| PollDiscoverySnapshot | `POST /api/v1/agent/discovery-snapshot:poll` | `Reporting.PollDiscoverySnapshot` | `Reporting.DiscoverySnapshotGrant` |
 | ReportActionResult | `POST /api/v1/agent/action-results` | `Reporting.ReportActionResult` | `Reporting.ActionResultAccepted` |
+
+> **一次性命令没有独立 entry**：网关下发的维护命令（首个为 `refresh_facts`）搭在
+> `SubmitAgentStatus` 的回执里（`AgentStatusAck.commands`），结果随下一次上报的
+> `AgentStatusReport.command_acks` 回来。agentd 没有入站监听面，3s 心跳是唯一由网关
+> **回话**的通道；新增命令只加一个 `kind` 词表值，不改报文形状，也不新增 seam。
+> 命令种类变多时应改开 `wist-api` 下的 `commands:poll`，而不是继续往回执里塞字段。
 
 ## 3. 代码实际用的 wire 类型（与模型对照）
 
 | seam/端点 | 代码里的 wire 类型 | 定义在 | 与模型一致？ |
 |---|---|---|---|
 | agent/enroll | 两侧均 `wist_api::enrollment::EnrollmentRequest` | **`wist-api`**（独立 seam crate） | ✅ **单型已收拢** |
-| agent/status | 两侧均 `wist_api::status::AgentStatusReport` | **`wist-api`** | ✅ **单型已收拢** |
+| agent/status | 两侧均 `wist_api::status::AgentStatusReport`，回执侧 `AgentStatusAck`（`ReportAgentStatus`/`AgentStatusAccepted` 同型） | **`wist-api`** | ✅ **单型已收拢**（回执里的 `AgentCommand` / 上报里的 `AgentCommandAck` 同在 `wist_api::status`） |
 | agent/work:poll · work:ack · work:result | 两侧均 `wist_api::work::{PollWork,WorkGrant,AckWork,WorkAccepted,ReportWorkResult,WorkResultAccepted}` | **`wist-api`** | ✅ **报文已收拢**（领域 `WorkSpec*`/`StandingWork`/`OneShotWork` 留 contracts） |
 | agent/uplink:poll | 两侧均 `wist_api::uplink::{PollAgentUplink,AgentUplinkGrant}` | **`wist-api`** | ✅ **报文已收拢**（`AgentUplinkState` 留 contracts） |
 | agent/action-results | 两侧均 `wist_api::action_result::ReportActionResult` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/action-plan（下发） | 两侧均 `wist_api::action_plan::DispatchActionPlan` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/facts | 两侧均 `wist_api::facts::ReportAgentFactSummary` | **`wist-api`** | ✅ **单型已收拢** |
 | agent/discovery-policies:poll | 两侧均 `wist_api::discovery_policies::PollDiscoveryPolicies` | **`wist-api`** | ✅ **单型已收拢** |
+| agent/discovery-snapshot:poll | 两侧均 `wist_api::discovery_snapshot::{PollDiscoverySnapshot,DiscoverySnapshotGrant}` | **`wist-api`** | ✅ **报文已收拢**（`AppliedDiscoverySnapshot` 搭车在请求里） |
 | agent/control-commands:poll | `wist_control::{PollControlCommands, AgentControlCommandsReturned}` | **`wist-control`**（有意保留，见 §5 决策 C） | ✅ **单型**（仅 gateway 用；响应内嵌 Control 域实体 `AgentControlCommand`） |
 | gateway/register · credentials:renew · credentials/verify | 两侧均 `wist_control::{RegisterGateway, RenewGatewayCredential, VerifyGatewayCredential, GatewayEnrollmentResult, GatewayCredentialBundle, GatewayCredentialVerificationResult}` | **`wist-control`**（生成，`Control.Gateway.{Supervision,Security}`） | ✅ **单型已收拢**（原 `wist-contracts::gateway_control` 手写副本**已删**） |
 | gateway/status | `wist_control::ReportGatewayStatus` | control（生成） | ✅ |

@@ -88,6 +88,11 @@ flowchart TD
 > 先布新网关、再布新 agentd：状态上报契约新增了字段，**旧网关会拒收带新字段的上报**。
 > 顺序：`gops sys download`（拉新镜像）→ `gops sys start` → 再把 agent 升到 `v0.1.24-alpha`。
 
+同一形态的第二个例子（一次性调查）：`wist-api` 0.9.4 给 `AgentStatusReport` 加了
+`investigation_capabilities`，agentd 0.11.0 **每次状态上报都带它** —— 发给 0.26.x 网关会被整条拒掉
+（agent 看上去会“掉线”）。所以 `wist-agentd/compat.json` 的 `requires.wist-gateway` 从 `>=0.26.0`
+提到 **`>=0.27.0`**：这条不是建议，是硬门槛，靠 `requires` 拦住“先升 agentd”的误操作。
+
 **gwlinkd 的位置**：它处在 `gateway ↔ center` 这一跳之间（注册/凭据 `gateway_control`、状态
 上报）。涉及这一跳的契约变更时同样**`center` 先、`gwlinkd` 后**。
 
@@ -122,4 +127,5 @@ flowchart TD
 - [architecture.md](./architecture.md) §9 协议与通信面
 - [api-seam-inventory.md](./api-seam-inventory.md) API seam 清单与缺口（seam = 运行时耦合点）
 - [cross-repo-issues.md](./cross-repo-issues.md) 跨仓问题
+- [upgrade-resilience.md](./upgrade-resilience.md) 可续跑升级：多组件/跨多版本的失败隔离与前向修复（Release Train / Upgrade Step / 兼容矩阵 / degraded/blocked）
 - 各仓 `_gal`（`gx adm` 版本/标签流程）与根 `CHANGELOG.md`
