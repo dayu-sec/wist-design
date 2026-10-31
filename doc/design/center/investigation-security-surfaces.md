@@ -50,6 +50,11 @@
 
 ## 2. 面清单
 
+> **已建模**：`Control.Agent.Investigation`（`jumo/model/static/control/module/agent/investigation/`）
+> 定义了 `variant InvestigationSurface`（下面这些题的闭集）、`variant InvestigationSection`（节的闭集）、
+> 以及报告契约（`InvestigationReport` / `InvestigationFinding` / `InvestigationCoverage`）。
+> 每题的具体元数据值仍在 agentd 的题注册表（jumo 装不下常量实例）。
+
 分组只是为了阅读；每个 `id` 仍是独立、只增不改名的词表项。
 
 | 分组 | id | 一句话问题 | 平台 | 特权 | 成本 | 敏感度 | 档位 |
@@ -197,9 +202,15 @@ SBOM 必须按**构建产物**生成（feature flag 与 target triple 会改变�
 
 | 节 | 证据 | 判定 |
 | --- | --- | --- |
-| `telemetry.sources` | 每个已配置源的最近写入时间、增长速率、轮转状态、可读性 | 静默 → WARN |
-| `telemetry.families` | 每个采集面**最后一次成功送出**的时间（复用 agentd 游标） | 超阈值 → WARN |
-| `telemetry.backlog` | checkpoint / spool 积压 | 积压 → WARN |
+| `telemetry.sources` | 每个配置输入的最近提交时间、源路径可读性、未读字节 | 静默 ≥15 分钟 → WARN；≥24 小时 → FAIL；无 checkpoint → UNKNOWN |
+| `telemetry.backlog` | spool 积压与最后写入时间 | 有积压 → WARN；到 `spool_max_bytes` → FAIL（运行时 `pause`） |
+| `telemetry.pipeline` | 输出闸门（`enabled` / `kind`）与全局 `seq` 高水位的写入时间 | 输出关闭 → WARN；从未产出 → UNKNOWN |
+
+> 早先草案里的 `telemetry.families`（“每个采集面最后一次成功送出”）需要按面归属拆 seq，
+> 成本明显高于前两节；P0 先用 `telemetry.pipeline` 的**全局** seq 高水位回答同一个问题，
+> 拆面留到需要时再加（加节是加性变更）。
+>
+> 已落地：agentd 0.18.0（两平台，只读 checkpoint / spool / seq，不读日志正文）。
 
 与 `diagnose` 的分工：`diagnose` 查 agent 自身；这一题查**主机侧证据源**（auditd 在不在跑、
 规则加载没有、suricata 丢包），数据源见
@@ -340,6 +351,16 @@ SBOM 必须按**构建产物**生成（feature flag 与 target triple 会改变�
 `report_hash` 不是签名：root 能改任何本机文件，它只用于**同一份报告在传输链路上不被截断/拼接**，
 以及中心侧判断“这份报告与那条 ack 是不是同一次”。
 
+**落地进度（agentd 0.18.0）**：
+
+| 字段 | 状态 | 说明 |
+| --- | --- | --- |
+| `boot_id` / `boot_time` | ✅ | Linux 读 `/proc`；其它平台无同语义值，**省略**而不是编一个 |
+| `schema` / `agent_version` | ✅（改名） | 实际字段是 `report_schema` + `version` |
+| `collected_at` | ✅（改名） | 实际字段是 `observed_at`（调查是一次性操作，没有结束时间可言） |
+| `clock_skew_ms` | ❌ | 需要外部时间基准；主机自己说不清自己的偏差，宁可缺失 |
+| `report_hash` | ❌ | 要进生产依赖（`sha2` 目前只在 dev-dependencies）；可复用 `fact-v3:sha256:` 格式 |
+
 ### 3.5 只读要结构化保证
 
 R1 目前是文档约束，建议做成类型约束：`investigate_*` 模块只接受一个只读上下文
@@ -435,8 +456,11 @@ installed 装了没跑                      → 只作证据
 | S0 ✅ | `disk`（已有） | agentd |
 | **S1** | ✅ **已落地（agentd 0.17）**：契约（`unknown` / `coverage` / `judged` / `limits`）+
 `accounts` / `persistence` / `exposure`（Linux）；`capabilities` 按平台过滤；三题各自登记脱敏策略与
-`good-report-*.json`。**未做**：`telemetry-health`（移入 S2）、`privilege_requirements[]`（见 §3.2） | agentd / contracts / gateway / web |
-| S2 | `telemetry-health` + `protection` + `secrets` + `data-exposure`；补齐 §3.3 的敏感度档与永不回传清单 | agentd / knowledge / gateway |
+`good-report-*.json`。**未做**：`privilege_requirements[]`（见 §3.2） | agentd / contracts / gateway / web |
+| **S1.5** | ✅ **已落地（agentd 0.18）**：`telemetry-health`（两平台）+ 报告头 `boot_id` / `boot_time`；
+模型、网关、web 名单同步（`scripts/check-investigation-surfaces.sh`） | agentd / gateway / web / 模型 |
+| S2 | `protection` + `secrets` + `data-exposure`；补齐 §3.3 的敏感度档与永不回传清单；
+`clock_skew_ms` / `report_hash` | agentd / knowledge / gateway |
 | S3 | `privilege` + `kernel-integrity` + `container` + `data-crypto` + `backup` | agentd |
 | S4 | `software`（evidence）+ `software.patch_state` + 发布物自带 SBOM | agentd / 发布链路 / center |
 

@@ -1,0 +1,231 @@
+// Module: AgentInvestigation — 调查面（闭集）、调查节（闭集）与报告契约
+
+// ── 面的闭集 ────────────────────────────────────────────────────────
+//
+// **只增不改名**：面 id 进入协议（命令 `params.topic`、`finding.id` 前缀、审计、历史报告），
+// 改名即破坏性变更 —— 历史报告里那个值会变成一个不存在的面。
+// 平台差异在**策略**（`InvestigationSurfacePolicy.platforms`）里，不在闭集里：
+// 同一个面在 macOS 可能还没实现，agentd 的 `capabilities` 按平台上报，网关不会把答不了的题下发。
+variant InvestigationSurface {
+  meta {
+    label zh "调查面"
+    label en "Investigation Surface"
+    summary zh "可执行的一次性调查题目（闭集）：磁盘、负载、账号与授权、持久化、暴露面、遥测健康。面描述**要问清什么**（问题），不是数据源（从哪读）；只增不改名，语义变了就出新面。"
+    tags "control", "agentd", "investigation"
+  }
+
+  // 已实现（两平台）：Disk 磁盘（哪几个目录/文件占盘、inode、扫描完成度）；
+  // Load 负载（谁在吃 CPU/内存/IO，按服务聚合）。
+  Disk Load
+
+  // 安全向（先只做 Linux）：Accounts 账号与授权（谁能登录、谁能提权）；
+  // Persistence 持久化（重启后什么会自己起来）；Exposure 暴露面（谁在听、绑在哪）。
+  Accounts Persistence Exposure
+
+  // 两平台：TelemetryHealth 遥测健康（我们瞎了多久：源还在产出吗、积压送得出去吗）。
+  // 协议值是 `telemetry-health`（带连字符）——它是面 id，不是节前缀；节前缀是 `telemetry.`。
+  TelemetryHealth
+}
+
+// ── 节的闭集 ────────────────────────────────────────────────────────
+//
+// 节 id 也是协议（`finding.id`，脚本/AI 按项取用）：**加节是加性变更，改语义要新开 id**。
+// 一节回答一个具体问句；节名里不带平台名（平台差异是数据，不是标识）。
+variant InvestigationSection {
+  meta {
+    label zh "调查节"
+    label en "Investigation Section"
+    summary zh "调查报告里的节标识（<面>.<节>）。它决定“这张表在回答什么”，也是脚本/AI 按项取用的稳定键；只增不改名。"
+    tags "control", "agentd", "investigation"
+  }
+
+  // disk：文件系统占用（含 inode）| 递归累计最大的目录 + 热点下钻链 | 一级目录合计 |
+  // 最大的文件 | agent 自己占多少 | df 与扫描的差量 | 扫描完成度与预算。
+  DiskFilesystems DiskLargestDirs DiskTopDirs DiskTopFiles DiskAgentDirs DiskUnattributed DiskScan
+
+  // load：负载与每核负载 | CPU 去向 | 按服务聚合 | 进程榜 | 内存与 swap |
+  // IO 压力与不可中断睡眠 | agent 自己 | 采样窗口与平台能力。
+  LoadSummary LoadCpu LoadTopServices LoadTopProcesses LoadMemory LoadIo LoadAgentProcesses LoadSample
+
+  // accounts：uid 分布 | 口令状态（只分类 none/locked/set，不回传哈希）| sudo 授权 |
+  // 授权密钥（只给类型/条数）| sshd 生效策略。
+  AccountsUids AccountsPasswords AccountsSudoers AccountsKeys AccountsSsh
+
+  // persistence：开机自启单元 | 定时任务 | 加载/登录钩子 | 近 7 天新增。
+  PersistenceUnits PersistenceScheduled PersistenceHooks PersistenceRecent
+
+  // exposure：监听端口与绑定范围（只出证据，不做安全判定）。
+  ExposureListeners
+
+  // telemetry-health：每个配置输入的最近提交与可读性 | spool 积压（到上限会 pause）|
+  // 采集闸门（输出是否关闭、全局 seq 高水位多久没动）。
+  TelemetrySources TelemetryBacklog TelemetryPipeline
+}
+
+// ── 元数据的闭集 ────────────────────────────────────────────────────
+
+// 敏感度：决定谁能看、留多久、要不要脱敏。比采集面更要紧 —— 调查外发的是**结论**，
+// 里面常带路径、用户名、命令行（`commandlines` 常含 `--password=…`）。
+variant InvestigationSensitivity {
+  meta {
+    label zh "调查敏感度"
+    label en "Investigation Sensitivity"
+    summary zh "报告的敏感级别：指标、路径、命令行、身份（用户名/公钥指纹）、凭据元数据（路径与权限，不含内容）、安全姿态。决定保留期、可见范围与是否脱敏。"
+    tags "control", "agentd", "investigation", "sensitivity"
+  }
+
+  Metrics Paths Commandlines Identities SecretMetadata SecurityPosture
+}
+
+// 成本：排期与限流用（能不能批量下发）。
+variant InvestigationCost {
+  meta {
+    label zh "调查成本"
+    label en "Investigation Cost"
+    summary zh "单次调查的大致耗时档：毫秒、秒、十秒级。决定能否批量下发与是否限流。"
+    tags "control", "agentd", "investigation"
+  }
+
+  Milliseconds Seconds TensOfSeconds
+}
+
+// 特权：同一个面在非 root 下**能跑但答不全**，网关用它区分“完整答案”与“部分答案”。
+// 非 root 读不到的节必须是 `Unknown`，不能显示成 `Ok`。
+variant InvestigationPrivilege {
+  meta {
+    label zh "调查特权"
+    label en "Investigation Privilege"
+    summary zh "跑这一题需要的特权：不需要、root 更完整（缺权限的节标 Unknown）、必须 root。"
+    tags "control", "agentd", "investigation", "privilege"
+  }
+
+  None OptionalRoot RequiredRoot
+}
+
+// 判定：`Unknown` 是**一等状态**，不是“没有判定”。
+// 读不到（权限 / 平台不支持 / 源不存在）不等于正常 —— 安全类报告最危险的失败方式是
+// “读不到被读成没有”。`Unknown` 不让退出码变非零（缺权限不该把 CI 变红）。
+variant InvestigationVerdict {
+  meta {
+    label zh "调查判定"
+    label en "Investigation Verdict"
+    summary zh "节的判定：正常、警告、失败、无法判定。无法判定 ≠ 正常：读不到的数据必须显式说出来。"
+    tags "control", "agentd", "investigation", "verdict"
+  }
+
+  Ok Warn Fail Unknown
+}
+
+// ── 元数据形状（值在实现侧）────────────────────────────────────────
+
+// 预算（R2）：没有预算的面**不许登记** —— 一个能无限跑的调查等于把 DoS 工具交给调用方。
+// 具体上限按题定（磁盘题是条目/时长/深度三重；账号题是用户数与单文件条数）。
+struct InvestigationBudget {
+  meta {
+    label zh "调查预算"
+    label en "Investigation Budget"
+    summary zh "单次调查的资源上限：条目数、时长、深度。超限必须如实标 truncated，网关不得放宽。"
+    tags "control", "agentd", "investigation", "budget"
+  }
+
+  max_entries: Int
+  max_seconds: Int
+  max_depth: Int
+}
+
+// 每题的元数据**形状**。值不在模型里（jumo 装不下常量实例）：
+// 今天在 agentd 的题注册表，未来若配置化按 `DiscoveryAspectPolicy` 的先例放 `wist-knowledge`。
+struct InvestigationSurfacePolicy {
+  meta {
+    label zh "调查面策略"
+    label en "Investigation Surface Policy"
+    summary zh "单个调查面的元数据：协议 id、标题、平台、特权、只读、敏感度、成本、报告契约名、是否只出证据、节清单、参数与预算。"
+    tags "control", "agentd", "investigation", "policy"
+  }
+
+  unique surface: InvestigationSurface
+  // 协议值：命令 `params.topic`、`finding.id` 的前缀、审计与历史报告。
+  // 与 variant 目录名的对应是命名约定（`Accounts` ↔ `accounts`）。
+  id: String
+  title: String
+  summary: String
+  // linux | macos：不支持的平台不该出现在菜单里，也不该被下发。
+  platforms: List<String>
+  privilege: InvestigationPrivilege
+  // 恒 true：调查面在结构上不允许改机器（R1）。留字段是为了让报告与网关能显式断言，
+  // 而不是靠“实现时记得别写”。
+  read_only: Boolean
+  sensitivity: InvestigationSensitivity
+  cost: InvestigationCost
+  // `wist.investigation.<id>/v1` —— 网关按它选渲染/落库规则，未知版本降级为原文展示。
+  report_schema: String
+  // true = 只出证据、不做安全判定（报告 `judged=false`，结论只能说“N 项证据”）。
+  evidence_only: Boolean
+  sections: List<InvestigationSection>
+  // 网关要校验、UI 要渲染的参数名（如 path / top / min_size / depth / max_seconds）。
+  // 未知参数忽略、类型不对忽略 —— 网关会与 agentd 版本错位。
+  params: List<String>
+  budget: InvestigationBudget
+}
+
+// ── 报告契约 ────────────────────────────────────────────────────────
+
+// 覆盖三态：读到多少、被拒多少（权限）、跳过多少（不存在/超预算）。
+// 只记数字；原因写在 `InvestigationFinding.limits` 里（人话）。
+struct InvestigationCoverage {
+  meta {
+    label zh "调查覆盖"
+    label en "Investigation Coverage"
+    summary zh "一节的覆盖三态：读到的来源数、被拒（权限）与跳过（不存在/超预算）。让“端口可见但属主不可见”这种半可见能被表达出来。"
+    tags "control", "agentd", "investigation", "coverage"
+  }
+
+  checked: Int
+  denied: Int
+  skipped: Int
+}
+
+// 一节结果。`id` 稳定（`<面>.<节>`），`coverage` 只在真有来源被检查过时出现。
+struct InvestigationFinding {
+  meta {
+    label zh "调查节结果"
+    label en "Investigation Finding"
+    summary zh "一节调查结果：稳定 id、判定、标题与说明、可选覆盖三态、能力边界。"
+    tags "control", "agentd", "investigation", "finding"
+  }
+
+  unique id: String
+  verdict: InvestigationVerdict
+  title: String
+  detail: String
+  coverage: InvestigationCoverage?
+  // 这一节的能力边界（人话）。报告级 `limits` 是各节并集，去重保序。
+  limits: List<String>
+}
+
+// 一次调查的完整结果：本机落盘与数据面 `IVSREP` 帧的正文用同一份。
+struct InvestigationReport {
+  meta {
+    label zh "调查报告"
+    label en "Investigation Report"
+    summary zh "一次调查的完整结果：关联键、面 id、契约名、观察时间、是否做安全判定、各节证据与能力边界。"
+    tags "control", "agentd", "investigation", "report"
+  }
+
+  // 报告与 ack 的唯一关联键（报告走数据面、ack 走控制面，靠它 join；本机 CLI 报告为空）。
+  command_id: String?
+  // = 面的 id（命令 `params.topic`）。
+  surface_id: String
+  report_schema: String
+  observed_at: DateTime
+  // 与采集流拼时间线用的锚点：重启前的事件不该和重启后的报告混在一起。
+  // 读不到就省略（不编一个数）；`observed_at` 只给墙钟，时钟被改过就对不上。
+  boot_id: String?
+  boot_time: DateTime?
+  // 这一题做不做安全判定。`false` 时结论只能说“N 项证据”，**绝不能说“全部正常”**。
+  judged: Boolean
+  findings: List<InvestigationFinding>
+  // 报告级能力边界（各节并集）：前端不得把它渲染成结论。
+  limits: List<String>
+  verdict: String
+}

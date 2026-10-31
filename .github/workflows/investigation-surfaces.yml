@@ -1,0 +1,68 @@
+name: Investigation Surfaces
+
+# 调查面名单的漂移闸门：模型 ↔ agentd ↔ 网关 ↔ web。
+#
+# 为什么放在这个仓：名单的「定义」在 `jumo/model/static/control/module/agent/investigation/items.mju`，
+# 而「事实」分散在 agentd / gateway / web 三个仓。任何一侧先改，另外几侧都会静默漂移 ——
+# 页面少一个题、或者下发后回 `unsupported`，都要等到现场才发现。
+#
+# 对端仓按 `alpha` 通道检出（制品的发版顺序是 alpha → beta → main）。
+# 仓是私有的话，把 token 换成有读权限的 PAT（或 GitHub App token）。
+
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - "*"
+  schedule:
+    # 每周一 03:17 UTC：对端仓动了但本仓没动时，也要能红。
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      peer_ref:
+        description: 对端仓（agentd / gateway / web）的分支或标签
+        required: false
+        default: alpha
+
+permissions:
+  contents: read
+
+env:
+  PEER_REF: ${{ github.event.inputs.peer_ref || 'alpha' }}
+
+jobs:
+  vocabulary:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout wist-design
+        uses: actions/checkout@v7
+
+      - name: Checkout wist-agentd
+        uses: actions/checkout@v7
+        with:
+          repository: dayu-sec/wist-agentd
+          ref: ${{ env.PEER_REF }}
+          path: _peer/wist-agentd
+
+      - name: Checkout wist-gateway
+        uses: actions/checkout@v7
+        with:
+          repository: dayu-sec/wist-gateway
+          ref: ${{ env.PEER_REF }}
+          path: _peer/wist-gateway
+
+      - name: Checkout wist-gateway-web
+        uses: actions/checkout@v7
+        with:
+          repository: dayu-sec/wist-gateway-web
+          ref: ${{ env.PEER_REF }}
+          path: _peer/wist-gateway-web
+
+      # 退出码即门禁：模型与 agentd 不一致 → 1；网关 / web 落后只打印（它们按发布周期跟进）。
+      - name: Check surface vocabulary
+        run: |
+          scripts/check-investigation-surfaces.sh \
+            _peer/wist-agentd _peer/wist-gateway _peer/wist-gateway-web

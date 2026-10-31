@@ -1,0 +1,35 @@
+// Control.Agent.Investigation 有界上下文：Agent 端的一次性调查（只读、按题给证据）。
+//
+// 与采集面的分界不是“全量 / 抽样”，而是**问句类型**：
+//   - 采集面（CollectionFamily）——“要**持续看见**哪一类事件”：日志/指标流，按面授权 + 面就绪度；
+//   - 调查面（InvestigationSurface）——“要**一次性问清**什么”：证据表，一次性命令 + 只读契约。
+// 两者共用“面”的词表纪律（闭集、只增不改名、语义变了就出新 id），但**授权轴不同**：
+// 调查面不参与面就绪度、不参与数据面上送授权 —— 采集链坏掉时调查仍须可用。
+//
+// 与 Agent.Command 的分工：Command 是“改机器”的短指令（upgrade / rotate / refresh），
+// 调查**永不改机器**（R1 只读）。需要改机器（清理 / 重启 / 改配置）走 ActionPlan
+// （wist-exec，有审批与回滚）。这条边界保证“能被授权发起一次调查”不等于“能在客户机上执行任意动作”。
+//
+// 为什么在 diagnose 之外还要这一层：`diagnose` 回答“agent **自己**为什么不对”，检查项固定；
+// 调查按题目给证据，题目随现场变（磁盘满 → 哪几个文件；负载高 → 谁在吃 CPU；
+// 安全 → 谁能登 / 什么会自启 / 谁在听）。
+//
+// 取值空间分两层（与 DiscoveryAspect / CollectionUnit 的做法一致）：
+//   InvestigationSurface        —— 题的闭集（见 items.mju）；
+//   InvestigationSurfacePolicy  —— 每题的元数据**形状**。
+// 具体值（title / platforms / sensitivity / report_schema / 预算…）**不在模型里**：
+// jumo 装不下常量实例（同一类型的多条记录无法逐条 verify）。今天这些值在 agentd 的题注册表；
+// 未来若要配置化，按 `DiscoveryAspectPolicy` 的先例放 `wist-knowledge` ——
+// **那时才需要知识库发版，且必须网关先发**（旧网关的目录是 `deny_unknown_fields`，
+// 多一个顶层节会整份目录拒载，不是少一个菜单）。
+
+module<entity> Agent.Investigation {
+  meta {
+    label zh "Agent 一次性调查"
+    label en "Agent Investigation"
+    summary zh "Agent 端一次性、只读、按题给证据的调查面：题的闭集、每题元数据形状、节的闭集与报告契约。"
+    tags "control", "agentd", "investigation"
+  }
+
+  layer Domain
+}

@@ -77,6 +77,25 @@ Linux 上是完全不同的文件，但都是同一类需求。调查面描述�
 一个新模块 `Control.Agent.Investigation`（与 `Agent.Content` / `Agent.Work` / `Agent.Command` 平级），
 `variant InvestigationSurface` 定义闭集，字段都在**面**这一层定死：
 
+> **已建模**（2026-10-31）：`jumo/model/static/control/module/agent/investigation/`
+>
+> * `variant InvestigationSurface` —— 题的闭集（Disk / Load / Accounts / Persistence / Exposure / TelemetryHealth）；
+> * `variant InvestigationSection` —— 节的闭集（`disk.filesystems`、`accounts.passwords`、`telemetry.sources`…），
+>   `finding.id` 就是它的协议形态；
+> * `variant InvestigationVerdict` / `Sensitivity` / `Cost` / `Privilege` —— 元数据的闭集；
+> * `struct InvestigationSurfacePolicy` —— 每题元数据的**形状**；
+> * `struct InvestigationReport` / `InvestigationFinding` / `InvestigationCoverage` —— 报告契约
+>   （`judged` / `limits` / 覆盖三态，以及与采集流拼时间线的 `boot_id` / `boot_time`，都在这里是一等字段）。
+>
+> 模型只定**形状与闭集**：每题的具体值（`title` / `platforms` / `sensitivity` / `report_schema` / 预算）
+> 仍在 agentd 的题注册表 —— jumo 装不下常量实例。将来要配置化，按 `DiscoveryAspectPolicy` 的先例
+> 放 `wist-knowledge`，那时才需要知识库发版（且网关先发）。
+>
+> 名单一致性用 `scripts/check-investigation-surfaces.sh` 检查：模型 ↔ agentd 必须相等（不等即退出码 1），
+> 模型 ↔ 网关 / web 只报告（它们可以落后一个发布周期，而且要改页面）。
+> CI 在 `.github/workflows/investigation-surfaces.yml`：检出三个对端仓后跑同一只脚本，
+> 另有每周定时任务 —— 对端仓单方面加题也会红。
+
 | 字段 | 例（`disk`） | 为什么在面里定 |
 | --- | --- | --- |
 | `id` | `disk` | 进协议（命令 `params.topic`、审计、UI、历史报告）→ **只增不改名** |
