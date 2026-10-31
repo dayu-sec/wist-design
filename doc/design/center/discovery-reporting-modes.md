@@ -76,7 +76,7 @@ TOP 的排序键当下只能是「采样瞬间的资源占用」，而这个键�
 
 - 范围 `Full` —— 原文是资产整理/拓扑的输入，截断即丢对象；
 - 触发 `Periodic` —— 它不是判据信号，需要周期证明链路与快照新鲜度；
-- 周期：默认 `300s`，由 agentd 本地配置 `discovery.snapshot_uplink_interval_seconds` 控制，最低夹到 `60s`；
+- 周期：默认 `3600s`（1 小时），**来源分两层**：控制面下发（`agent/discovery-snapshot:poll`，管理面 web 按机器设：单机覆盖 > 全局）优先；控制面没有设置时用 agentd 本机 `discovery.snapshot_uplink_interval_seconds`。两层都最低夹到 `60s`；
 - 判重/替换归消费端：以 `snapshot_id + revision` 为幂等/替换作用域，agentd 不做内容判重；
 - **分帧**：摘要走 `OBSFACT:`（控制面网关），原文走 `DSNAP:`（数据面 atlas），两者不共用 sink；
 - 边界：原文快照**不是** `CollectionFamily`（采集面），也**暂不**进入 `CapabilityManifest`（见 [`collection-family-capability-contract.md`](./collection-family-capability-contract.md) §6.6）。
@@ -85,7 +85,9 @@ TOP 的排序键当下只能是「采样瞬间的资源占用」，而这个键�
 
 **观测频率**（§4 表里那一列）是平台级取舍，不写在二进制里。它有一份独立的策展数据与下发链路：
 
-> 注意：原文快照的上送周期（§5.1）**不在**这张策略表里，它是 agentd 本地配置；策略表只管各发现方向的观测周期。
+> 注意：原文快照的上送周期（§5.1）**不在**这张策略表里 —— 它有自己的 seam
+> （`agent/discovery-snapshot:poll`）与两层来源（单机覆盖 > 全局），因为它是「上送节奏」
+> 而不是「观测频率」；策略表只管各发现方向的观测周期。
 
 | 环节 | 位置 | 说明 |
 |---|---|---|
@@ -105,7 +107,7 @@ TOP 的排序键当下只能是「采样瞬间的资源占用」，而这个键�
 
 | 项 | 状态 |
 |---|---|
-| **原文快照上行（`DSNAP:`）** | **基础链路已落地**：agentd 周期发帧（本地配置 `snapshot_uplink_*`）；wparse `discovery_frame` + `sink_group agent-discovery`；wist-atlas 适配器/`import-jsonl`。**未做**：atlas HTTP ingest、Rust 适配器、快照替换（`removed/stale`） |
+| **原文快照上行（`DSNAP:`）** | **基础链路已落地**：agentd 周期发帧（本地配置 `snapshot_uplink_*`）；wparse `agent_uplink_obs_dsnap` + `sink_group agent-dsnap`；wist-atlas 适配器/`import-jsonl`。**未做**：atlas HTTP ingest、Rust 适配器、快照替换（`removed/stale`） |
 | 观测频率下发 | **已落地**（见 §6）；agentd 仍把策展值当**内建默认值**保留一份，表里改了值而 agent 拿不到表时会走默认 |
 | 应用时的夹取与留痕 | **已落地**：agentd 用策略自带的 `[min,max]` 夹取（区间自相矛盾则回退内建值），调整清单随 `DiscoveryPolicyApplied` 一起打进日志 —— 静默夹取会把「网关发了一份坏表」伪装成一切正常 |
 | 生效版本可观测 | **已落地**：agentd 在状态上报里带 `discovery_policy_version`；网关落库（`agent_instances`）+ 写指标 `agent.discovery_policy_version`（历史免费）+ 管理面逐台列出 |

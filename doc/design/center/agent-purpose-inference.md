@@ -34,7 +34,7 @@
 agentd ──OBSFACT: <摘要> ──────▶ 数据面（warp-parse 作发布/订阅中枢）
                                  └─ sink agent-facts → 网关 → 入库（覆盖式）→ 规则推断 → 页面
 agentd ──DSNAP: <原文快照> ────▶ 同一条 TCP，不同帧标记
-                                 └─ sink agent-discovery → atlas 适配器 → wist-atlas → 资产目录
+                                 └─ sink agent-dsnap → atlas 适配器 → wist-atlas → 资产目录
 ```
 
 | | 摘要 | 原文快照 |
@@ -59,7 +59,7 @@ agentd ──DSNAP: <原文快照> ────▶ 同一条 TCP，不同帧标�
 > （`app/purpose.rs` + 内部订阅端点 `POST /api/v1/ingest/agent-facts` +
 > `GET /api/v1/admin/agents/{id}/purpose`），控制面直报端点 `POST /api/v1/agent/facts` **已删除**。
 > **原文快照**已落地基础链路：agentd 以 `DSNAP:` 帧周期上送 `ReportDiscoverySnapshot`，
-> wparse `discovery_frame` + `agent-discovery` sink，wist-atlas 适配器/导入；
+> wparse `agent_uplink_obs_dsnap` + `agent-dsnap` sink，wist-atlas 适配器/导入；
 > 仍缺 atlas HTTP ingest 与快照替换（`removed/stale`）。
 
 ## 4. 上送什么（聚合，不是明细）
@@ -135,7 +135,7 @@ agentd ──DSNAP: <原文快照> ────▶ 同一条 TCP，不同帧标�
 | # | 缺什么 | 状态 |
 |---|---|---|
 | 1 | **摘要**上报链路：agentd 聚合 + 控制面端点 + 网关入库/推断/页面 | **已实现**（2026-09） |
-| 2 | **原文快照**链路：数据面 `DSNAP:` 帧 + `agent-discovery` sink + atlas 适配器/导入 | **基础链路已落地**；缺 atlas HTTP ingest、Rust 适配器、快照替换（`removed/stale`） |
+| 2 | **原文快照**链路：数据面 `DSNAP:` 帧 + `agent-dsnap` sink + atlas 适配器/导入 | **基础链路已落地**；缺 atlas HTTP ingest、Rust 适配器、快照替换（`removed/stale`） |
 | 3 | Linux 补采集：`cmdline` + 已装包清单 | **已记需求 `B119`** |
 | 4 | 确定的资源画像（核数/内存/磁盘/GPU）+ macOS `machine_id`/`ip_addresses` | **已记需求 `B118`** |
 | 5 | 中心侧模型推断（`method = model`，需建议表支持多条 + `model_version`） | 待做 |

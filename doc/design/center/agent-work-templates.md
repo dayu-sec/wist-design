@@ -52,8 +52,8 @@
 | `ServiceLifecycle` 服务生命周期（launchd） | `launchd.log*` | 有 sample + **草稿规则** |
 | `RebootPower` 关机/重启 | `shutdown_monitor.log`、`last reboot` | 有 sample，无规则 |
 | `MiscSystem` 系统杂项 | `fsck_apfs*`、`cups/`、`apache2/`、`mDNSResponder/` | 有 sample，无规则 |
-| `HostMetrics` 主机指标 | `oml/macos_agent_metrics.oml` | **规则已有** |
-| （非采集面）上送帧/记录信封 | `wpl/agent_uplink/parse.wpl` + `macos_agent_record.oml` | **规则已有** |
+| `HostMetrics` 主机指标 | `oml/agent_uplink/agent_uplink_metrics_frame/adm.oml` | **规则已有** |
+| （非采集面）上送帧/记录信封 | `wpl/agent_uplink/parse.wpl`（`METRICS:` / `OBSFACT:` / `DSNAP:`）+ 各采集面包的 `parse.wpl`（`LOGRAW:`）+ `raw_log` 兜底 | **规则已有** |
 
 `macos-dev` = 上表全部 **+** 下面两个面：
 

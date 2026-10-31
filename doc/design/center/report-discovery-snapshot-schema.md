@@ -1,7 +1,7 @@
 # warp-insight ReportDiscoverySnapshot Schema
 
 > 状态：**Current** —— 与 `wist-contracts::ingest::DiscoveryReport` 对齐；数据面帧为 `DSNAP:`。
-> 当前实现与 telemetry **共用数据面 TCP**，用 `DSNAP:` 帧标记区分，落 `agent-discovery` sink；
+> 当前实现与 telemetry **共用数据面 TCP**，用 `DSNAP:` 帧标记区分，落 `agent-dsnap` sink；
 > 不另开 discovery 端口/receiver。
 > 历史草案中的 OTel `attributes[]` / `runtime_facts` 已废弃（见 §13 注）。
 
@@ -669,5 +669,5 @@ DiscoveryIngestAck {
   1. discovery receiver 的**身份校验**（事实是资产清单，现状接入层无鉴权）；
   2. 本文 §13 的示例已按 `wist-contracts` 实际契约修正：`attributes` 是**扁平 map**，
      `targets[]` 是 `resource_ref` + `execution_hints`，**没有** `runtime_facts` / `resource_refs[]`。
-  3. `DSNAP:` 帧标记与 `agent-discovery` sink 已落地；消费端（wist-atlas）的导入链路见
+  3. `DSNAP:` 帧标记与 `agent-dsnap` sink 已落地；消费端（wist-atlas）的导入链路见
      [`asset-discovery-data-flow.md`](./asset-discovery-data-flow.md)。

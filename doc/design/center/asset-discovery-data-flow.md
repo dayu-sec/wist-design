@@ -22,19 +22,19 @@ flowchart TD
   PR -.->|"控制面：拉周期策略"| GW
 
   subgraph DP["数据面 warp-parse"]
-    WPL["WPL agent_uplink/obs_fact：拆信封，正文透传"]
-    OML["OML agent_obs_fact"]
+    WPL["WPL agent_uplink/agent_uplink_obs_fact：拆信封，正文透传"]
+    OML["OML agent_uplink_obs_fact"]
     SG["sink_group agent-facts"]
-    WPL2["WPL agent_uplink/discovery_frame"]
-    OML2["OML agent_discovery_snapshot"]
-    SG2["sink_group agent-discovery"]
+    WPL2["WPL agent_uplink/agent_uplink_obs_dsnap"]
+    OML2["OML agent_uplink_obs_dsnap"]
+    SG2["sink_group agent-dsnap"]
     WPL --> OML --> SG
     WPL2 --> OML2 --> SG2
   end
 
   SG -->|"file sink"| F1[("agent-facts.jsonl（肉眼验证）")]
   SG -->|"http_sink POST · 明文 127.0.0.1:3001"| ING
-  SG2 -->|"file sink"| F2[("agent-discovery.jsonl")]
+  SG2 -->|"file sink"| F2[("agent-dsnap.jsonl")]
   F2 --> AD["atlas 适配器：ReportDiscoverySnapshot → atlas.in.edge.v1"]
   AD --> AT["wist-atlas import-jsonl / 后续 HTTP ingest"]
 
@@ -56,18 +56,18 @@ flowchart TD
 
 | 段 | 位置 | 做什么 |
 |---|---|---|
-| 发现 | `wist-agentd/src/discovery/` | 探针 `host / network / endpoint / process`（`[discovery] *_enabled` 控制；container/k8s 当前关闭），产出 `DiscoveredResource` |
+| 发现 | `wist-agentd/src/discovery/` | 探针 `host / network / endpoint / process / container`（`[discovery] *_enabled` 控制；container 默认开）产出 `DiscoveredResource` |
 | 快照 | `discovery/runtime.rs`、`cache.rs` | 把各探针输出拼成 `DiscoverySnapshot`；**只刷到期的探针**，未到期沿用上次输出（少交一个探针等于把它上次的资源删掉） |
 | 摘要 | `reporting/fact_summary.rs` | `build_summary()`：去重压成 `process_executables` / `listen_ports` / `packages`（探针未实现，恒空）+ `os/arch/process_count`；另带 `host_id/host_name/network_addresses`（仅留痕，不进摘要） |
 | 上行（摘要） | `runtime/daemon.rs::report_fact_summary` | 组 `{schema, agent, ts, seq} OBSFACT: <json>` 帧，走数据面 TCP sink |
-| 原文快照 | `discovery/runtime.rs` 的 `latest_snapshot` | `ReportDiscoverySnapshot`（`kind=report_discovery_snapshot`，`report_mode=full_snapshot`）；周期由 `discovery.snapshot_uplink_interval_seconds` 控制（默认 300s，最低 60s） |
+| 原文快照 | `discovery/runtime.rs` 的 `latest_snapshot` | `ReportDiscoverySnapshot`（`kind=report_discovery_snapshot`，`report_mode=full_snapshot`）；周期由 `discovery.snapshot_uplink_interval_seconds` 控制（默认 3600s，最低 60s） |
 | 上行（原文） | `runtime/daemon.rs::report_discovery_snapshot` | 组 `{schema, agent, ts, seq} DSNAP: <json>` 帧；与摘要共用 TCP sink 与全局 `seq` |
-| 解析（摘要） | `data-plane/models/wpl/agent_uplink/parse.wpl` | `rule obs_fact`：`symbol(OBSFACT:)` + `chars:body\0`，**正文不拆字段**（契约可演进） |
-| 解析（原文） | 同一 WPL + `models/oml/agent_discovery_snapshot.oml` | `rule discovery_frame`：`symbol(DSNAP:)` + `chars:body\0`；只拆信封，正文原样透传 |
-| 建模（摘要） | `data-plane/models/oml/agent_obs_fact.oml` | 只把信封拆成 `schema/agent_id/observed_at/seq/category/body` |
-| 分流（摘要） | `data-plane/topology/sinks/business.d/agent_facts.toml` | `sink_group agent-facts`，`oml=["agent_obs_fact"]` |
+| 解析（摘要） | `data-plane/models/wpl/agent_uplink/parse.wpl` | `rule agent_uplink_obs_fact`：`symbol(OBSFACT:)` + `chars:body\0`，**正文不拆字段**（契约可演进） |
+| 解析（原文） | 同一 WPL + `models/oml/agent_uplink/agent_uplink_obs_dsnap/adm.oml` | `rule agent_uplink_obs_dsnap`：`symbol(DSNAP:)` + `chars:body\0`；只拆信封，正文原样透传 |
+| 建模（摘要） | `data-plane/models/oml/agent_uplink/agent_uplink_obs_fact/adm.oml` | 只把信封拆成 `schema/agent_id/observed_at/seq/category/body` |
+| 分流（摘要） | `data-plane/topology/sinks/business.d/agent_facts.toml` | `sink_group agent-facts`，`oml=["agent_uplink_obs_fact"]` |
 | 落两处（摘要） | 同上 | ① `file_json_sink` → `agent-facts.jsonl`（肉眼验证）；② `gateway_facts_sink`（`sink.d/22-gateway_facts_sink.toml`）POST 到网关 |
-| 分流（原文） | `data-plane/topology/sinks/business.d/agent_discovery.toml` | `sink_group agent-discovery`，`oml=["agent_discovery_snapshot"]` → `agent-discovery.jsonl` |
+| 分流（原文） | `data-plane/topology/sinks/business.d/agent_dsnap.toml` | `sink_group agent-dsnap`，`oml=["agent_uplink_obs_dsnap"]` → `agent-dsnap.jsonl` |
 | 原文消费 | `wist-atlas/scripts/wist-snapshot-to-atlas.py`（P0）| `ReportDiscoverySnapshot` → `atlas.in.edge.v1`（hosts/interfaces/processes）→ `import-jsonl` |
 | 校验 | `wist-gateway/src/api/ingest.rs` | 只做两件正确性检查：`agent_id`/`instance_id` 对得上登记表、**信封自称 == 正文自称**（**不是认证**） |
 | 派生 | `src/api/agent_ops.rs` | `ingest_fact_summary`：网关**自算** `content_digest` → 判重 → 覆盖写 `agent_fact_summary`；内容变才 `refresh_software_inventory`（`app/inventory.rs::derive_inventory`）+ 重跑用途推断 |
@@ -91,7 +91,7 @@ flowchart TD
 
 约束：
 
-- 原文快照是**全量**的，atlas 只取上表子集；未消费的 kind 仍保留在 `agent-discovery.jsonl` 中供回放。
+- 原文快照是**全量**的，atlas 只取上表子集；未消费的 kind 仍保留在 `agent-dsnap.jsonl` 中供回放。
 - `targets[]` 不直接落 atlas 的服务/端点对象；它只作为采集提示，P0 忽略。
 - `host.id` 形如 `hostname:<name>` 时映射为 `external_ref`，**不能**当 `machine_id`。
 - host 资源的 `os.name` / `os.version` / `host.arch` 映射为 `HostInventory.os_name` / `os_version` / `arch`。`os.name` 是**产品名**（`macOS` / `Ubuntu`），不是 sysinfo 的内核名（`Darwin`）；Linux 上 `os.version` 是内核版本。
@@ -109,7 +109,7 @@ flowchart TD
 
 | 缺口 | 影响 |
 |---|---|
-| **原文快照的实时接收** | 已落地：`DSNAP:` → `agent-discovery.jsonl` → `atlas-wist-ingest`（增量读 + 偏移检查点）→ `wist-atlas`。**没有**做 atlas 内部 HTTP ingest：网关的 `http_sink` 重试 3 次后就丢帧，而 sink 文件是追加写的，停机期间帧还在长；也不需要为写入口设计鉴权。快照替换（stale）已做，限 `processes[]`。 |
+| **原文快照的实时接收** | 已落地：`DSNAP:` → `agent-dsnap.jsonl` → `atlas-wist-ingest`（增量读 + 偏移检查点）→ `wist-atlas`。**没有**做 atlas 内部 HTTP ingest：网关的 `http_sink` 重试 3 次后就丢帧，而 sink 文件是追加写的，停机期间帧还在长；也不需要为写入口设计鉴权。快照替换（stale）已做，限 `processes[]`。 |
 | **原文消费子集有限** | endpoint / container / k8s / package 暂不进 atlas，容器与编排资产仍不可见 |
 | `packages` 探针未实现 | 已装包集合恒空（**空 = 没采，不是没装**，见 `B119`） |
 | 数据面接入**无鉴权** | 网关/atlas 订阅端不校身份（有意接受的降级窗口，见交付计划 §9） |

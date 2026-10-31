@@ -16,7 +16,7 @@
 > - `wist-metrics/src/spec.rs`
 > - `wist-gateway/src/api/host_metrics.rs`
 > - 数据面 `data-plane/models/wpl/agent_uplink/parse.wpl`、
->   `data-plane/models/oml/macos_agent_metrics.oml`
+>   `data-plane/models/oml/agent_uplink/agent_uplink_metrics_frame/adm.oml`
 
 ## 1. 需求与结论
 
@@ -312,8 +312,8 @@ VM 行把标签平铺到 `metric` 对象：
 
 数据面 `agent_uplink` 的 WPL/OML 需要透传 `metric.mount` / `metric.fstype`：
 
-- `parse.wpl` 的 `metrics_frame` 增加可选字段；旧 agent 帧不带标签时必须仍能解析；
-- `macos_agent_metrics.oml` 写回 `mount` / `fstype`（缺省时不要写空标签）。
+- `parse.wpl` 的 `agent_uplink_metrics_frame` 增加可选字段；旧 agent 帧不带标签时必须仍能解析；
+- `agent_uplink_metrics_frame`（`oml/agent_uplink/agent_uplink_metrics_frame/adm.oml`）写回 `mount` / `fstype`（缺省时不要写空标签）。
 
 ### 5.5 网关接口
 
@@ -477,7 +477,7 @@ system.filesystem.inodes.usage{mount="/var"} > 90
 ### Phase 2：数据面透传（已落地）
 
 - `agent_uplink/parse.wpl` 增加 `mount` / `fstype` 可选字段；
-- `macos_agent_metrics.oml` 写回标签；
+- `agent_uplink_metrics_frame` OML 写回标签；
 - 验证 VM 中能按 `mount` 查询到独立序列；
 - 回归脚本：`dev/tests/agent-uplink-metric-labels.test.sh`（wparse batch，带标签/不带标签两条帧）。
 
