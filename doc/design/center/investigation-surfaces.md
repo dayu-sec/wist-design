@@ -127,7 +127,7 @@ Linux 上是完全不同的文件，但都是同一类需求。调查面描述�
 
 | 闸 | 回答 | 落点 | 现状 |
 | --- | --- | --- | --- |
-| **G1 授权**（人） | 这个调用者能不能对**这台机器**发起这个调查 | `require_admin_bearer` → 未来 scope `agent:investigate` + 按面授权 | ✅ 已落地两层：`agent_commands.requested_by = admin:<token 指纹>`（调查/重采/预检三条入队路径都写，视图回显）；按面授权 `[investigations] allowed_topics`（配置 ∩ 词表，不一致的 id 静默滤掉，被禁的面 403 `investigation_not_allowed`，下发/列表响应回带生效集）。细粒度 scope 待身份体系 |
+| **G1 授权**（人） | 这个调用者能不能对**这台机器**发起这个调查 | `require_admin_bearer` → 未来 scope `agent:investigate` + 按面授权 | ✅ 已落地三层：`agent_commands.requested_by = admin:<token 指纹>`（调查/重采/预检三条入队路径都写，视图回显）；**上界** `[investigations] allowed_topics`（配置 ∩ 词表，403 `investigation_not_allowed`）；**按 agent 的下界**（`investigation_grant` 表，`PUT/DELETE …/investigations/grant`，403 `investigation_not_granted`）—— 下界只能在上界之内收窄，页面可改、即时生效（只影响下发，不影响已落盘报告的读取）。细粒度 scope（按调用者角色）待身份体系 |
 | **G2 能力**（机器） | 这台 agent 认不认识这个面、平台/特权够不够 | agent 上报 `investigation_capabilities`；网关**入队前**校验 | ✅ 已落地：`InvestigationCapabilities{surfaces, privileged}`（contracts 0.9.9 / api 0.9.4）；网关 409 `investigation_unsupported` |
 | **G3 资源**（现场） | 现在跑会不会伤到业务 | 每 agent 并发 1、每面/每 agent 每日配额、命令 TTL 10 min、报告大小上限 | ✅ 网关侧：`[investigations] max_per_agent_per_hour`（默认 12，`0`=不限，429 `investigation_quota_exceeded`，数**尝试**不数成果）+ 同 kind 覆盖 + 命令 TTL；`report_retention_days`（默认 7，`0`=不限，只过滤不删文件）。agentd 侧另有条目/时长/深度三重预算 |
 
@@ -235,10 +235,12 @@ agentd 侧已实现（0.11.0），网关/数据面侧的 WPL/OML/sink 与落库�
    目录是 wparse 写的，网关只是读者，一个只读视图不该替写者删数据；真清盘按运维策略清。
    配套修正：读取改为**读尾部**（单文件尾 2 MiB、按新→旧遍历文件）——wparse 的 file sink
    不轮转，旧写法在文件超过上限时会整份跳过，页面会从“有报告”突变成“没报告”。
-2. **按面授权**的粒度：全局开关 / 按 gateway / 按 agent / 按调用者角色。当前网关只有单一 admin token，
-   做细粒度需要先有身份体系（这是 gateway 的另一个议题）。
-   **已补最小一档**：`[investigations] allowed_topics` 按**网关**放开关（配置 ∩ 词表），关掉一个面
-   是整个网关的事，不用去下线 agent。按 agent / 按角色仍待身份体系。
+2. **按面授权**的粒度：全局开关 / 按 gateway / 按 agent / 按调用者角色。
+   **已落地两档**：上界 `[investigations] allowed_topics`（环境策略，改完重启）；下界
+   `investigation_grant`（**按 agent**，页面上勾选即时生效，但只能在上界内收窄）。
+   为什么不把下界也放配置：配置是“这套环境允许什么”，而“这台机器开哪几面”是日常运维动作
+   —— 把后者也梭进配置文件，就等于每次调整都要重启网关。
+   仍待身份体系：按**调用者角色**（不同 admin 能开的面不同）。
 3. **`process` 的 argv 脱敏规则**由谁定（agentd 实现 / 知识库配置），以及"脱敏前的原文"是否允许落本机。
 4. **命名**：采集面的"就绪度"已经叫"面就绪度"，调查面的能力检查不能再用这个词（建议叫
    **"调查能力"** / `investigation_capabilities`），避免两个闸被混成一个。

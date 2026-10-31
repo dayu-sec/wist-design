@@ -34,7 +34,7 @@
 
 ## 2. 闭集与维护规矩
 
-**共 19 个**（清单见 §3）。三条规矩：
+**共 20 个**（清单见 §3）。三条规矩：
 
 1. **只增不改名。** 面名一旦进入协议（数据帧 / 记录 / 接口），改名就是**破坏性变更**：
    历史数据里那个值会变成"不存在的面"，按面统计与回溯都会断。
@@ -46,7 +46,7 @@
 **谁校验**：网关装载采集目录时按词表拒未知面 —— 面名写错会**报错**，不会被静默收下；
 词表本身还要过**追加式校验**（不得删除 / 改名 / 复用已退场 ID）。
 
-## 3. 19 个面一览
+## 3. 20 个面一览
 
 > 「载体」一列只是让你知道**大概从哪来**，会随系统版本与策展变；**以 `catalog.toml` 为准**。
 > 同一个面也可能有多个载体（如 `NetworkFirewall` 的 macOS 侧 = `wifi.log` + 统一日志 `com.apple.alf`）。
@@ -72,6 +72,7 @@
 | `ContainerWorkload` | 容器 stdout（business / gateway / k8s_pod） | Linux | k8s：`/var/log/containers/*.log`；纯 Docker：`/var/lib/docker/containers/*/*-json.log*`（13/15/16 同一批流） |
 | `BackupJob` | 备份与批处理 | Linux | `borg/*`、`restic/*` |
 | `NetworkService` | 网络服务（NFS/SMB/防火墙规则） | Linux | `nginx/*`、`samba/*` |
+| `TrafficInspection` | 流量的入侵检测事件（镜像点） | Linux | `suricata/eve.json`（显式单路径跟尾，一行一条 JSON） |
 
 > **`HostMetrics` 的磁盘口径**（Linux）：容量分两个角色 —— `system` = 根文件系统 `/`（系统盘，
 > 看使用率），`data` = 其余本地块设备挂载点汇总（数据盘，看剩余可用）。多块数据盘按容量汇总，
