@@ -88,6 +88,21 @@ message<command> AdminGetGatewayLifecycle {
   gateway_id: String
 }
 
+// 换绑审计：谁在什么时候把该网关绑到哪个客户（换绑时带旧值）。
+// 绑定表（GatewayCustomerBinding）只保留最新值，历史靠这条 append-only 记录。
+message<command> AdminGetGatewayBindingHistory {
+  gateway_id: String
+}
+
+struct GatewayBindingAuditEvent {
+  gateway_id: String
+  customer_id: String
+  previous_customer_id: String?
+  revision: Int
+  requested_by: String
+  at: DateTime
+}
+
 struct GatewayLifecycleEvent {
   gateway_id: String
   from_state: String?
@@ -178,6 +193,11 @@ interface GatewayOpsInterface {
   entry AdminGetGatewayLifecycle {
     actor PlatformMaintenanceEngineer
     output List<GatewayLifecycleEvent>
+  }
+
+  entry AdminGetGatewayBindingHistory {
+    actor PlatformMaintenanceEngineer
+    output List<GatewayBindingAuditEvent>
   }
 
   entry AdminGetGatewayInitialConfig {

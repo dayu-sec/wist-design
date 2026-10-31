@@ -32,6 +32,9 @@ struct GatewayInitialConfig {
   server_tls_required: Bool
   protocol_version: String
   enrollment_token_id: String
+  // 首次接入时随配置带出业务身份；旧 gwlinkd 忽略。
+  tenant_id: String?
+  binding_revision: Int?
 }
 
 struct GatewayStatusAccepted {
@@ -44,6 +47,21 @@ struct GatewayStatusAccepted {
   gateway_id: String
   instance_id: String
   accepted_at: DateTime
+  // 中心**权威**期望的业务身份（无绑定 → 缺省）。
+  // 网关据此在命令丢失 / 离线 / 重启后发现本地落后并自行补偿（设计 edge/gateway-business-identity.md §11.1）。
+  desired_business_identity: DesiredBusinessIdentity?
+}
+
+struct DesiredBusinessIdentity {
+  meta {
+    label zh "期望业务身份"
+    label en "Desired Business Identity"
+    summary zh "中心权威的业务身份期望值（绑定表 customer_id → 数据面 tenant_id）+ 绑定版本；随状态回执下发。"
+    tags "gateway", "tenant", "binding"
+  }
+
+  tenant_id: String
+  revision: Int
 }
 
 // Gateway 运行态领域事实（注册后的版本/状态/健康/最近上报），非 View DTO。
@@ -128,6 +146,11 @@ struct GatewayCustomerBinding {
   customer_id: String
   status: String
   bound_at: DateTime
+  // 绑定版本：同客户重复绑定不递增；换绑递增。
+  revision: Int
+  applied_revision: Int?
+  applied_at: DateTime?
+  last_error: String?
 }
 
 struct GlobalPolicyDispatch {
@@ -247,6 +270,9 @@ message<command> ReportGatewayStatus {
   // gwlinkd（宿主侧常驻）**自身**版本：`version` 是网关（容器）的，两者别混。
   // 可选 —— 老 gwlinkd 不带这个键，中心侧 serde default 兜底。
   gwlinkd_version: String?
+  // 业务身份（数据面字段名 tenant_id）：可选，旧 gwlinkd 不带。
+  tenant_id: String?
+  binding_revision: Int?
   // 在线/离线：`online` / `offline`（中心按 `== "online"` 计数与展示，别用 `running`）。
   status: String
   health: String

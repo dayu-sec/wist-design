@@ -487,6 +487,13 @@ bind GatewayOpsInterface {
     status List<GatewayLifecycleEvent> 200
   }
 
+  entry AdminGetGatewayBindingHistory {
+    route GET "/api/v1/admin/gateways/{gateway_id}/bindings"
+    auth bearer
+    actor_identity PlatformMaintenanceEngineer.id from jwt.sub
+    status List<GatewayBindingAuditEvent> 200
+  }
+
   entry AdminGetGatewayInitialConfig {
     route GET "/api/v1/admin/gateways/{gateway_id}/config"
     auth bearer
