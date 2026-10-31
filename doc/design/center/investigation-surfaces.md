@@ -116,10 +116,13 @@ Linux 上是完全不同的文件，但都是同一类需求。调查面描述�
 | `commandlines` | argv | 默认掩码（`--password=***`），且**默认不外发** |
 
 当前进度（S3）：**保留期已落地**（`[investigations] report_retention_days`，网关只看可见窗口，
-不删数据面的文件）；**脱敏未做** —— 唯一在跑的 `disk` 面里，路径本身就是证据（掩掉文件名的报告
-没有任何可用信息），所以第一版的做法是“**按面授权 + 配额 + 短期保留**”，而不是把目录名打成 `***`。
-触发条件明确：**在实现 `process` / 任何携带 argv 的面之前**，必须先把 agentd 侧的掩码规则定下来
-（见 §7 待决 3），否则第一个带 `--password=` 的报告就会直接进数据面 sink。
+不删数据面的文件）。**出口脱敏已落地为一套可校验的策略**（agentd 的
+`investigation/redaction-policy.toml` + `investigate_safety`，CI 闸门
+`tests/investigation_redaction_policy.rs`）：它**不掩路径**（路径本身就是证据——掩掉文件名的报告
+没有任何可用信息），只掩**值**里不该出现的东西：私钥、口令哈希、连接串口令、云/平台 token、
+`authorized_keys` 正文、`--password=` 这类命令行参数。所以 `paths` 档仍按“按面授权 + 配额 + 短期保留”
+处理，而 `commandlines` / `secret-metadata` 档由这套规则兜底
+（见 [`investigation-security-surfaces.md`](./investigation-security-surfaces.md) §3.3）。
 
 ## 3. 三道闸（谁有权 / 谁能做 / 现场允不允许）
 
@@ -225,6 +228,17 @@ agentd 侧已实现（0.11.0），网关/数据面侧的 WPL/OML/sink 与落库�
 14 万条，而真正的 150 GiB 在 `~/.Trash`）；按报告点名的目录重扫 `/Users`（30s）后，
 `~/.Trash` 立刻成为热点。**一条调查报告的价值在于它指向下一条命令。**
 
+### 5.2 安全向题目
+
+安全向（身份与权限 / 持久化 / 暴露面 / 保护姿态 / 软件证据 / 遥测健康 / 数据可达性）的清单、
+每题的节结构与判定边界，以及它们逼出来的契约补充（覆盖三态 `unknown ≠ ok`、节级特权、
+`identities` 与 `secret-metadata` 敏感度档、统一报告头、只读的结构化保证、成本闸门），见
+[`investigation-security-surfaces.md`](./investigation-security-surfaces.md)。
+
+这里不重复列表。两文的取舍一致，冲突时以本文的 R1/R2/R3 与三道闸 G1/G2/G3 为准；
+§2.2 的脱敏触发条件（“在实现 `process` / 任何携带 argv 的面之前先定掩码规则”）
+在安全向题目里同样生效。
+
 ## 6. 落点与分阶段
 
 | 阶段 | 内容 | 仓 |
@@ -262,7 +276,9 @@ agentd 侧已实现（0.11.0），网关/数据面侧的 WPL/OML/sink 与落库�
    为什么不把下界也放配置：配置是“这套环境允许什么”，而“这台机器开哪几面”是日常运维动作
    —— 把后者也梭进配置文件，就等于每次调整都要重启网关。
    仍待身份体系：按**调用者角色**（不同 admin 能开的面不同）。
-3. **`process` 的 argv 脱敏规则**由谁定（agentd 实现 / 知识库配置），以及"脱敏前的原文"是否允许落本机。
+3. **`process` 的 argv 脱敏规则**由谁定：**已定**——规则在 agentd 的
+   `investigation/redaction-policy.toml`（随代码评审，不进知识库），`load` 更是结构上不放 argv。
+   仍待：`process` 面是否允许放（脱敏后的）argv，以及 argv 原文是否允许只留本机。
 4. **命名**：采集面的"就绪度"已经叫"面就绪度"，调查面的能力检查不能再用这个词（建议叫
    **"调查能力"** / `investigation_capabilities`），避免两个闸被混成一个。
 5. 批量调查（一次对 N 台发起）要不要做：可以做，但必须有 G3 配额，否则一次点击就是一次舰队级 IO 风暴。

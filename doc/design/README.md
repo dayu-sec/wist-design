@@ -10,7 +10,7 @@
   `wist-exec` / 本地状态 / 故障处理 / 资源发现 / 磁盘容量采集（按挂载点）/ **动态日志源定位（服务证据 + 本机解析 + 人工覆盖，解决“日志不在标准目录”）** / Gateway 业务身份（customer_id 绑定、下发与 wparse `.env` 注入）（agentd 专属设计文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
 - `center/`
-  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、发现上报的模式与规则、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板（含采集内容与工作总览·通俗版）、Agent 工作体系交付计划、资产发现数据流、采集面与采集能力契约、**调查面与调查授权（一次性只读证据，与采集面分开的授权轴）**、WarpStation 规则管理下发（Git Proxy + gwlinkd 命令通道）、Linux 服务器日志采集覆盖与支持方案（16 类 `log_type` 的现状、决策与分阶段落地）
+  控制中心、控制平面、管理平台容器 bootstrap、Gateway 协议、计划投递、discovery 同步、发现上报的模式与规则、主机库存与运行态、软件归一化、公开漏洞源接入、图谱关系与结果回报 schema、常驻工作模板（含采集内容与工作总览·通俗版）、Agent 工作体系交付计划、资产发现数据流、采集面与采集能力契约、**调查面与调查授权（一次性只读证据，与采集面分开的授权轴）**、**安全向调查面（身份与权限 / 持久化 / 暴露面 / 保护姿态 / 软件证据 / 遥测健康 / 数据可达性；含 `unknown ≠ ok` 与节级特权等契约补充）**、WarpStation 规则管理下发（Git Proxy + gwlinkd 命令通道）、Linux 服务器日志采集覆盖与支持方案（16 类 `log_type` 的现状、决策与分阶段落地）
 - `telemetry/`
   metrics 集成、discovery、resource mapping、uplink 设计、数据防丢失与 Batch A 规格（logs file input / macOS 采集文档已移至
   [`crates/wist-agentd/docs/`](../../crates/wist-agentd/docs/README.md)）
@@ -69,3 +69,4 @@
 46. [foundation/upgrade-resilience.md](./foundation/upgrade-resilience.md)（**设计稿**：可续跑升级 / Resumable upgrade —— 多组件、跨多版本升级的失败隔离与前向修复：Upgrade Step、主机版本向量、按主机求解的升级路径、组件发布自带的兼容/升级 manifest（不是人工维护的全局 Release Train）、`degraded/blocked` 与按步 retry/supersede/pin；无 train 时仍可探针门禁续跑）
 47. [foundation/upgrade-compat-mode.md](./foundation/upgrade-compat-mode.md)（**设计稿**：升级兼容模式 / Mixed-version compatibility —— 先升 B 后仍能把 A/C/D 升完：`compat=mixed`、`coexists_with`/`bridge`/`control_compat` 发布契约、兼容顺序求解、已卡住的救援路径与混合版本 CI 矩阵；Gateway/Center 包入库/发布/计划批准/包列表的兼容检查与报告）
 48. [center/investigation-surfaces.md](./center/investigation-surfaces.md)（**设计稿**：调查面 `InvestigationSurface` —— 与采集面共用“面”的词表纪律、但**另开一道授权轴**：只读契约 R1/R2/R3、三道闸 G1 授权 / G2 能力协商 / G3 资源，明确不参与面就绪度与数据面上送闸门；含报告回传 vs 留本机的取舍、敏感度与脱敏、首版清单与分阶段落地）
+49. [center/investigation-security-surfaces.md](./center/investigation-security-surfaces.md)（**设计稿**：安全向调查面 —— 采集面答不了的“状态与配置”类问句：`accounts` / `persistence` / `exposure` / `protection` / `kernel-integrity` / `container` / `software`（只出证据，判断留中心）/ `telemetry-health` / 数据可达性（`secrets` / `data-exposure` / `data-crypto` / `backup`）；含覆盖三态与 `unknown ≠ ok`、节级特权、`identities` 与 `secret-metadata` 敏感度档、永不回传清单、统一报告头、只读的结构化保证、成本闸门（采集宽 / 富化窄）、明确不做的清单与分阶段）
