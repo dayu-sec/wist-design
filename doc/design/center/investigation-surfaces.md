@@ -195,7 +195,7 @@ agentd 侧已实现（0.11.0），网关/数据面侧的 WPL/OML/sink 与落库�
 | id | 问题 | 平台 | 特权 | 成本 | 敏感度 | 建议 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `disk` | 哪个**目录**占了盘（递归累计 + 热点下钻）、最大的哪些文件 | 两平台 | root 更完整 | seconds | paths | **P0（已实现）** |
-| `load` | 谁在吃 CPU / 内存 / IO：每核负载、进程排行、iowait 与 D 状态 | 两平台 | root 更完整 | seconds | process names（**不含 argv**） | **P0（已实现）** |
+| `load` | 谁在吃 CPU / 内存 / IO：每核负载、**按服务聚合**（cgroup 归属）、进程排行、iowait 与 D 状态 | 两平台 | root 更完整 | seconds | 服务/容器名 + 进程名（**不含 argv**） | **P0（已实现）** |
 | `process` | 谁在吃 CPU / 内存（含 argv 脱敏） | 两平台 | 否 | ms | commandlines | P0 |
 | `service` | systemd/launchd 单元状态与最近退出 | 两平台 | 部分 | ms | paths | P1 |
 | `network` | 监听端口、连接数、出站失败 | 两平台 | 部分 | ms | paths | P1 |
