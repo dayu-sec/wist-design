@@ -27,6 +27,33 @@
 - **重放**：`git -C wist/wist-gwlinkd apply <备份>/gwlinkd/gwlinkd-A.patch`；网关侧按 §6 那几行补回
   （环回面模块 + 路由 + 两个错误码 + 测试）；模型模块从备份拷回并重新登记进 `subsystem.mju`。
 
+### 0.1 重放决策（2026-10-31，已确认）
+
+**范围收窄为两件事**：
+
+1. **机队运行态上报**（本文 §1–§8 的全部内容）；
+2. **`AgentRuntimeStatus` 扩三字段**：`node_id` / `hostname` / `ip_addresses` ——
+   中心页要能回答“这是哪台机器”。**数据源已在网关注册表里**（`StoredAgentRegistration`），
+   所以**不需要动 agentd**；属加性变更，`wist-control` 先发版本。
+
+**明确不做**：调查报告（IVSREP）上中心 —— 中心当前没有接收端点（`rg ivsrep wist-center/src` 为空），
+需要新设计一个 ingest 面，**另立专项**。教训沿用：不要把“无法验证的新面”和“重放修复”混在一个变更集里。
+
+**重放注意**（已实测）：`state/wip-agent-detail/` 里的两个补丁**已不能 `git apply`**
+（gateway 5 个文件、gwlinkd 3 个文件冲突；design 补丁仍可干净应用）。两个**新文件**
+（`gateway_agents.rs` ×2）可整文件拷入，其余（`codes.rs` / `api/mod.rs` / `center.rs` /
+`main.rs`）手工重生。
+
+**发版顺序**（比原 §9 多一级，因为契约要动）：
+
+```
+wist-control 0.19（扩字段，crates.io）
+   → wist-center（表加 3 列 + 读写投影） + wist-center-web（展示）
+      → wist-gateway（环回面填新字段）
+         → wist-gwlinkd（拉取 + 转报）
+            → wist-gateway-stack（GATEWAY_TAG）
+```
+
 ## 1. 背景与问题
 
 **需求**：网关侧采集/登记的 **agentd 机队信息**（每台 agent 的运行态）要能在**中心侧看到**，
@@ -71,7 +98,7 @@
 |---|---|---|
 | 环回机队面 | `GatewayAgentsReport`（`gateway_id` + `agents: List<AgentRuntimeStatus>`） | `wist-gateway/src/api/gateway_agents.rs`；模型 `Control.GatewayApp.AgentReportInterface.GatewayAgentsReport` |
 | 上报中心 | `ReportAgentStatus`（`gateway_id` + `agents`） | `wist-control`（生成）；模型 `Control.GatewayApp.FacingInterface.ReportAgentStatus` |
-| 中心视图 | `AgentRuntimeStatus`（`agent_id` / `instance_id` / `version` / `status` / `health` / `last_seen_at` / `memory_bytes` / `cpu_percent` / `admin_latency_ms`） | 模型 `Control.Agent.Status.AgentRuntimeStatus` |
+| 中心视图 | `AgentRuntimeStatus`（`agent_id` / `instance_id` / `version` / `status` / `health` / `last_seen_at` / `memory_bytes` / `cpu_percent` / `admin_latency_ms` / **`node_id` / `hostname` / `ip_addresses`**） | 模型 `Control.Agent.Status.AgentRuntimeStatus` |
 
 - **环回面与上报契约同形**：gwlinkd 拉到后**以自身配置的 `gateway_id` 覆写**再转报
   （环回面回显的是调用方给的值，不以它为准 —— 防网关侧 misconfig 时张冠李戴）。
@@ -202,8 +229,9 @@ sequenceDiagram
 0. **前置**：先发环回准入修复（§0）—— 没它本接口够不到，重放也没法联调。
 1. **机队规模上限**：当前环回面一次全量。若单网关机队上万，需评估环回 payload 体积与 gwlinkd 内存占用
    （备选：环回面分页 + gwlinkd 循环，或只报**增量**）。dev 规模暂不需要。
-2. **更丰富字段**：中心页目前只见契约 9 字段（无 `node_id` / `hostname` / `ip_addresses`）。
-   若要展示「这是哪台机器」，需扩 `AgentRuntimeStatus` 契约（`wist-control` 发版）——属后续增强，非本需求。
+2. **更丰富字段**：~~中心页目前只见契约 9 字段（无 `node_id` / `hostname` / `ip_addresses`）~~
+   **已纳入（2026-10-31）**：三个字段加性扩展进 `AgentRuntimeStatus`（`wist-control` 次版本），
+   数据源是网关注册表，**不需要 agentd 配合**。
 3. **环回面鉴权定案**：待与 self 面一并定案后补 `bind`，本接口随之入 codegen。
 
 ## 12. 关联文档

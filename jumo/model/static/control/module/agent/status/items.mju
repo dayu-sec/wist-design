@@ -40,6 +40,12 @@ struct AgentRuntimeStatus {
   memory_bytes: Int?
   cpu_percent: Float?
   admin_latency_ms: Int?
+  // 机器身份：中心页要能回答“这是哪台机器”。来自网关注册表的机器画像，
+  // 旧版生产者不报时为 null（不是空串，也不是“没有机器”）。
+  node_id: String?
+  hostname: String?
+  // 形如 `en0 192.168.1.5/24`；空表 = 还没报过 / 确实没有地址。
+  ip_addresses: List<String>?
 }
 
 struct AgentOverviewMetrics {
