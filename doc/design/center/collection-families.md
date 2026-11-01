@@ -72,7 +72,7 @@
 | `ContainerWorkload` | 容器 stdout（business / gateway / k8s_pod） | Linux | k8s：`/var/log/containers/*.log`；纯 Docker：`/var/lib/docker/containers/*/*-json.log*`（13/15/16 同一批流） |
 | `BackupJob` | 备份与批处理 | Linux | `borg/*`、`restic/*` |
 | `NetworkService` | 网络服务（NFS/SMB/防火墙规则） | Linux | `nginx/*`、`samba/*` |
-| `TrafficInspection` | 流量的入侵检测事件（镜像点） | Linux | `suricata/eve.json`（显式单路径跟尾，一行一条 JSON） |
+| `TrafficInspection` | 流量的入侵检测事件（镜像点） | Linux | `/opt/suricata/logs/eve.json`（显式单路径跟尾，一行一条 JSON） |
 
 > **`HostMetrics` 的磁盘口径**（Linux）：容量分两个角色 —— `system` = 根文件系统 `/`（系统盘，
 > 看使用率），`data` = 其余本地块设备挂载点汇总（数据盘，看剩余可用）。多块数据盘按容量汇总，
