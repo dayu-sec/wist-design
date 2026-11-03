@@ -8,6 +8,10 @@
 > [`agent-work-templates.md`](./agent-work-templates.md)（面就绪度 = 采集授权闸门）、
 > [`../telemetry/agent-uplink-authorization.md`](../telemetry/agent-uplink-authorization.md)（数据面闸门）、
 > [`../foundation/api-seam-inventory.md`](../foundation/api-seam-inventory.md)（一次性命令通道）。
+>
+> **下发入口**：本文描述的下发今天长在网关（`POST /api/v1/admin/agents/{agent_id}/investigations`）。
+> 平台内部服务（C3）经 Center 转投同一能力的契约，见
+> [`center-open-api.md`](./center-open-api.md) §7.6.1。
 
 ## 0. 结论
 
@@ -152,7 +156,7 @@ Linux 上是完全不同的文件，但都是同一类需求。调查面描述�
 
 | 闸 | 回答 | 落点 | 现状 |
 | --- | --- | --- | --- |
-| **G1 授权**（人） | 这个调用者能不能对**这台机器**发起这个调查 | `require_admin_bearer` → 未来 scope `agent:investigate` + 按面授权 | ✅ 已落地三层：`agent_commands.requested_by = admin:<token 指纹>`（调查/重采/预检三条入队路径都写，视图回显）；**上界** `[investigations] allowed_topics`（配置 ∩ 词表，403 `investigation_not_allowed`）；**按 agent 的下界**（`investigation_grant` 表，`PUT/DELETE …/investigations/grant`，403 `investigation_not_granted`）—— 下界只能在上界之内收窄，页面可改、即时生效（只影响下发，不影响已落盘报告的读取）。细粒度 scope（按调用者角色）待身份体系 |
+| **G1 授权**（人） | 这个调用者能不能对**这台机器**发起这个调查 | `require_admin_bearer` → 未来 scope `agent:investigate` + 按面授权 | ✅ 已落地三层：`agent_commands.requested_by = admin:<token 指纹>`（调查/重采/预检三条入队路径都写，视图回显）；**上界** `[investigations] allowed_topics`（配置 ∩ 词表，403 `investigation_not_allowed`）；**按 agent 的下界**（`investigation_grant` 表，`PUT/DELETE …/investigations/grant`，403 `investigation_not_granted`）—— **默认全关**（没有授权行 = 一个面都不开，与采集面一致），下界只能在上界之内，页面可改、即时生效（只影响下发，不影响已落盘报告的读取）。细粒度 scope（按调用者角色）待身份体系 |
 | **G2 能力**（机器） | 这台 agent 认不认识这个面、平台/特权够不够 | agent 上报 `investigation_capabilities`；网关**入队前**校验 | ✅ 已落地：`InvestigationCapabilities{surfaces, privileged}`（contracts 0.9.9 / api 0.9.4）；网关 409 `investigation_unsupported` |
 | **G3 资源**（现场） | 现在跑会不会伤到业务 | 每 agent 并发 1、每面/每 agent 每日配额、命令 TTL 10 min、报告大小上限 | ✅ 网关侧：`[investigations] max_per_agent_per_hour`（默认 12，`0`=不限，429 `investigation_quota_exceeded`，数**尝试**不数成果）+ 同 kind 覆盖 + 命令 TTL；`report_retention_days`（默认 7，`0`=不限，只过滤不删文件）。agentd 侧另有条目/时长/深度三重预算 |
 
@@ -267,7 +271,7 @@ agentd 侧已实现（0.11.0），网关/数据面侧的 WPL/OML/sink 与落库�
 | --- | --- | --- |
 | S0 ✅ | agentd：`investigate` 命令 + 本地报告 + ` IVSREP: ` 帧回传（带 `command_id`、单帧 64 KiB 上限、与事实帧同闸） | agentd |
 | S1 ✅ | 词表与能力：`InvestigationCapabilities`（contracts）+ `AgentStatusReport` 加性字段（api）；agentd 上报（源 = `investigate::TOPICS` + `geteuid`）；网关落库 + 入队前校验 + `requested_by` 审计 | design / knowledge / agentd / gateway |
-| S2 ✅ | 网关：下发/查看端点与报告读取（`POST/GET /api/v1/admin/agents/{id}/investigations`，只读 `<data-plane>/data/ivsrep/`）；数据面：`wp-rules` 1.1.0 的 `agent_uplink_ivsrep` WPL/OML + `wp-infra` 1.2.0 的 `business.d/agent_ivsrep.toml`（落 `./data/ivsrep/`）；回归测试 `agent-uplink-ivsrep.test.sh` | gateway / wp-rules / wp-infra |
+| S2 ✅ | 网关：下发/查看端点与报告读取（`POST/GET /api/v1/admin/agents/{id}/investigations`，只读报告目录，缺省 `<data-plane>/data/ivsrep/`）；数据面：`wp-rules` 1.1.0 的 `agent_uplink_ivsrep` WPL/OML + `wp-infra` 1.2.0 的 `business.d/agent_ivsrep.toml`（落 `./data/ivsrep/`）；回归测试 `agent-uplink-ivsrep.test.sh` | gateway / wp-rules / wp-infra |
 | S3 ✅ | **已落地**：按面授权（`[investigations] allowed_topics`，403）、配额（`max_per_agent_per_hour`，429）、报告保留期（`report_retention_days`，只过滤不删文件）、报告读取的**读尾**（sink 不轮转，文件超上限时仍能看到新报告）；web：菜单可用性 = 允许集 ∩ 能力，非 root 标出“部分答案”，四个错误码分开说，发起人回显。**仍待做**：细粒度 scope（依赖身份体系）、`sensitivity` 驱动的脱敏与外部 sink 保留策略（见 §2.2 的触发条件） | gateway / web |
 
 兼容顺序（与既有规矩一致）：
@@ -284,7 +288,9 @@ agentd 侧已实现（0.11.0），网关/数据面侧的 WPL/OML/sink 与落库�
 
 1. **报告落在哪、留多久**：**已定**（与既有的「采集日志」同一模型）——
    agentd 本机一份（`state/investigations/<topic>.json`）+ 数据面 ` IVSREP: ` 帧由 wparse
-   落到**网关本机报告目录**（`<data_plane work_dir>/data/ivsrep/*.jsonl`，网关只读、不建表）。
+   落到**网关本机报告目录**（缺省 `<data_plane work_dir>/data/ivsrep/*.jsonl`，网关只读、不建表）。
+   路径**不是写死的**：`[investigations] report_dir` 可覆盖（相对 = 相对 `work_dir`，
+   绝对 = 直接用，报告可以单独挂一个卷）；它必须与 sink 的 `base` 一起改。
    不做网关内部接入端点，理由：报告是**按命令的一次性产物**，不是要入库的流水；
    建表就要管 schema 演进与保留期，而目录 + 文件天然可备份/可删。
    **保留期与配额**：网关侧 `[investigations] report_retention_days`（默认 7，`0` = 不限），
@@ -292,9 +298,15 @@ agentd 侧已实现（0.11.0），网关/数据面侧的 WPL/OML/sink 与落库�
    目录是 wparse 写的，网关只是读者，一个只读视图不该替写者删数据；真清盘按运维策略清。
    配套修正：读取改为**读尾部**（单文件尾 2 MiB、按新→旧遍历文件）——wparse 的 file sink
    不轮转，旧写法在文件超过上限时会整份跳过，页面会从“有报告”突变成“没报告”。
+   **中央归档（新增，不改变上面这条）**：多客户模式下报告要能跨网关查、要能按敏感度定期删，
+   正文改由**计算区的证据服务 + COS** 承接（网关本地目录降为 7 天兜底缓存）。
+   索引、授权、保留期与删除凭证见 [`evidence-service.md`](evidence-service.md)。
 2. **按面授权**的粒度：全局开关 / 按 gateway / 按 agent / 按调用者角色。
    **已落地两档**：上界 `[investigations] allowed_topics`（环境策略，改完重启）；下界
-   `investigation_grant`（**按 agent**，页面上勾选即时生效，但只能在上界内收窄）。
+   `investigation_grant`（**按 agent**，页面上勾选即时生效，只能在上界内）。
+   **默认全关**（与采集面同一逻辑：没派过活就不采）：没有本机行 = 一个面都不开，
+   `DELETE …/investigations/grant` 删行回到的也是全关 —— 要放开必须显式写。
+   旧构建的“缺行 = 继承上界”已废弃（`grant.inherited` 恒为 `false`，字段只为旧前端解析保留）。
    为什么不把下界也放配置：配置是“这套环境允许什么”，而“这台机器开哪几面”是日常运维动作
    —— 把后者也梭进配置文件，就等于每次调整都要重启网关。
    仍待身份体系：按**调用者角色**（不同 admin 能开的面不同）。

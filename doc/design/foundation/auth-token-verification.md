@@ -52,7 +52,7 @@ center 只持 token 的**摘要**（不可反推、不能签新的），被攻�
 | **D11** | **续期 = 发新撤旧，带重叠窗口** | 避免在飞的请求因为换凭据而 401 |
 | **D12** | **撤销靠推送 + TTL 兜底**；撤销记录留到 `expires_at` | 推送会丢；但把窗口收敛到 TTL 就把"永久后门"变成"最多 N 小时" |
 | **D13** | **break-glass 使用即告警**，审计标 `source = token` 且单独打点 | 应急通道长期开着就等于没有认证 |
-| **D14** | 不上 JWT/JWKS | 没有第三方 IdP、没有跨组织验签需求；引入它是纯负担（见 §14） |
+| **D14** | **机器身份不上 JWT/JWKS**；人的 SSO 若引入 Keycloak，JWT+JWKS 只作为人侧的桥（§16.3(a)），不改变机器的 T 路径 | 没有第三方 IdP、没有跨组织验签需求；引入它是纯负担（见 §14）。将来接 Keycloak 时按 §16 的单点例外处理 |
 | **D15** | **签发独立成 `wist-cred`，放计算区**；center 只是 X | 「能签出任意身份」是平台里权限最高的一项能力，不能长在互联网区最暴露的服务上；它也不属于任何业务路径 |
 | **D16** | **凭据由人（或审批系统）在凭据服务的管理页面上为程序创建**，程序不得自助申请 | 自助申请 = 审批、归因、配额全部失效；也避免明文多经一道手；同 GitHub PAT——建在你手里，用在程序里 |
 | **D17** | **凭据服务自带管理页面**（`wist-cred-web`），且**页面自带登录**：页面输口令 → `Authorization: Bearer` → **`wist-cred` 自己验**（`mode = "token"`，配置里只存 `sha256`），**永不建本机用户表**；`mode = "ingress"` 只留给开发态 | 好的产品体验不可能由反代提供（浏览器原生弹窗、无登录框/登出/错误提示）。将来接用户中心 / 钉钉时，只把口令校验换成 OIDC 回调，页面与授权逻辑不动 |
@@ -60,6 +60,8 @@ center 只持 token 的**摘要**（不可反推、不能签新的），被攻�
 一句话：
 
 > **人的身份由产品自己验（页面输口令），机器身份由证书证明，脚本身份由 C 签发、摘要推到 X、X 本地比对。**
+
+> 演进方向（**租约 + 短期凭据 + 标准词汇对齐**）见 §16；**当前不开发**。
 
 ---
 
@@ -457,10 +459,9 @@ sequenceDiagram
 |---|---|---|---|---|
 | `wist-cred`（新增） | 计算区 | **C** | `/api/v1/credentials`（**人机面**，页面 = `wist-cred-web`） | token（页面口令，`Authorization: Bearer`，cred 自验；dev 可用 ingress） |
 | | | | `/api/v1/credentials`（可选服务面，默认关） | certificate（CA-I），留给审批系统 |
-| `wist-center` | 接入区 | X | `/api/v1/admin/**`（反代后） | ingress |
-| | | | `/api/v1/internal/**` | certificate（CA-I） |
+| `wist-center` | 接入区 | X | `/api/v1/admin/**` | token（wist-cred 签发的凭据，`admin` 角色）；break-glass 口令兜底 |
+| | | | `/api/v1/internal/credentials`（mTLS listener，3103） | certificate（CA-I） |
 | | | | `/api/v1/gateway/**` | certificate（CA-G）；运行期 bearer 已删，见 [`gateway-secure-registration.md`](../center/gateway-secure-registration.md) |
-| | | | `/api/v1/auth/**`（脚本直连面） | token |
 | `wist-ingest-ctrl` | 计算区 | X | `[ctrl.auth]` 对应的 listener | certificate + token |
 | `wist-console` | 接入区 | X + 反代下游 | 自己的入站 | ingress（`x-console-operator`，现有做法） |
 | `wist-center-web` | 接入区 | — | 无后端 | 不持凭据，全部走反代（**本次要修的现状**） |
@@ -530,34 +531,49 @@ audience = "wist-ingest"
 
 ### 9.2 `wist-center`（X 侧，接入区）
 
+已实现（`wist-center` 0.28+，配置段 `[credentials]`，代码 `src/credentials.rs` +
+`src/api/admin_auth.rs`）：
+
 ```toml
 [server]
-admin_addr = "127.0.0.1:8081"              # 管理面：**反代后**，不直接暴露
-admin_token = "${SEC_CENTER_ADMIN_TOKEN}"  # break-glass（直连面），用了即告警
+admin_addr = "0.0.0.0:3102"                # 管理面：内网 listener（浏览器经 web 反代）
+admin_token = "${SEC_CENTER_ADMIN_TOKEN}"  # break-glass；cred 正常时不该被用到
 
-[auth]
-mode = "ingress"                    # admin 面在反代后：ingress | token
-ingress_header = "x-wist-operator"
-ingress_roles_header = "x-wist-roles"
-ingress_exp_header = "x-wist-session-exp"
-# 反代注入面只认这些 peer（unix socket / 回环 / 指定网卡）
-trusted_peers = ["unix:/run/wist/center.sock", "127.0.0.1/32"]
-# 若 console 在反代后透传，则要求它有 CA-I 证书（更强的第二层）
-require_client_cert_from = ["wist-console"]
-
-[auth.credential_store]              # center 也要验脚本 token（直连面）
+[credentials]
 enabled = true
-path = "state/credentials.json"      # 0640，冷启动即可验
-known_roles = ["read", "command:write", "command:dispatch", "provision", "release", "security"]
+listen_addr = "0.0.0.0:3103"        # 独立的内网 mTLS listener（不是管理面端口）
+store_path = "state/credentials.json" # 只存 sha256；不进 PG
+audience = "wist-center"              # 必须等于 cred 侧的认证系统名
+allowed_issuers = ["wist-cred"]       # 客户端证书（CA-I）的身份
+known_roles = ["admin", "read"]
+admin_roles = ["admin"]               # 空 = 不按角色卡；read 能认证但进不了管理面
+server_cert_path = "/wist-center/ca/cred/server.crt"   # 由 cred 的 CA-S 签
+server_key_path = "/wist-center/ca/cred/server.key"
+client_ca_path = "/wist-center/ca/cred/client-ca.pem"   # CA-I 公钥证书
+# 授权记录的 Ed25519 验签（收到时 + 从磁盘加载时各一次）
+require_signature = true
+issuer_public_key_path = "/wist-center/ca/cred/issuer-signing.pub"
 ```
 
-> 迁移注意：现有 `wist_auth::AuthConfig` 只有 `admin_token` / `admin_token_hash` / `viewer_token*` /
-> `allow_anonymous`，**没有 `mode`**；且它是 `deny_unknown_fields`。所以新增的 `mode`、
-> `trusted_peers`、`ingress_header`、`credential_store` 必须**同时**改库与各 X，
-> 并全部标 `#[serde(default)]`，否则旧配置直接拒载。
->
-> `admin_token*` 字段**不删**，降级为 break-glass（D4）：配了就在直连面上生效，审计标 `source = token`，
-> 用了就告警。
+**授权记录必须由签发方签名。** 登记表落盘后可被改，没有签名的话改 `roles` / 延长
+`expires_at` / 清掉 `revoked_at` 就能凭空提权。签名覆盖：凭据指纹、主体、角色、资源、受众、
+有效期、版本号、撤销状态；规范字节由 `wist-auth::signing` 统一（签发与验证同一份）。
+验不过的记录：`register` 直接拒收，磁盘加载时直接丢弃（`rejected_on_load` 可观测）。
+
+> 签名挡不住的是**回放**：把旧的、签名仍然有效的记录恢复回来。处置靠撤销墓碑（不删行）
+> 与单调 `revision`；整目录回滚检测需要外部锚点（cred 的当前版本），不在本期。
+> 验证方只拿**公钥**（随接入包 `issuer-signing.pub` 下发），私钥永远在 cred。
+
+实现口径：
+
+- 管理面鉴权是**两级**：先 `wist_cred_peer::Peer::verify(token)`（本地摘要表），通了再看
+  `admin_roles`；没通过再回落 `admin_token_hash`（D4，命中即 `warn`）。两者都没配才保持 dev 直通。
+- 凭据 listener 与网关面**分开**：不同端口、不同服务器证书（cred 只信任自己 CA-S 签的证书，
+  中心自己的 `control-center.pem` 不在信任锚里）、客户端证书严格校验（CA-I）。
+- `register` / `revoke` / `/healthz` 由 `wist-cred-peer` 提供；中心只负责装配与鉴权接线。
+
+> 尚未做（后续）：反代注入面（`mode = "ingress"`）与 `trusted_peers` 仍是设计稿；当前管理面只认
+> 凭据 token / break-glass token。反代层做认证不符合本平台的产品体验，不能拿 nginx 代替。
 
 ### 9.3 `wist-ingest`（X 侧，接收）
 
@@ -895,6 +911,10 @@ openssl s_client -connect <x>:19443 -cert cred-client.crt -key cred-client.key \
 
 ## 12. 分阶段落地
 
+> 本节是**最初**的分阶段计划，保留作历史参照。
+> 当前已实现的是「推摘要 + 离线验签 + 撤销」（见 §8 / §9.2）；
+> 「租约 + 短期凭据」的演进见 §16，**暂不实施**。
+
 四步，每一步都能独立交付、独立回退。**不要跳步**：P0 定下的 `Subject{kind: Human}` 形状，
 P1/P2 都复用。**P0 / P1 都不需要新建服务**，签发服务只在 P2 出现。
 
@@ -1106,6 +1126,145 @@ J 里成立、T 仍然保留的四条：验证在本地零回调、冷启动离�
 - [`api-seam-inventory.md`](./api-seam-inventory.md)：seam 的单一所有权与版本策略
 - `wist-auth`：现有 `bearer_token` / `token_matches` / `constant_time_eq` / `sha256_hex` / `AuthPolicy` / `FailureLimiter`
   —— 本文的 token 路径就是在这套原语上加一张登记表
+
+---
+
+## 16. 演进提案：租约 + 短期凭据（标准词汇对齐，**暂不实施**）
+
+> **状态：提案，不开发。**
+> 当前实施只到“推摘要 + 离线验签 + 撤销”：一条凭据一个 TTL（cred 的
+> `max_ttl_seconds`，默认 30 天），没有调度器、没有轮换、没有租约、没有 BFF/JWKS。
+> 本节记录**将来**怎么做，以及它对应的标准范式；**不要**据此提前改代码。
+
+### 16.1 要解决的问题
+
+| 问题 | 现状 | 后果 |
+|---|---|---|
+| 验证方本地状态被回滚 | 签名只挡“改内容”，不挡“恢复旧文件” | 回滚窗口 = 剩余 TTL（默认 30 天） |
+| 撤销是尽力而为 | 推不到目标就等 TTL | 撤销延迟不可控 |
+| 人的 TTL 与机器不同 | 人直接持 token，短 TTL 不可用 | 要么天天领 token，要么用 30 天 token |
+| 多客户 / 离线 | 自研推送 | 需要一个不依赖 IdP 的验证方 |
+
+### 16.2 标准词汇对齐
+
+这套模型在业界有成熟名字，**不要自造概念**：
+
+| 我们的说法 | 标准词汇 | 出处 |
+|---|---|---|
+| 30 天授权窗口 | **lease** | HashiCorp Vault（`ttl` / `max_ttl` / `renew` / `revoke`） |
+| 每天一张的短凭据 | **short-lived credential / access token / service ticket / dynamic secret / SVID** | OAuth 2.0、Kerberos、Vault、SPIFFE |
+| 稳定 key | **refresh token / TGT / workload identity / client certificate** | OAuth 2.0、Kerberos、SPIFFE/SPIRE |
+| 用 key 换当前凭据 | **token exchange / refresh grant / AssumeRole / SVID rotation** | RFC 8693、RFC 6749 §6、AWS STS |
+| 旧 key 再用就整族撤销 | **refresh token rotation + reuse detection** | OAuth 2.0 Security BCP（RFC 9700） |
+| key 绑定一把私钥 | **sender-constrained / proof-of-possession** | DPoP（RFC 9449）、mTLS-bound（RFC 8705） |
+| 人只拿会话、后端持 token | **BFF（Backend for Frontend）** | OAuth 2.0 for Browser-Based Apps |
+| 人登录 | **OIDC / SSO** | Keycloak / Zitadel / Ory |
+| 机器身份 | **workload identity** | SPIFFE/SPIRE、K8s projected SA token、云 STS |
+
+一句话：**lease + short-lived credential + rotation + proof-of-possession + BFF**。
+
+### 16.3 目标架构（人 / 机器两条路）
+
+```text
+人：
+  浏览器 → console/BFF → Keycloak 登录（OIDC）
+              │  后端持有短效 access token
+              ↓
+            center  ← JWKS 验人的 JWT（admin / read）
+
+机器：
+  lease（30 天）→ cred 按周期物化短凭据 → 推摘要给 center
+              │
+              └─ 程序用稳定 key 向 cred 取当前明文
+                         ↓
+                      调 center（离线验摘要）
+```
+
+边界：
+
+| | Keycloak | wist-cred |
+|---|---|---|
+| 主体 | 人 | 服务 / 程序 |
+| 负责 | 登录、MFA、钉钉联邦、密码找回、会话 | 租约、签发/轮换/撤销、推摘要、离线验证 |
+| 目标怎么验 | JWT + JWKS | 本地摘要 + 签名 |
+| 不碰 | 机器凭据、推摘要 | 用户表、密码、MFA |
+
+多租户：建议 **per-customer realm**（或 per-customer IdP），与“一客户一 center、一份
+credential store”对齐；共享 realm + tenant claim 省运维，但爆炸半径大。
+
+人这条路的**两种接法**（二选一，不要把 Keycloak token 直接交给浏览器）：
+
+- **(a) JWKS 直验**：BFF 持有 Keycloak 的短效 access token，center 用 JWKS 验 JWT。
+  标准、少写代码；代价是 center 对 Keycloak JWKS 有弱依赖（缓存可撑短时故障）。
+- **(b) 服务凭据 + 用户断言**：BFF 用 wist-cred 的服务凭据调 center，另带一份由 BFF
+  签名的短效用户断言（`sub` / `roles` / `exp`）。center 保持完全离线，代价是多一层内部断言
+  的格式与验签。
+
+选 (a) 还是 (b)，取决于“center 能不能接受一次 JWKS 依赖”；**两条都不改变机器那条路**。
+
+### 16.4 实施时必须守住的约束
+
+1. **稳定 key 只能“取”，不能“改”。** 取到的角色 / 受众 / TTL 由 lease 决定，不接受
+   请求里指定——否则 key 泄露即可提权。
+2. **先登记、后给明文。** cred 必须先把短凭据的摘要成功推到目标，再把明文交给持有人；
+   推失败就拒绝发放（fail-closed）。
+3. **轮换 + 重用检测。** 每次取用轮换稳定 key；旧 key 再次出现 → 撤销整条 family
+   （RFC 9700）。这是“旧凭据被回放”的标准答案。
+4. **稳定 key 用 proof-of-possession**（机器：per-program mTLS 证书；人：passkey 或 BFF
+   会话），不做裸 bearer，更不放 `localStorage`。
+5. **交付要留 lookahead。** 目标手里保留 1–2 张：1 张窗口最小、但零容错；2–3 张能扛
+   短时故障，代价是回滚窗口同步变长。
+6. **取消 = 停发 + 可选 revoke。** 停发管长期（≤ 一个周期自然断）；立即生效仍需对当前
+   那张发一次 revoke。
+7. **单张 TTL ≥ 周期 + 重叠，且 ≤ 目标侧的角色上限。** 否则会出现“下一张没到、上一张
+   已死”或“cred 说还有 30 天、center 1 小时就拒”。
+8. **离职联动。** Keycloak 停用只挡“发新”；必须同时撤销该 subject 名下的 lease / 凭据，
+   否则“人走了 token 还在”。
+9. **过期记录清理 + 可观测。** 到期清理；监控交付失败、逾期未签发、lookahead 耗尽、
+   以及“已撤销的 `credential_id` 再次出现”。
+
+### 16.5 已知残留风险（不因签名而消失）
+
+- **验证方本地状态回滚**：短 TTL 只限定窗口，不检测回滚；要检测需外部锚点
+  （与 cred 对账 / 单调版本 / 审计）。
+- **稳定 key 泄露**：可一直换新凭据，直到 key 被撤销。控制点是 key 的保护强度与撤销延迟。
+- **交付依赖**：调度器 / 网络故障会让目标在最后一张过期后失联；用 lookahead 换容错。
+- **撤销仍是尽力而为**：推不到时靠 TTL 兜底。
+- **签名不防回放**：它只防“改内容”；回放由 TTL 与轮换/reuse detection 处理。
+
+### 16.6 明确不做（scope guard）
+
+- **现在不实现**：租约、调度器、轮换、reuse detection、BFF、JWKS、Keycloak 接入。
+- **不改 wire**：仍是 `register` / `revoke` + Ed25519 签名。
+- **不先降 TTL**：没有续期通道时改短 TTL，会让机器每小时断一次。
+- **不把 Keycloak 用来发机器凭据**：那会把“离线 + 立即撤销”两个优势换掉。
+
+### 16.7 真要做时的顺序
+
+| 阶段 | 内容 | 前置 |
+|---|---|---|
+| 0 | 角色 TTL 上限（`max_ttl_by_role`）+ 过期/撤销错误码分开 | 无 |
+| 1 | **lease + 周期签发 + lookahead**（cred） | 0 |
+| 2 | **稳定 key + exchange 端点**（先机器；mTLS 证书或长期 key） | 1 |
+| 3 | Keycloak OIDC：cred-web 登录换 OIDC + console BFF（人） | 无（可与 1 并行） |
+| 4 | rotation + reuse detection + 离职联动 | 2、3 |
+| 5 | 可选：JWT 模式 + JWKS（接标准生态；推摘要仍作即时撤销层） | 2 |
+
+阶段 0 是低成本的；1 之后才真正改变“回滚窗口”。
+
+### 16.8 待决策
+
+- 机器稳定 key：**per-program CA-I 证书** 还是 **cred 签发的长期 key**？
+- 人的稳定 key：**Keycloak 会话** 还是 **passkey**？
+- 每个角色的 `period` / `lookahead` / `max_ttl` 取值。
+- 多租户：per-customer realm 还是共享 realm + tenant claim。
+- 是否要在阶段 5 引入 JWT 作为标准生态桥。
+
+### 16.9 与现有章节的关系
+
+- §7.3「续期：发新撤旧 + 重叠窗口」是本文提案的**手工版**；租约是把它自动化。
+- §14（T vs JWT/JWKS）不被推翻：机器仍走 T，JWT 只在人 / 第三方场景作为桥。
+- 附录 A（接 SSO）是本文人侧的最小版本；本文补上了 lease / BFF / 离职联动的边界。
 
 ---
 

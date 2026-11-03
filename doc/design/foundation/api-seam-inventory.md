@@ -196,3 +196,5 @@ wist-api/src/<seam>/
 - [upgrade-order.md](./upgrade-order.md)：发布序 vs 升级序
 - `static/control/binding.mju`：seam 的路由/鉴权声明
 - `static/control/module/*/facing-interface/items.mju`：seam 的报文体声明
+- [../center/center-open-api.md](../center/center-open-api.md)：北向三类调用方（网关 / 管理者 / 内部服务）的面划分，
+  以及新增 seam（`/api/v1/internal/**`、指令创建与下发）的归属与版本策略

@@ -224,6 +224,9 @@
 - 分发
 - ack 处理
 
+> 北向到底分几类调用方、各自的前缀 / 凭据 / 权限矩阵，以及「指令创建 vs 下发」的资源契约，
+> 见 [`center-open-api.md`](center-open-api.md)。本节只保留职责边界，不重复路由表。
+
 ### 6.2 Install Bootstrap Endpoint
 
 面向 operator 和目标机器安装脚本的 bootstrap 入口。
