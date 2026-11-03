@@ -695,13 +695,13 @@ sequenceDiagram
 
     Op->>C: 只填一个名称，点「创建」
     C->>C: 生成 32B 随机券（只存 sha256，TTL 分钟级）
-    C-->>Op: curl -fsSLk <entry>/onboarding/script/<券> | bash
+    C-->>Op: curl -fsSLk <entry>/enroll/<券>/join.sh | bash
     Op->>X: 在 X 上执行这一行
-    X->>C: GET /onboarding/script/<券>
+    X->>C: GET /enroll/<券>/join.sh
     C-->>X: 脚本（客户端 CA + 券，无任何私钥）
     X->>X: 算自己的 host（--host / --advertise / hostname -f）
     X->>X: genpkey 生成本机私钥 → 出 CSR
-    X->>C: POST /onboarding/enroll/<券> {CSR, host, endpoint?, roles?}
+    X->>C: POST /enroll/<券>/certificate {CSR, host, endpoint?, roles?}
     C->>C: 1 验 CSR / 2 看券与已登记值 / 3 校验上报值 / 4 兑现券 / 5 按 CSR 签
     C-->>X: 证书（CN/SAN = 上报的 host）
     X->>X: 校验「证书公钥 == 本机私钥」且 SAN 含自己的名字 → 落盘
@@ -771,7 +771,7 @@ sequenceDiagram
 | 来源 | 写什么 | 什么时候 |
 |---|---|---|
 | **PKI 种子** `onboarding.dir/*/peer.json` | 部署阶段由 `gen-pki.sh` 写 | 启动时导入一次，**已有的不覆盖** |
-| **API** `POST /api/v1/onboarding/peers` | 人在页面上建（**只填名称**） | 立即生效，不需要重启 |
+| **API** `POST /api/v1/peers` | 人在页面上建（**只填名称**） | 立即生效，不需要重启 |
 | **登记上报** `enroll` 体里的 `host` / `endpoint` | X 自己报的 | 只补空，不覆盖已有值 |
 
 **操作者只填一个名称。** 主机名（证书 SAN）和收数地址都是**对方自己知道的**——
@@ -783,7 +783,7 @@ X 跑接入脚本时本机算出 `host`（`--host` > 从 `--advertise` 推导 > 
 否则握手必然失败——所以 `host` 与 `endpoint` 同时上报时两者必须相符（`host_mismatch`），
 而 `host` 只补空、不覆盖已登记的值（`host_mismatch` 同样拒掉）。失败都不消耗那张券。
 
-收数地址后续也能改（`POST /api/v1/onboarding/peers/{name}/endpoint`，传 `null` 清空）：
+收数地址后续也能改（`POST /api/v1/peers/{name}/endpoint`，传 `null` 清空）：
 建的时候没上报、或者对方换了端口，都在页面上就地改，下一轮心跳即生效。
 
 #### 心跳：只有能握手，推送才有意义
