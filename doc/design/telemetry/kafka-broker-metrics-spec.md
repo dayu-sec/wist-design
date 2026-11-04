@@ -195,7 +195,7 @@ k8s_service_port   = 9092
 security_protocol = "SASL_SSL"        # PLAINTEXT | SSL | SASL_PLAINTEXT | SASL_SSL
 sasl_mechanism    = "SCRAM-SHA-512"   # 仅 SASL_* 时必填
 username          = "wist-probe"
-password_file     = "/etc/wist-agentd/kafka-password"   # 0600；不写明文到配置文件
+password_file     = "/etc/wist-agentd/kafka-password"   # agentd 可读即可，不写明文到配置
 tls_ca_file       = "/etc/wist-agentd/kafka-ca.pem"     # SSL / SASL_SSL 时使用
 lag_group_allowlist = ["orders", "payments"]            # 为空则按 §5 的阈值策略
 max_groups = 200
@@ -204,6 +204,8 @@ max_groups = 200
 凭据纪律：
 
 - 密码只从文件读，**不进**配置文件、不进日志、不进诊断包；
+- **不校验文件权限**：`0600` 是运维约定，不是我们的接口。agentd 只负责"能不能读"——
+  读不到就把路径与 errno 报出来，不猜、不降级、不自动生成密码；
 - `DescribeConfigs` 可能返回敏感配置（如 SASL JAAS 配置），采集侧**不落库**任何配置值，只做本地判断。
 
 ## 8. 失败与降级
