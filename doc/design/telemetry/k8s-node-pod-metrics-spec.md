@@ -310,6 +310,9 @@ B2 为什么成立：agentd 在宿主上本来就用 cgroup 采主机/容器指�
 
 ## 12. 部署形态：DaemonSet
 
+> 另一种形态（节点上以 systemd 安装）与它的能力对比见 §13。两者数据面几乎相同，
+> 差别在交付与运维。
+
 ### 12.1 拓扑
 
 ```text
@@ -457,3 +460,78 @@ Pod 起来后要先注册才会上报。当前注册令牌的签发路径是**�
 - 不把 agentd 做成 `Deployment`（多副本抢同一批节点没有意义，且会争同一份 state）；
 - 不用 `hostNetwork`（出站连网关即可，不需要宿主网络身份）；
 - 不要求 `privileged: true`（读宿主 cgroup 与 kubelet 目录只需要 hostPath + root）。
+
+## 13. 部署形态选型：节点安装 vs DaemonSet
+
+### 13.1 结论先行
+
+**两种形态在「能采到什么指标」上几乎完全相同** —— DaemonSet 里的 agentd 也是通过
+hostPath + `hostPID` 读宿主的同一批文件。差别在交付与运维，不在数据面。
+
+所以选型不应该按「哪种采得多」来定，而应该按「节点是谁管的、能不能装东西」来定（§13.6）。
+
+### 13.2 节点安装时能采到的指标（现有实现）
+
+| 域 | 指标 | 来源 |
+|---|---|---|
+| 主机 CPU | `host.cpu.seconds`（按 mode 拆）、负载 | `/proc/stat` |
+| 主机内存 | `host.memory.total/available/usage_ratio/swap_*` | `/proc/meminfo` |
+| 文件系统 | `host.filesystem.usage_ratio/total/available/inodes/inodes_free`（按 mountpoint） | `statfs` |
+| 磁盘 IO | `host.disk.read_bytes/written_bytes/reads/writes/io_time_seconds`（按 device） | `/proc/diskstats` |
+| 网络 | 按网卡的收发字节 / 包 / 错误 | `/proc/net/dev` |
+| 进程 | `process.cpu.seconds`、`process.memory.rss_bytes`、`process.state`、`process.executable.name` | `/proc/<pid>` |
+| 容器身份 | runtime、container id、cgroup 路径、`k8s.namespace.name`（已能拿到） | runtime 目录 + `/proc/<pid>/cgroup` |
+| K8s 元数据 | pod uid / name / owner | **待实现**（本机 `/var/lib/kubelet/pods` 或只读 kubeconfig） |
+
+### 13.3 数据面对比
+
+| 能力 | 节点安装 | DaemonSet | 差异 |
+|---|---|---|---|
+| 主机级指标 | ✅ | ✅ | 相同 |
+| 进程级指标 | ✅（宿主 `/proc`） | ✅（`hostPID: true`） | 相同 |
+| 容器 / pod 指标 | ⚠️ 需读 kubelet 目录或配 kubeconfig | ⚠️ 同样要读，但 SA token 自动挂载 | 只是**拿元数据的便利度**不同 |
+| Pod 日志（`/var/log/pods`） | ✅ 直接读 | ✅ hostPath 同 | 相同 |
+| 应用指标（JMX / Prometheus） | 看节点网络能否到达 | 集群网络内更自然 | 跨节点抓取时 DaemonSet 有优势 |
+| 权限模型 | root（读 cgroup / proc） | root + hostPath + hostPID | DaemonSet 多一层声明 |
+
+### 13.4 运维面对比（真正的差别）
+
+| 维度 | 节点安装 | DaemonSet |
+|---|---|---|
+| 新节点覆盖 | 靠装机流程，容易漏 | **自动**，节点加入即被覆盖 |
+| 升级 | 现有 `wist-upgrader`，网关可派发、可灰度 | 只能改镜像 tag + 滚动更新，网关派发要禁用（见 §12 讨论） |
+| 交付物 | 已有 tarball | **需要新建镜像通道**（§12.3） |
+| 不可变 OS（Bottlerocket / Talos / COS） | ❌ 装不了 systemd 服务 | ✅ 唯一选择 |
+| 身份 / 状态 | 落宿主 `/var/lib/wist-agentd` | 落 hostPath，仍在宿主 |
+
+### 13.5 实际价值：先问「要回答哪个问题」
+
+| 想知道的事 | 靠哪类指标 | 节点安装 | DaemonSet |
+|---|---|---|---|
+| 三个 broker 哪个 CPU 高 | 容器 / 进程级 CPU | ✅（需 pod 映射） | ✅（需 pod 映射） |
+| 为什么 broker 延迟高、日志刷盘慢 | **主机磁盘 IO / page cache** | ✅ 但**无法归属到 pod** | ✅ 同样无法归属 |
+| 是不是消息积压 / 副本落后 | 应用层（lag / ISR） | ❌ | ❌ |
+
+结论：**换部署形态不会多出任何一类指标**。真正常决定价值的是下面三件，两者都要补：
+
+1. **pod 映射**（K1）：把 `container_id → pod uid/name/namespace/owner` 接上，
+   否则只能看见「一堆容器」，没法按 `pod=kafka-0` 查；
+2. **cgroup 级容器指标**：容器域目前复用的是**进程探测**（`container_probe_mode = "discovery_hints"`），
+   拿到的是容器内主进程的 CPU / RSS；Kafka 这类重 page cache 的进程，
+   `memory.current` / `io.stat` 都不在其中 —— **两种部署都缺**，这是实现缺口不是部署问题；
+3. **应用层抓取**（§11.4）：lag / ISR / 吞吐无论怎么部署 agentd 都拿不到。
+
+### 13.6 选型建议
+
+```text
+节点自己管、能装 systemd、规模稳定
+    → 节点安装：省掉镜像通道与 RBAC，升级沿用现有路径
+
+节点是不可变 OS / 托管 K8s / 节点频繁伸缩
+    → DaemonSet：自动覆盖、GitOps 友好，但要先做镜像通道（§12.3）
+
+两种情况都要补：pod 映射（K1）→ cgroup 级容器指标 → 应用层抓取（K4）
+```
+
+如果目标只是「尽快看到 kafka broker 的 CPU / 内存」，**节点安装 + K1** 是投入最小的一条路：
+不需要镜像、不需要 RBAC，改动只在 agentd 里加一个「读本机 kubelet 目录」的元数据来源。
