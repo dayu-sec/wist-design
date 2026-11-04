@@ -520,6 +520,8 @@ hostPath + `hostPID` 读宿主的同一批文件。差别在交付与运维，�
    拿到的是容器内主进程的 CPU / RSS；Kafka 这类重 page cache 的进程，
    `memory.current` / `io.stat` 都不在其中 —— **两种部署都缺**，这是实现缺口不是部署问题；
 3. **应用层抓取**（§11.4）：lag / ISR / 吞吐无论怎么部署 agentd 都拿不到。
+   Kafka 有一条不依赖 Prometheus 的旁路（原生协议探针），见
+   [`kafka-broker-metrics-spec.md`](kafka-broker-metrics-spec.md)。
 
 ### 13.6 选型建议
 

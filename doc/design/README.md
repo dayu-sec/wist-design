@@ -58,6 +58,8 @@
 35. [foundation/config-and-state-layout.md](./foundation/config-and-state-layout.md)（配置与运行数据的组织模式：四类内容 / 落点 / 声明 / 加载 / 写入）
 36. [foundation/layered-config-recipe.md](./foundation/layered-config-recipe.md)（现场态做法：toml 模板 → 声明 `toml` + `.env` 值）
 37. [center/collection-family-capability-contract.md](./center/collection-family-capability-contract.md)（采集面的不变量与护栏分层、能力契约、知识库承载、校验链、发布/回退、从 4 个仓收敛到 1 个的迁移路径与新增面的标准流程）
+38. [telemetry/k8s-node-pod-metrics-spec.md](./telemetry/k8s-node-pod-metrics-spec.md)（K8s node/pod 指标：四层采集面、授权模型、DaemonSet 与节点安装的取舍）
+39. [telemetry/kafka-broker-metrics-spec.md](./telemetry/kafka-broker-metrics-spec.md)（不依赖 Prometheus 的 Kafka 采集：协议探针、最小指标集、lag 限流与失败降级）
 38. [foundation/platform-positioning.md](./foundation/platform-positioning.md)（平台四层能力、AI 位置、部署形态与整体竞争格局）
 39. [foundation/vs-agent-systems.md](./foundation/vs-agent-systems.md)（Agent 层对比：云厂商与可观测厂商）
 40. [edge/disk-capacity-collection.md](./edge/disk-capacity-collection.md)（磁盘容量采集：按挂载点/文件系统、Linux/macOS 过滤、标签与逐挂载点告警）
