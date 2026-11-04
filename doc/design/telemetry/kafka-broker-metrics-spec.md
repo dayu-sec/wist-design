@@ -129,16 +129,23 @@ B 的匹配口（不依赖 StatefulSet 命名约定）：
 
 | 指标 | 级别 | 类型 | 单位 | label | 说明 |
 |---|---|---|---|---|---|
-| `kafka_broker_up` | P0 | gauge_i64 | 1 | `broker_id` | 该 broker 在 metadata 里可达且为 leader/副本成员 → 1 |
-| `kafka_broker_role_is_controller` | P0 | gauge_i64 | 1 | `broker_id` | 一热：当前 controller → 1（集群内应有且仅有一个 1） |
-| `kafka_partition_under_replicated` | P0 | gauge_i64 | 1 | `broker_id` | `len(ISR) < len(replicas)` 的分区数 —— 副本健康的主信号 |
-| `kafka_partition_offline` | P0 | gauge_i64 | 1 | `broker_id` | leader 不存在（`leader == -1`）的分区数 —— 不可用 |
-| `kafka_log_dir_usage_ratio` | P0 | gauge_f64 | 1 | `broker_id` | 已用 / 总量（`DescribeLogDirs` 的 `total_bytes`），分母写进注册表备注 |
+| `kafka_broker_up` | P0 | gauge_i64 | 1 | —— | 该 broker 在 metadata 里可达且为 leader/副本成员 → 1 |
+| `kafka_broker_role_is_controller` | P0 | gauge_i64 | 1 | —— | 一热：当前 controller → 1（集群内应有且仅有一个 1） |
+| `kafka_partition_under_replicated` | P0 | gauge_i64 | 1 | —— | `len(ISR) < len(replicas)` 的分区数 —— 副本健康的主信号 |
+| `kafka_partition_offline` | P0 | gauge_i64 | 1 | —— | leader 不存在（`leader == -1`）的分区数 —— 不可用（集群级） |
+| `kafka_log_dir_usage_ratio` | P0 | gauge_f64 | 1 | —— | 已用 / 总量（`DescribeLogDirs` 的 `total_bytes`），分母写进注册表备注 |
 | `kafka_consumergroup_lag` | P0 | gauge_i64 | 1 | `group`, `topic` | `log_end_offset - committed_offset` 按 topic 求和 —— 消费是否跟得上 |
-| `kafka_partition_count` | P1 | gauge_i64 | 1 | `broker_id` | 该 broker 作为 leader 的分区数（看 leader 倾斜） |
-| `kafka_log_dir_size_bytes` | P1 | gauge_i64 | By | `broker_id` | 全部 log dir 合计大小（绝对值，排查用） |
-| `kafka_log_dir_usable_bytes` | P1 | gauge_i64 | By | `broker_id` | 可用空间 |
+| `kafka_partition_count` | P1 | gauge_i64 | 1 | —— | 该 broker 作为 leader 的分区数（看 leader 倾斜） |
+| `kafka_log_dir_size_bytes` | P1 | gauge_i64 | By | —— | 全部 log dir 合计大小（绝对值，排查用） |
+| `kafka_log_dir_usable_bytes` | P1 | gauge_i64 | By | —— | 可用空间 |
 | `kafka_consumergroup_state` | P1 | gauge_i64 | 1 | `group`, `state` | 一热：`stable` / `rebalancing` / `dead` / `empty` |
+
+**broker 身份不靠 label，靠 `instance`**（每 broker 一个 target，`instance = kafka:<cluster_key>:<broker_id>`）：
+这与规范 §3「`instance` 是被监控对象的稳定身份」一致，也避免给 VM 线协议新增一个只有 Kafka 用的 label。
+集群级指标（`kafka_partition_offline`）的 `instance = kafka:<cluster_key>`。
+
+`cluster_key` 是 broker 端点集合的稳定摘要：Metadata v1 不返回 `cluster_id`，而用
+“第一个 broker 的地址”会在换 bootstrap 节点时变掉，历史序列就断了。
 
 P0 就是 §2.2 那四个问题的最小集合；P1 只在排障时有用，缺了不影响「集群健不健康」的结论。
 
@@ -246,11 +253,23 @@ kafka_partition_under_replicated{app="kafka"}
 
 | 阶段 | 内容 | 依赖 |
 |---|---|---|
-| V1 | 协议客户端 + 拓扑 / ISR / 离线分区 / log dir 使用率；broker 发现（显式列表 + K8s label） | Kafka 2.4+；`kafka` 命名空间入规范 |
+| V1 | 协议客户端（Metadata v1）+ 拓扑 / ISR / 离线分区 / leader 计数；`[kafka]` 配置与校验（**已落地**） | Kafka 0.10+；`kafka` 命名空间入规范 |
+| V1.1 | `DescribeLogDirs`（容量）+ 版本协商；SASL / TLS | V1 |
 | V2 | 消费组 lag + 组状态（白名单 / 阈值 / 上限） | V1 |
 | V3 | broker_id ↔ pod 映射落地（资源层与应用层对齐，见 §3.2） | V1 + K8s 元数据（pod 列表） |
 | V4 | 配置漂移（`min.insync.replicas`、`unclean.leader.election` 等） | V1 |
 | V5（可选） | 客户已有 Prometheus 时的 `prom_scrape` 作为性能类补充 | 另一个采集域 |
+
+落地备注（首发顺序，很容易弄错）：
+
+```text
+1. wist-metrics 先发新版本（kafka 指标声明在它里面）
+2. wist-agentd 把依赖从 wist-metrics 0.10 切到新版本
+3. 再发 agentd
+```
+
+顺序反了不会报错：`find_metric_spec` 查不到声明时整条序列被静默丢掉，现场只表现为
+「指标没数据」。
 
 ## 12. 验收
 
