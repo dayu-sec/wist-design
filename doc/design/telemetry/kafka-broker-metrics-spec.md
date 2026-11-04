@@ -133,11 +133,10 @@ B 的匹配口（不依赖 StatefulSet 命名约定）：
 | `kafka_broker_role_is_controller` | P0 | gauge_i64 | 1 | —— | 一热：当前 controller → 1（集群内应有且仅有一个 1） |
 | `kafka_partition_under_replicated` | P0 | gauge_i64 | 1 | —— | `len(ISR) < len(replicas)` 的分区数 —— 副本健康的主信号 |
 | `kafka_partition_offline` | P0 | gauge_i64 | 1 | —— | leader 不存在（`leader == -1`）的分区数 —— 不可用（集群级） |
-| `kafka_log_dir_usage_ratio` | P0 | gauge_f64 | 1 | —— | 已用 / 总量（`DescribeLogDirs` 的 `total_bytes`），分母写进注册表备注 |
+| `kafka_log_dir_size_bytes` | P0 | gauge_i64 | By | —— | 该 broker 全部 log dir 的合计大小（`DescribeLogDirs`，不含 future 副本） |
 | `kafka_consumergroup_lag` | P0 | gauge_i64 | 1 | `group`, `topic` | `log_end_offset - committed_offset` 按 topic 求和 —— 消费是否跟得上 |
 | `kafka_partition_count` | P1 | gauge_i64 | 1 | —— | 该 broker 作为 leader 的分区数（看 leader 倾斜） |
-| `kafka_log_dir_size_bytes` | P1 | gauge_i64 | By | —— | 全部 log dir 合计大小（绝对值，排查用） |
-| `kafka_log_dir_usable_bytes` | P1 | gauge_i64 | By | —— | 可用空间 |
+| `kafka_log_dir_usable_bytes` | P1 | gauge_i64 | By | —— | 可用空间；**需要 `DescribeLogDirs` v2+**，暂不实现 |
 | `kafka_consumergroup_state` | P1 | gauge_i64 | 1 | `group`, `state` | 一热：`stable` / `rebalancing` / `dead` / `empty` |
 
 **broker 身份不靠 label，靠 `instance`**（每 broker 一个 target，`instance = kafka:<cluster_key>:<broker_id>`）：
@@ -149,13 +148,17 @@ B 的匹配口（不依赖 StatefulSet 命名约定）：
 
 P0 就是 §2.2 那四个问题的最小集合；P1 只在排障时有用，缺了不影响「集群健不健康」的结论。
 
-`kafka_log_dir_usage_ratio` 必须有分母（规范 §5.2 规则 6）：
+**容量口径（为什么没有 `usage_ratio`）**：`DescribeLogDirs` v0 只给每个分区的 `size`，
+不给磁盘总量；v2+ 才有 `total_bytes` / `usable_bytes`。第一版不去猜版本布局，改成两段式：
 
 ```text
-分母 = DescribeLogDirs 返回的该 broker 各 log dir total_bytes 之和
-→ 若目标 Kafka 版本不返回 total_bytes（旧版），则降级为只发 P1 的绝对值，
-  不发 ratio（宁缺，不猜）
+Kafka 侧：kafka_log_dir_size_bytes{instance="kafka:<cluster>:<broker>"}   —— 占了多少
+主机侧：system_filesystem_usage_ratio{mountpoint="/data"}                 —— 还剩多少
+         （agentd 已在采；log_dir 路径由 DescribeLogDirs 返回，可对上挂载点）
 ```
+
+两个口径分开是**有意**的：分母属于主机（同一块盘可能还有别的进程在写），
+把它塞进 Kafka 指标会让「盘满了」这件事被读成「Kafka 用多了」。
 
 基数上限（规范 §7.2）：
 
@@ -254,7 +257,8 @@ kafka_partition_under_replicated{app="kafka"}
 | 阶段 | 内容 | 依赖 |
 |---|---|---|
 | V1 | 协议客户端（Metadata v1）+ 拓扑 / ISR / 离线分区 / leader 计数；`[kafka]` 配置与校验（**已落地**） | Kafka 0.10+；`kafka` 命名空间入规范 |
-| V1.1 | `DescribeLogDirs`（容量）+ 版本协商；SASL / TLS | V1 |
+| V1.1 | `DescribeLogDirs` v0（容量绝对值）（**已落地**） | V1 |
+| V1.2 | `DescribeLogDirs` v2+（`total_bytes` / `usable_bytes`）+ 版本协商；SASL / TLS | V1.1 |
 | V2 | 消费组 lag + 组状态（白名单 / 阈值 / 上限） | V1 |
 | V3 | broker_id ↔ pod 映射落地（资源层与应用层对齐，见 §3.2） | V1 + K8s 元数据（pod 列表） |
 | V4 | 配置漂移（`min.insync.replicas`、`unclean.leader.election` 等） | V1 |
