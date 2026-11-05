@@ -136,7 +136,7 @@ B 的匹配口（不依赖 StatefulSet 命名约定）：
 | `kafka_log_dir_size_bytes` | P0 | gauge_i64 | By | —— | 该 broker 全部 log dir 的合计大小（`DescribeLogDirs`，不含 future 副本） |
 | `kafka_consumergroup_lag` | P0 | gauge_i64 | 1 | `group`, `topic` | `log_end_offset - committed_offset` 按 topic 求和 —— 消费是否跟得上 |
 | `kafka_partition_count` | P1 | gauge_i64 | 1 | —— | 该 broker 作为 leader 的分区数（看 leader 倾斜） |
-| `kafka_log_dir_usable_bytes` | P1 | gauge_i64 | By | —— | 可用空间；**需要 `DescribeLogDirs` v2+**，暂不实现 |
+| `kafka_log_dir_usable_bytes` | P1 | gauge_i64 | By | —— | 可用空间（`DescribeLogDirs v4` 的 `usable_bytes`；broker 不支持 v4 时缺序列） |
 | `kafka_consumergroup_state` | P1 | gauge_i64 | 1 | `group`, `state` | 一热：`stable` / `rebalancing` / `dead` / `empty` |
 
 **broker 身份不靠 label，靠 `instance`**（每 broker 一个 target，`instance = kafka:<cluster_key>:<broker_id>`）：
@@ -149,7 +149,8 @@ B 的匹配口（不依赖 StatefulSet 命名约定）：
 P0 就是 §2.2 那四个问题的最小集合；P1 只在排障时有用，缺了不影响「集群健不健康」的结论。
 
 **容量口径（为什么没有 `usage_ratio`）**：`DescribeLogDirs` v0 只给每个分区的 `size`，
-不给磁盘总量；v2+ 才有 `total_bytes` / `usable_bytes`。第一版不去猜版本布局，改成两段式：
+不给磁盘总量；v4 才有 `total_bytes` / `usable_bytes`。第一版只采 v0 口径，V1.2 起在
+broker 支持时补上可用空间：
 
 ```text
 Kafka 侧：kafka_log_dir_size_bytes{instance="kafka:<cluster>:<broker>"}   —— 占了多少
@@ -163,7 +164,9 @@ Kafka 侧：kafka_log_dir_size_bytes{instance="kafka:<cluster>:<broker>"}   —�
 基数上限（规范 §7.2）：
 
 - `kafka_consumergroup_lag` **默认只发白名单 group**；未配白名单时只发「lag > 阈值」的 group（阈值默认 1000）；
-- 单次采集最多 `max_groups`（默认 200）个组，超出按 `lag` 降序取前 N，丢弃数计入自观测。
+  白名单非空时**先按白名单筛选**，再应用下面的 `max_groups` 上限（否则大集群里白名单的组会被截掉）；
+- 单次采集最多 `max_groups`（默认 200）个组，超出按组名稳定截断（白名单模式下即白名单内部的稳定截断），
+  丢弃数计入自观测 / warnings。
 
 ## 6. 采集通道：调用与节奏
 
@@ -216,7 +219,12 @@ max_groups = 200
 | 部分 broker 不可达 | 其余 broker 照常上送；不可达的那个不发样本（缺序列 = 不可达，不要发假 0） |
 | 无 `ListGroups` 权限 | lag 类指标缺席，其余照常；自观测记一行「权限不足」 |
 | 单次超时 | 本轮放弃，下一轮重试；连续 3 轮失败才在自观测里升级为 `failed` |
-| 集群规模超 `max_groups` | 按 lag 降序取前 N，其余丢弃并计数 |
+| 集群规模超 `max_groups` | 按**组名**稳定截断（同一批组每轮都相同），其余丢弃并计数 |
+
+> 为什么不是「按 lag 降序取前 N」：排序需要先把这 N 个组的 lag 都算出来，而算 lag 正好就是
+> 我们要限流的成本（`DescribeGroups` + `OffsetFetch` + 每 leader 一次 `ListOffsets`）。
+> 在**取之前**无法知道 lag，所以截断只能按一个与 lag 无关、但稳定的口径（组名）——
+> 至少保证每轮截掉的是同一批组，专属序列不会跳来跳去。要看关键组就用白名单（它先筛后截）。
 
 ## 9. 吞吐为什么不在第一版（需要规范层决定）
 
@@ -260,8 +268,8 @@ kafka_partition_under_replicated{app="kafka"}
 |---|---|---|
 | V1 | 协议客户端（Metadata v1）+ 拓扑 / ISR / 离线分区 / leader 计数；`[kafka]` 配置与校验（**已落地**） | Kafka 0.10+；`kafka` 命名空间入规范 |
 | V1.1 | `DescribeLogDirs` v0（容量绝对值）（**已落地**） | V1 |
-| V1.2 | `DescribeLogDirs` v2+（`total_bytes` / `usable_bytes`）+ 版本协商；SASL / TLS | V1.1 |
-| V2 | 消费组 lag + 组状态（白名单 / 阈值 / 上限） | V1 |
+| V1.2 | `DescribeLogDirs` v2+（`total_bytes` / `usable_bytes`）+ 版本协商；SASL / TLS（**已落地**，真集群验过 v4） | V1.1 |
+| V2 | 消费组 lag + 组状态（白名单 / 阈值 / 上限）（**已落地**） | V1 |
 | V3 | broker_id ↔ pod 映射落地（资源层与应用层对齐，见 §3.2） | V1 + K8s 元数据（pod 列表） |
 | V4 | 配置漂移（`min.insync.replicas`、`unclean.leader.election` 等） | V1 |
 | V5（可选） | 客户已有 Prometheus 时的 `prom_scrape` 作为性能类补充 | 另一个采集域 |
@@ -270,6 +278,7 @@ kafka_partition_under_replicated{app="kafka"}
 
 ```text
 1. wist-metrics 先发新版本（kafka 指标声明在它里面）
+   —— lag / state / usable_bytes 三条已在 wist-metrics 0.14.0 登记
 2. wist-agentd 把依赖从 wist-metrics 0.10 切到新版本
 3. 再发 agentd
 ```
