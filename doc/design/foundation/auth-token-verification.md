@@ -55,7 +55,7 @@ center 只持 token 的**摘要**（不可反推、不能签新的），被攻�
 | **D14** | **机器身份不上 JWT/JWKS**；人的 SSO 若引入 Keycloak，JWT+JWKS 只作为人侧的桥（§16.3(a)），不改变机器的 T 路径 | 没有第三方 IdP、没有跨组织验签需求；引入它是纯负担（见 §14）。将来接 Keycloak 时按 §16 的单点例外处理 |
 | **D15** | **签发独立成 `wist-cred`，放计算区**；center 只是 X | 「能签出任意身份」是平台里权限最高的一项能力，不能长在互联网区最暴露的服务上；它也不属于任何业务路径 |
 | **D16** | **凭据由人（或审批系统）在凭据服务的管理页面上为程序创建**，程序不得自助申请 | 自助申请 = 审批、归因、配额全部失效；也避免明文多经一道手；同 GitHub PAT——建在你手里，用在程序里 |
-| **D17** | **凭据服务自带管理页面**（`wist-cred-web`），且**页面自带登录**：页面输口令 → `Authorization: Bearer` → **`wist-cred` 自己验**（`mode = "token"`，配置里只存 `sha256`），**永不建本机用户表**；`mode = "ingress"` 只留给开发态 | 好的产品体验不可能由反代提供（浏览器原生弹窗、无登录框/登出/错误提示）。将来接用户中心 / 钉钉时，只把口令校验换成 OIDC 回调，页面与授权逻辑不动 |
+| **D17** | **凭据服务自带管理页面**（`wist-cred-web`），且**页面自带登录**：页面输口令 → `Authorization: Bearer` → **`wist-cred` 自己验**（`mode = "token"`，配置里只存 `sha256`），**永不建本机用户表**；**永不从请求头取身份**（历史上的 `mode = "ingress"` 已在 cred 0.7.0 删除） | 好的产品体验不可能由反代提供（浏览器原生弹窗、无登录框/登出/错误提示）。将来接用户中心 / 钉钉时，只把口令校验换成 OIDC 回调，页面与授权逻辑不动 |
 
 一句话：
 
@@ -117,6 +117,11 @@ flowchart TD
 | 直连面（脚本） | `Authorization: Bearer` → 摘要查表 | `{ kind: script, id: "svc-atlas-job", roles: [...] }` | `invalid_token` / `token_expired` |
 
 > 服务来源时 `roles` 里装的是 scope 串；角色 / scope → 权限的映射在各服务本地（D9）。
+
+> 上表是 **X（center / ingest / console）** 的入站面。`wist-cred`（C）**不在这个模型里**：
+> 它的人机面只有口令（`mode = "token"`）与将来的 OIDC，**永不从请求头取身份** ——
+> 历史上那个 `mode = "ingress"`（反代注入 `x-wist-operator`）已在 cred 0.7.0 删除，
+> 原因是不满足 S2 的前提时它是**静默放行**。
 
 ### 3.4 这套模型的硬约束（S1–S7，必须可验收）
 
@@ -457,7 +462,7 @@ sequenceDiagram
 
 | 服务 | 区 | 角色 | 面 | 来源 |
 |---|---|---|---|---|
-| `wist-cred`（新增） | 计算区 | **C** | `/api/v1/credentials`（**人机面**，页面 = `wist-cred-web`） | token（页面口令，`Authorization: Bearer`，cred 自验；dev 可用 ingress） |
+| `wist-cred`（新增） | 计算区 | **C** | `/api/v1/credentials`（**人机面**，页面 = `wist-cred-web`） | token（页面口令，`Authorization: Bearer`，cred 自验；`ingress` 模式已于 0.7.0 删除） |
 | | | | `/api/v1/credentials`（可选服务面，默认关） | certificate（CA-I），留给审批系统 |
 | `wist-center` | 接入区 | X | `/api/v1/admin/**` | token（wist-cred 签发的凭据，`admin` 角色）；break-glass 口令兜底 |
 | | | | `/api/v1/internal/credentials`（mTLS listener，3103） | certificate（CA-I） |
@@ -484,9 +489,10 @@ admin_password = "${SEC_CRED_WEB_PASSWORD}"
 # 第二道锁（可选）：只允许反代这个地址进人机面。
 trusted_peers = ["10.0.20.10/32", "127.0.0.1/32"]
 
-# 开发态 / 已经有入口认证的场合：人身份由内网反代注入（浏览器原生弹窗，不在产品里）。
-# mode = "ingress"
-# ingress_header = "x-wist-operator"
+# 历史上还有一个 `mode = "ingress"`（人身份由内网反代注入 `x-wist-operator`）。
+# 它已在 cred 0.7.0 删除：那等于信任一个客户端可伪造的头，失守时是静默放行；
+# 开发态也随之改成 token（`dev/svc.sh` 写一个 dev 口令，vite 代理只在页面没带口令时补上）。
+# 老配置里写 `mode = "ingress"` 现在会**拒绝启动**，报错会直接说它被删了。
 
 # 阶段二（**现在不做**）：接用户中心 / 钉钉 OIDC。页面与授权逻辑不变，只换“口令从哪来”。
 # mode = "oidc"
