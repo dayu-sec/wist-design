@@ -40,13 +40,13 @@
 
 | 项 | 数值 |
 | --- | --- |
-| 容器数 | **8**（field-api / web / evidence / evidence-pg / atlas / atlas-pg / atlas-web / VM） |
+| 容器数 | **7**（field-api / web / evidence / evidence-pg / atlas / atlas-pg / VM；`atlas-web` 已合并进 field-web） |
 | 常驻内存 | **~350 MiB**（VictoriaMetrics 约 243 MiB，其余个位数～三十几 MiB） |
 | 指标保留 | 默认 **30d**（`VM_RETENTION`），按客户可调 |
 | 磁盘大头 | 证据正文（`data/evidence-objects` 或 COS） |
 | 宿主端口 | **7 个**：web `8088`、证据写 `18800`、资产写 `18801`、VM `18428`、evidence-pg `55434`、atlas-pg `55435`、cred 收数 `3103` |
 
-按 10 客户估算：≈ 3.5 GB 内存 / 80 个容器 / 70 个宿主端口。
+按 10 客户估算：≈ 3.5 GB 内存 / 70 个容器 / 70 个宿主端口。
 
 ## 4. 部署形态
 
