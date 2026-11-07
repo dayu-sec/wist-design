@@ -212,30 +212,30 @@ scripts/package.sh                # → dist/wist-software-kb-<ver>.tar.gz
 
 ## 7. 导入器（atlas 侧）
 
+**详细设计见 [`software-kb-import.md`](software-kb-import.md)**（校验链、表结构、失败语义、`counts`、`stale`）。
+这里只留结论，避免两处漂移。
+
 ```sh
-wist-atlas kb import --pack /path/wist-software-kb-2026.11.07.tar.gz \
-                     [--overlay /etc/wist-kb/local] \
-                     [--dry-run]
+wist-atlas kb status                        # 当前 active / 来源 / 验签 / counts
+wist-atlas kb import <pack> [--dry-run]
 ```
 
-流程：
+1. **校验链复用 gateway**：sha256 → 临时目录 → manifest 自洽 → Ed25519 验签 →
+   `schema_version` 兼容（`wist-gateway` 已有完整实现，不写第二份）。
+2. **落 PG，整表替换**：单事务 `TRUNCATE` + `COPY`，`kb_state` 切 active 指针。
+   几千条、秒级、幂等天然成立。
+3. **失败不拒启**：包坏 = 本次导入不生效，服务照常启动（沿用上一版或空载）。
+4. **命中带 `kb_version`**，导入后旧版本的命中在查询时标 `stale`；后台重算放 P2。
 
-1. 验 `sha256` 与签名；校验 `schema_version`；
-2. 解包到临时目录（**不落成运行期依赖**，导入完可删）；
-3. 单事务内批量 upsert：
-   - `software_product` / `software_version` / `software_external_id` / `software_advisory`；
-   - 顺序：curated 覆盖 bulk（同一 `osv_id` 后写者胜）；
-   - overlay 覆盖前两者（客户私有）；
-4. 写一行 `kb_state(kb_version, imported_at, pack_sha256, source_counts)`；
-5. `--dry-run` 只打印将新增/更新/未变的数量。
-
-**幂等**：同一包重复导入结果一致；不同包按 `kb_version` 记一条新行。
-
-**退役语义**：新包里消失的 advisory **不物理删除**，标 `revoked_at`（旧 `host_software_hit` 还引用着它）。
-物理清理另走一个显式的 `kb prune --older-than`。
+> 改自原设计的两个点（2026-11-07）：
+> - 原来写「新包里消失的 advisory 标 `revoked_at` 不物理删除」——改为**整表替换**，
+>   靠命中自包含（`host_software_hit` 冗余存 `osv_id / severity / kb_version`）来保历史。
+>   代价：不能「按公告反查历史命中」。
+> - 原来写「验不过就拒绝导入，不降级」——改为**拒绝这次导入但服务照常启动**：
+>   拒启等于把处置入口一起关掉（gateway 已踩过这个坑）。
 
 **为什么导 PG 而不是 SQLite**：atlas 已经有 Postgres（备份 / 权限 / 升级面都现成），
-十万级 advisory 对 PG 是小表；再引一个 SQLite 就是多一套存储生命周期。
+而且 `atlas-storage` 已经有 memory / postgres 双实现的 trait 形状，加一层不引新机制。
 
 ---
 
