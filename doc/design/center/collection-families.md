@@ -34,7 +34,7 @@
 
 ## 2. 闭集与维护规矩
 
-**共 20 个**（清单见 §3）。三条规矩：
+**共 24 个**（清单见 §3）。三条规矩：
 
 1. **只增不改名。** 面名一旦进入协议（数据帧 / 记录 / 接口），改名就是**破坏性变更**：
    历史数据里那个值会变成"不存在的面"，按面统计与回溯都会断。
@@ -46,7 +46,7 @@
 **谁校验**：网关装载采集目录时按词表拒未知面 —— 面名写错会**报错**，不会被静默收下；
 词表本身还要过**追加式校验**（不得删除 / 改名 / 复用已退场 ID）。
 
-## 3. 20 个面一览
+## 3. 24 个面一览
 
 > 「载体」一列只是让你知道**大概从哪来**，会随系统版本与策展变；**以 `catalog.toml` 为准**。
 > 同一个面也可能有多个载体（如 `NetworkFirewall` 的 macOS 侧 = `wifi.log` + 统一日志 `com.apple.alf`）。
@@ -73,6 +73,15 @@
 | `BackupJob` | 备份与批处理 | Linux | `borg/*`、`restic/*` |
 | `NetworkService` | 网络服务（NFS/SMB/防火墙规则） | Linux | `nginx/*`、`samba/*` |
 | `TrafficInspection` | 流量的入侵检测事件（镜像点） | Linux | `/opt/suricata/logs/eve.json`（显式单路径跟尾，一行一条 JSON） |
+| `KafkaMetrics` | Kafka 集群指标（broker 拓扑 / 容量 / 消费组 lag 与状态） | Linux | `KafkaCluster auto`（端点由 agentd 自探） |
+| `PostgresMetrics` | PostgreSQL 指标（连接 / 事务 / IO / 复制） | Linux | `PostgresInstance auto`（同上；单元先 draft） |
+| `MysqlMetrics` | MySQL / TiDB 指标（连接 / 线程 / QPS / InnoDB / 复制） | Linux | `MysqlInstance auto`（同上；单元先 draft） |
+| `DorisMetrics` | Doris 指标（BE 存活 / 容量 / tablet） | Linux | `DorisCluster auto`（同上；单元先 draft） |
+
+> **外部系统指标的共同约定**：source 的 `target` 只认 `auto` —— 端点 / 协议 / 凭据全部由
+> agentd 本机自探，工作里写具体地址会被判 `unsupported`（不扩大 SSRF 面）；
+> `requires_privilege = root`（要读别的用户的 `/proc/<pid>`）；平台只有 Linux（自探读 /proc）。
+> 派单闸门仍是单元的 `status`：目前只开 `KafkaMetrics`（真集群验过），其余三个为 `draft`。
 
 > **`HostMetrics` 的磁盘口径**（Linux）：容量分两个角色 —— `system` = 根文件系统 `/`（系统盘，
 > 看使用率），`data` = 其余本地块设备挂载点汇总（数据盘，看剩余可用）。多块数据盘按容量汇总，
