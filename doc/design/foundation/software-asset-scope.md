@@ -14,12 +14,13 @@
 ## 1. 结论（先给答案）
 
 1. **不做「全量已安装软件」的常驻资产。** 一台机器动辄上千条包/可执行，其中绝大多数永远不会触发任何治理动作。
-2. **目标是「参与可观测运行时 + 能被治理动作命中」的那一小撮。** 判据见 §3，机械可执行，不靠人工白名单。
+2. **两类数据，两个范围。** 公共知识库（产品 / 版本 / 外部标识 / 漏洞公告）**收得宽**——它是跨租户共享的只读事实；客户域（装了哪份、跑的是哪份、命中）**收得窄**——只收能被治理动作命中的那一撮（判据见 §3）。
 3. **先圈目标，再采版本。** 目标集先由中心从**已有数据**派生（进程 + 业务绑定 + 监听端口），零新增采集；只对目标做「文件 → 包 → 版本」反查。
 4. **全量清单与漏洞扫描是取证（evidence），不是资产。** 它按工单/合规检查触发、带 TTL，不进图谱。
-5. **每条资产必须带「为什么在这」。** 模型里存 `role`（承担什么）+ `reason`（哪条判据命中）。不解释来源的资产没人会信。
+5. **每条安装必须带「为什么在这」。** `role`（承担什么）+ `reason`（哪条判据命中），**多值**。不解释来源的资产没人会信。
 
-一句话：**资产图谱回答「谁在对外、谁承担业务、谁需要被治理」；不回答「这台机装了哪些包」。** 后者是取证问题。
+一句话：**资产图谱回答「谁在对外、谁承担业务、谁需要被治理」；不回答「这台机装了哪些包」。** 后者是取证问题；
+「这个版本有什么漏洞」是公共知识库的问题。
 
 ---
 
@@ -94,7 +95,7 @@ ps / -zsh                  27 / 23 采集器自己与登录 shell
 | 数据 | 何时 | 范围 | 去处 | 保留 |
 | --- | --- | --- | --- | --- |
 | **① 目标派生** | 每次 DSNAP 摄入后（增量） | 进程 + 绑定 + 端点，已有字段 | 中心侧计算，不新增采集 | 随图谱 |
-| **② 版本反查** | 与 ① 同批；只对目标集 | `path → package → version`，Linux 一次批量、macOS 读 bundle 元数据 | `SoftwareEvidence` → 归一成 `SoftwareEntity` | 常驻（版本变化即更新） |
+| **② 版本反查** | 与 ① 同批；只对目标集 | `path → package → version`，Linux 一次批量、macOS 读 bundle 元数据 | `SoftwareEvidence` → 归一成 `software_product` / `software_version`（KB 确定性 id）+ `software_installation`（客户域） | 常驻（版本变化即更新） |
 | **③ 全量清单 / 漏洞扫描** | 按工单、合规检查、事件响应触发 | 该主机全部包 + 已知漏洞 | `wist-evidence`（调查面，`software` 主题） | 按证据 TTL，**不进图谱** |
 
 三条纪律：
@@ -107,38 +108,46 @@ ps / -zsh                  27 / 23 采集器自己与登录 shell
 
 ## 5. 与已有模型的对应
 
-| 本文的范围决策 | 落到已有模型 |
-| --- | --- |
-| 目标判定（A/B/C） | 中心侧派生规则，产出候选 `SoftwareEvidence` |
-| 版本反查 | edge 上报的 package / bundle 事实 → `SoftwareEvidence`（`package_name` / `version_text` / `package_manager`） |
-| 归一与去重 | `SoftwareEvidence → SoftwareEntity`（`purl` / `cpe_candidates`），对 helper 归并 |
-| `role` / `reason` | `SoftwareEntity` 的扩展属性（见 §6）；图谱与页面用它解释「为什么在这」 |
-| 全量清单 / CVE | `wist-evidence` 的调查面 + `SoftwareVulnerabilityFinding`（P3 才接情报源） |
+| 本文的范围决策 | 落到已有模型 | 属于 |
+| --- | --- | --- |
+| 目标判定（A/B/C） | 中心侧派生规则，决定**客户域**写不写 `software_installation` | 客户域 |
+| 版本反查 | edge 上报的 package / bundle 事实 → evidence → 归一成 `product_id` / `version_id` | 客户域（引用 KB） |
+| 归一与去重 | `software_product` / `software_version` + `software_external_id`（确定性 id） | 公共 KB |
+| `role` / `reason` | `software_installation` 上的多值属性（入库凭据） | 客户域 |
+| 全量清单 / CVE | `wist-evidence` 调查面 + `software_advisory` / `host_software_hit` | 证据 / KB + 客户域 |
 
-**不加的东西**（防止模型膨胀）：`host.software[]` 内嵌数组、`process` 上的版本字段、
+**范围边界**：KB 里没有、也不收客户数据（主机名 / IP / 安装路径 / 命中）；客户域只存对 KB 的**引用**
+（`product_id` / `version_id` / `advisory_id`）。这样 KB 能跨实例共享、随包分发、离线可用，
+客户数据也永远不出计算区。
+
+**不加的东西**（防止模型膨胀）：`host.software[]` 内嵌数组、`process` 上的版本文本字段、
 把 `executable.name` 当漏洞查询键 —— 三者在 `host-process-software-vulnerability-graph.md` §5 已明确禁止。
 
 ---
 
 ## 6. 模型上要补的最小字段
 
-在 `SoftwareEntity` 之外，需要一个「这台机器上的这一份」：
+客户域侧需要一个「这台机器上的这一份」（KB 侧的产品/版本见
+`center/models/software-normalization-and-vuln-enrichment.md` §5）：
 
 ```text
-SoftwareInstallation {
+software_installation {
   installation_id
-  software_id            -> SoftwareEntity
+  tenant_id
   host_id / container_id
-  role      = exposed-service | business-runtime | middleware | runtime | agent
-  reason    = listener | service-binding | governance-class
+  product_id            -> 公共 KB（确定性 id）
+  version_id            -> 公共 KB（确定性 id；解析不到则空 + version_text）
   version_text
-  install_source = dpkg | rpm | brew | app-bundle | container-image | unknown
+  role[]      = exposed-service | business-runtime | middleware | runtime | agent
+  reason[]    = listener | service-binding | governance-class
+  install_source = dpkg | rpm | brew | app_bundle | container_image | unknown
   install_path?
   first_seen_at / last_seen_at
 }
 ```
 
 `role` / `reason` 不是装饰：它是**入库凭据**。页面上一行「中间件 · 命中监听端口 5432」比任何排序算法都有说服力。
+二者都是**多值**：同一软件可能既在监听又承担业务。
 
 ---
 
@@ -147,7 +156,7 @@ SoftwareInstallation {
 | 阶段 | 做什么 | 验收口径 |
 | --- | --- | --- |
 | **P0（零采集）** | 中心侧派生：`GET /api/software/targets` —— 从 processes + bindings + endpoints 出目标清单（带 role/reason），**不落新表** | 本机样例上目标数 ≈ 30 条（对比 713 可执行），且每条能说出命中的判据 |
-| **P1（小采集）** | 只为目标做版本反查（`software.packages_of(paths)`），落 `SoftwareEvidence` / `SoftwareInstallation` | 29 个目标里 ≥ 80% 拿到 `package_name + version`；取不到的明确标 `unknown` |
+| **P1（小采集）** | 只为目标做版本反查（`software.packages_of(paths)`），落 `SoftwareEvidence` + `software_installation`（产品/版本引用 KB） | 29 个目标里 ≥ 80% 拿到 `package_name + version`；取不到的明确标 `unknown` |
 | **P2** | 类别规则（C 档）+ 页面：主机详情「软件」页签、拓扑加 `host → software` 层 | 页面上每个软件能解释 role/reason；噪声（XPC/helper/`<defunct>`）为 0 |
 | **P3** | 漏洞情报源接入（`P2-09`），finding 挂到实体 | — |
 

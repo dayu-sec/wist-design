@@ -295,15 +295,22 @@ HostInventory
   -> SoftwareEvidence[]
 
 SoftwareEvidence
-  -> SoftwareEntity
-  -> SoftwareVulnerabilityFindings[]
+  -> software_installation（客户域）
+  -> software_product / software_version（公共知识库）
+
+software_installation
+  -> host_software_hit -> software_advisory（公共知识库）
 ```
+
+> 旧称对照：`SoftwareEntity` = 现在的 product + version；`SoftwareVulnerabilityFinding` = 现在的
+> advisory（公共）+ hit（客户域）。详见
+> [`software-normalization-and-vuln-enrichment.md`](software-normalization-and-vuln-enrichment.md) §2.1。
 
 关键点：
 
 - `HostInventory` 是宿主对象
 - `ProcessRuntimeState` 是主机上的动态对象
-- `SoftwareEntity` 不是主机字段，而是独立实体
+- 软件的产品/版本是**公共知识库**的独立实体，安装/命中是**客户域**的独立实体；两者都不是主机字段
 
 因此不要把：
 

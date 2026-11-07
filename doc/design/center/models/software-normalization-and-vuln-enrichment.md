@@ -1,172 +1,148 @@
-# warp-insight Software Normalization 与 Vulnerability Enrichment 设计
+# warp-insight 软件归一化与漏洞 enrichment 设计
 
 ## 1. 文档目的
 
-本文档定义 `warp-insight` 中“软件归一化”和“漏洞/元数据 enrichment”的独立设计。
+本文档定义软件信息的**分层、标识与归一化**：边缘采什么、中心存什么、公共知识库放什么、三者之间怎么衔接。
 
-这里的目标不是在边缘节点直接查漏洞，而是先把边缘发现到的进程、安装路径和包管理事实，收敛成中心侧可复用的软件实体，再挂载漏洞、生命周期和其他 meta 信息。
-
-本文重点回答：
-
-- `process` / `container` / package facts 如何归一到稳定的软件对象
-- 软件知识库应采用什么标识体系
-- `CPE`、`purl`、`SWID` 和内部 `software_id` 的关系是什么
-- 漏洞 enrichment 应放在边缘还是中心
-- enrichment 结果如何回挂到资源目录和多信号查询体系
-
-相关文档：
-
-- [`../edge/resource-discovery-runtime.md`](../edge/resource-discovery-runtime.md)
-- [`control-center-architecture.md`](control-center-architecture.md)
-- [`../foundation/architecture.md`](../foundation/architecture.md)
-- [`../foundation/target.md`](../foundation/target.md)
-- [`../foundation/glossary.md`](../foundation/glossary.md)
+它不定义漏洞情报源的抓取格式（见 [`public-vulnerability-source-ingestion.md`](public-vulnerability-source-ingestion.md)），
+也不定义主机/进程与软件的图谱关系全貌（见 [`host-process-software-vulnerability-graph.md`](host-process-software-vulnerability-graph.md)）。
+采集/入库的**范围**（哪些软件值得成为资产、哪些只进证据）见
+[`../../foundation/software-asset-scope.md`](../../foundation/software-asset-scope.md)。
 
 ---
 
 ## 2. 核心结论
 
-第一版固定以下结论：
+1. **三层，边界是"主人"而不是"功能"**：
+   - **边缘**：只产出线索（evidence），不做归一、不做漏洞判断；
+   - **客户域**（计算区）：这台机**装了哪份、跑的是哪份、对外开了什么、命中了什么** —— 带 `tenant_id`，一客一份；
+   - **公共知识库**（下称 KB）：产品、版本、外部标识、漏洞公告 —— **跨租户共享、只读、无 `tenant_id`**。
+2. **数据只向一个方向流**：KB → 客户域。客户数据（主机名、IP、安装路径、命中结果）**永不回写 KB**。
+3. **KB 的主键必须确定性**（由规范化 purl/CPE 派生），客户域用本地 UUID 引用它。否则跨实例无法对账，KB 也无法随包分发。
+4. **版本是独立一层**，不挂在产品上。产品（`nginx`）与版本（`1.24.0`）分开，否则升级即换身份、漏洞区间匹配无处落。
+5. **漏洞要拆成"公告"与"命中"**：`software_advisory`（公共：这个产品的这些版本有问题）与 `host_software_hit`（客户域：这台机命中了哪条，用哪版 KB 算的）。
+6. **KB 只说"这个版本有问题"，不说"这台机不安全"** —— 后者要叠加客户域的安装、运行、暴露与证据。
 
-- `warp-insightd` 只负责发现本地软件线索，不负责维护漏洞知识库
-- 软件归一化和漏洞 enrichment 应放在中心侧
-- 软件实体不能直接以 `CPE` 或 `purl` 作为唯一主键
-- 中心必须维护内部稳定 `software_id`
-- `purl` 和 `cpe_candidates[]` 都应支持，但作用不同
-- enrichment 必须先完成 software normalization，再进入 vulnerability lookup
+一句话：
 
-一句话说：
+```text
+process / package / bundle facts  →  SoftwareEvidence（边缘）
+   → 归一（客户域引用 KB 的确定性 id）
+   → software_installation / process.software_version_id / host_software_hit（客户域）
+   ← software_advisory（公共 KB，只读）
+```
 
-`process / package / file facts -> software normalization -> software entity -> vulnerability enrichment`
+**而不是** `process.executable.name → 直接查 CVE`。
 
-而不是：
+### 2.1 术语对照（其他文档里的旧称）
 
-`process.executable.name -> 直接查 CVE`
+本次把两个对象拆开了，旧的图/表里还会看到旧名，读作：
+
+| 旧称 | 现在 |
+| --- | --- |
+| `SoftwareEntity` | `software_product` + `software_version`（两个层次） |
+| `SoftwareVulnerabilityFinding` | `software_advisory`（公共）+ `host_software_hit`（客户域） |
+| `Host -> SoftwareEntity -> Findings` | `Host -> software_installation -> host_software_hit -> software_advisory` |
 
 ---
 
 ## 3. 为什么不能直接用进程名查漏洞
 
-直接拿进程路径、可执行名或 `process.executable.name` 去查漏洞，会有明显问题：
+- 同一软件在不同机器上安装路径不同；
+- 同一软件常有多个 helper / renderer / sidecar 进程；
+- 一个进程名不构成稳定的发行物标识；
+- 进程路径既不是 `CPE` 也不是 `purl`；
+- 漏洞库按**产品 + 版本区间**建模，不按运行时进程建模。
 
-- 同一软件在不同机器上的安装路径可能不同
-- 同一软件可能有多个 helper / renderer / sidecar 进程
-- 一个进程名并不稳定映射到一个发行物
-- 进程路径本身通常既不是 `CPE`，也不是 `purl`
-- 漏洞库的受影响对象通常按产品、版本、包生态建模，不按运行时进程建模
-
-因此必须固定一个中间层：
-
-- 先把运行时进程和安装线索归一成“软件实体”
-- 再把软件实体映射到漏洞情报和生命周期知识
+所以必须有中间层：先把运行时与安装线索收敛成稳定的产品/版本，再与公告匹配。
 
 ---
 
-## 4. 分层边界
+## 4. 三层边界
 
-### 4.1 边缘负责什么
+| | 边缘（agentd） | 客户域（计算区） | 公共知识库（KB） |
+| --- | --- | --- | --- |
+| 回答什么 | 看到了什么线索 | 这台机的软件事实与命中 | 这个产品这个版本有什么问题 |
+| 数据 | 可执行路径 / 包名 / 版本文本 / 签名 / 镜像 ref | installation、跑着的版本、暴露、hit | product / version / external id / advisory |
+| 属主 | 客户 | **客户** | 平台 |
+| 跨租户 | — | **不互通** | **共享、只读** |
+| 主键 | 本地 | 本地 UUID | **确定性 hash** |
+| 可写性 | 只采不判 | 采集与派生结果可写 | 只由发布/同步写入，客户数据禁止写入 |
+| 可有 `tenant_id` | — | **必须有** | **不能有** |
+| 更新方式 | 随 agentd 发布 | 持续采集 | 随产品包 / 离线知识包；带 `kb_version` |
 
-边缘负责：
-
-- 发现 `process`
-- 发现容器镜像、容器运行时信息
-- 发现已安装 package / app bundle / binary path 等本地事实
-- 提供 `process.pid`
-- 提供 `process.executable.name`
-- 提供安装路径、签名、版本线索、哈希等候选事实
-
-边缘不负责：
-
-- 维护完整软件目录
-- 维护漏洞知识库
-- 做跨主机、跨环境的软件归一化
-- 直接把软件线索解释成最终 CVE 结论
-
-### 4.2 中心负责什么
-
-中心负责：
-
-- 软件归一化
-- 软件实体建模
-- 软件目录存储
-- `purl` / `CPE` / `SWID` 外部标识映射
-- 漏洞 enrichment
-- 生命周期 enrichment
-- 许可证、供应商、维护状态等 meta enrichment
+**为什么要这么切**：KB 是"事实的公共部分"，天然可共享；"机器是否安全"取决于这台机装了什么、跑没跑、对不对公网 —— 那是客户数据。
+把两者混在一张表里，要么让 KB 被客户数据污染（泄漏），要么让每个客户各存一份 KB（无法对账、包无法预生成）。
 
 ---
 
 ## 5. 对象模型
 
-### 5.1 `SoftwareEvidence`
-
-这是边缘上报或中心抽取后的“软件识别证据”。
-
-建议结构：
+### 5.1 `SoftwareEvidence`（客户域，边缘上报/中心抽取）
 
 ```text
 SoftwareEvidence {
   evidence_id
-  source_kind
-  environment_id
-  agent_id
-  resource_ref?
+  tenant_id            # 客户域
+  agent_id / host_id
   observed_at
+  source_kind          # process | package | app_bundle | container_image | file
   executable_path?
   install_path?
   binary_name?
   display_name?
-  version_text?
   package_name?
-  package_manager?
+  package_manager?     # dpkg | rpm | apk | brew | app_bundle | unknown
+  version_text?
   vendor_hint?
   signer?
   container_image_ref?
   file_hashes?
-  raw_facts
 }
 ```
 
-作用：
+只表达"看到了什么线索"，不表达"最终认定它是什么"。
 
-- 只表达“看到了什么线索”
-- 不表达“最终认定它是什么软件”
-
-### 5.2 `SoftwareEntity`
-
-这是中心归一后的软件实体。
-
-建议结构：
+### 5.2 `software_product`（KB）
 
 ```text
-SoftwareEntity {
-  software_id
+software_product {
+  product_id           # 确定性：hash(normalized purl 或 cpe 产品段)
   canonical_name
   vendor?
-  normalized_version?
-  edition?
-  package_type?
-  lifecycle_state?
-  aliases[]
+  package_type?        # deb | rpm | brew | app | npm | pypi | ...
   homepage?
-  created_at
-  updated_at
+  aliases[]
+  lifecycle_state?
+  normalization_status # confirmed | provisional
+  merged_into?         # 归一化纠错：被并入哪个 product_id
+  created_at / updated_at
 }
 ```
 
-关键约束：
-
-- `software_id` 是中心内部稳定主键
-- 任何外部标准标识都不直接替代 `software_id`
-
-### 5.3 `SoftwareExternalId`
-
-建议单独建模外部标识映射。
+### 5.3 `software_version`（KB）
 
 ```text
-SoftwareExternalId {
-  software_id
-  id_kind
+software_version {
+  version_id           # 确定性：hash(product_id + normalized_version)
+  product_id
+  raw_version          # 原样保留（`1.24.0-1ubuntu1`、`156.0.4314.58`）
+  normalized_version   # 规范化后（去掉 epoch/发行版后缀，仅用于展示与索引）
+  ecosystem            # deb | rpm | brew | semver | apple-bundle | unknown
+  released_at?
+}
+```
+
+**约束**：`(product_id, raw_version)` 唯一 + upsert，避免每次安装都新增版本行。
+**匹配不用字符串比较**：区间判断按 `ecosystem` 选比较器（dpkg 的 `~`/`epoch`、rpm 的段比较、semver 的预发布）——见 §8。
+
+### 5.4 `software_external_id`（KB）
+
+```text
+software_external_id {
+  owner_kind           # product | version
+  owner_id
+  id_kind              # purl | cpe | swid | vendor_product_id
   id_value
   confidence
   source
@@ -174,330 +150,259 @@ SoftwareExternalId {
 }
 ```
 
-其中：
+`purl` 天然带版本，所以**必须能挂到 version**；不带版本的 purl 才挂 product。CPE 同理（带版本段）。
 
-- `id_kind` 可取：
-  - `purl`
-  - `cpe`
-  - `swid`
-  - `vendor_product_id`
-- `confidence` 表达匹配可信度
-
-### 5.4 `SoftwareVulnerabilityFinding`
-
-这是 enrichment 后的漏洞结果。
+### 5.5 `software_advisory`（KB）
 
 ```text
-SoftwareVulnerabilityFinding {
-  finding_id
-  software_id
-  advisory_source
-  vulnerability_id
-  aliases[]
-  severity
-  affected_range?
+software_advisory {
+  advisory_id          # 确定性：hash(source + advisory 编号)
+  source               # nvd | vendor | ecosystem
+  advisory_ref         # CVE-2024-xxxx / GHSA-... / vendor 编号
+  product_id
+  affected_range?      # 版本区间（生态语义）
   fixed_range?
+  severity?
   exploited_known?
   patch_available?
-  published_at?
-  updated_at?
-  evidence
+  published_at / modified_at
 }
 ```
 
-关键约束：
+这是**公共事实**：任何地方的这个产品这些版本都有问题。不含主机、不含客户。
 
-- 这层是 enrichment 结果，不是原始情报镜像
-- `evidence` 应说明本次是基于 `purl`、`CPE` 还是 vendor feed 命中的
+### 5.6 `software_installation`（客户域）
+
+```text
+software_installation {
+  installation_id      # 本地 UUID
+  tenant_id
+  host_id / container_id
+  product_id           # 引用 KB（确定性 id）
+  version_id           # 引用 KB；解析失败时为空 + version_text 保留
+  version_text         # 原文兜底（KB 里没有这个版本时仍可展示）
+  install_source       # dpkg | rpm | brew | app_bundle | container_image | unknown
+  install_path?
+  role[]               # exposed-service | business-runtime | middleware | runtime | agent
+  reason[]             # listener | service-binding | governance-class
+  first_seen_at / last_seen_at
+  stale_at?
+}
+```
+
+- `role` / `reason` 是**多值**：同一软件在一台机上可能既监听又承担业务；
+- 它们放在 installation 而不是 product 上 —— 同一软件在不同主机角色不同；
+- 它们同时是**入库凭据**（见 scope 文档）：能解释"为什么这条在图上"。
+
+### 5.7 `process_runtime_state.software_version_id`（客户域，一格列）
+
+进程行加一个可空的 `software_version_id`（归一化回填）。用来回答「**装的版本 ≠ 跑的版本**」（升级没重启），
+以及「这个进程属于哪个软件的哪个版本」。职责与 `runtime_binding`（业务绑定）不同，不复用。
+
+### 5.8 `host_software_hit`（客户域，可物化）
+
+```text
+host_software_hit {
+  hit_id
+  tenant_id
+  host_id
+  installation_id
+  advisory_id          # 引用 KB
+  kb_version           # 算这条命中时 KB 是哪一版
+  matched_by           # version-range | cpe | purl
+  confidence
+  detected_at / last_seen_at
+}
+```
+
+命中是**派生**结果：可以落表（便于排序/告警），也可以查询时 join。落表时必须带 `kb_version`，
+否则"上周没事、这周有了"解释不了是 KB 变了还是机器变了。
 
 ---
 
 ## 6. 标识体系
 
-### 6.1 内部主键：`software_id`
+### 6.1 确定性主键（KB 的前提）
 
-必须明确：
+| 对象 | 主键 | 派生方式 |
+| --- | --- | --- |
+| `software_product` | `product_id` | `hash(normalized_purl 去掉版本)`，退化时用 `hash(vendor|name)` |
+| `software_version` | `version_id` | `hash(product_id + raw_version)` |
+| `software_advisory` | `advisory_id` | `hash(source + advisory_ref)` |
 
-- `software_id` 是系统内部唯一稳定主键
-- 不能直接把 `CPE` 作为内部主键
-- 不能直接把 `purl` 作为内部主键
+为什么不用随机 UUID：每个计算区各生成一套 id，则
 
-原因：
+- 跨实例无法对账（同一 CVE 命中在两边是不同 id）；
+- KB 无法随包分发（包里的 id 与本地生成的对不上）。
 
-- 一个软件实体可能对应多个 `CPE`
-- 一个软件实体可能有多个 `purl`
-- 同一产品不同来源可能存在别名和版本表达差异
+客户域表继续用本地 UUID，用 `product_id` / `version_id` 引用 KB —— **KB 升级不需要迁移客户数据**。
 
 ### 6.2 `purl`
 
-`purl` 更适合现代包生态。
-
-适合场景：
-
-- OS package
-- Java / npm / PyPI / Go module
-- 容器镜像中的 package
-- 语言生态依赖
-
-优势：
-
-- 语义更现代
-- 对 package ecosystem 更自然
-- 适合和 SBOM 及包管理系统衔接
-
-限制：
-
-- 不覆盖所有传统桌面 app / 手工安装二进制
-- 与 CVE/NVD 体系不是一一直接对齐
+现代包生态的首选：OS package、Java/npm/PyPI/Go module、容器镜像内的包、语言依赖。与 SBOM 天然衔接。
+限制：不覆盖传统桌面 app 与手工安装的二进制；与 NVD 不是一一对齐。
 
 ### 6.3 `CPE`
 
-`CPE` 更适合漏洞情报映射。
-
-适合场景：
-
-- 对接 NVD
-- 对接以产品/版本为核心的漏洞知识库
-- 对接传统安全产品接口
-
-优势：
-
-- 在 CVE / NVD 场景中兼容性强
-
-限制：
-
-- 现代软件生态映射常常不自然
-- 命名歧义较多
-- 同一软件常常需要维护多个 `cpe_candidates[]`
+漏洞情报的首选：NVD、以产品/版本为核心的库、传统安全产品接口。
+限制：现代生态映射不自然、命名歧义、常需维护多个候选。
 
 ### 6.4 `SWID`
 
-`SWID` 可作为企业资产或安装清单补充标识，但不建议作为第一版主路径。
+企业资产/安装清单的补充标识，第一版不走主路径。
 
 ### 6.5 结论
 
-第一版建议采用：
-
-- 内部：`software_id`
-- 现代生态映射：`purl`
-- 漏洞情报映射：`cpe_candidates[]`
+- 内部与跨实例：确定性 id（§6.1）
+- 包生态：`purl`（挂 product 或 version）
+- 漏洞情报：`cpe`（挂 product，版本段在 version 上表达）
 - 预留：`swid`
-
-一句话说：
-
-- 内部靠 `software_id`
-- 包生态优先 `purl`
-- 漏洞库兼容 `CPE`
 
 ---
 
 ## 7. 归一化流程
 
-建议固定如下处理链：
-
 ```text
-SoftwareEvidence ingest
--> evidence canonicalization
--> software candidate match
--> software entity merge / create
--> external id mapping
--> vulnerability enrichment
--> resource / process / package back-reference
+SoftwareEvidence（边缘）
+-> canonicalization        路径标准化、版本文本清洗、供应商别名、package manager 名称统一
+-> candidate match         优先级：package+version > 签名 bundle > 路径+版本元数据 > hash 目录 > 别名启发
+-> product / version upsert  命中即复用确定性 id；未命中建 provisional
+-> external id mapping     purl / cpe（带置信度与来源）
+-> back-reference          installation、process.software_version_id
 ```
 
-### 7.1 evidence canonicalization
+### 7.1 人工纠错出口（必须有）
 
-处理内容：
+归一化一定会错（误拆、误并）。第一版就要留：
 
-- 路径标准化
-- 版本文本清洗
-- 供应商别名统一
-- 可执行名与 bundle 名归一
-- package manager 名称统一
+- `software_product.merged_into`：合并后查询沿链解析到最终 id；
+- `software_merge_log(actor, at, from, to, reason)`：谁在什么时候动了什么。
 
-### 7.2 software candidate match
+没有这两个口子，错一次就永久错下去。
 
-建议按以下优先级：
+### 7.2 失败时不许装成"没有"
 
-1. package manager + package name + version
-2. signed bundle / product metadata
-3. executable path + version metadata
-4. hash + known catalog
-5. heuristic alias mapping
-
-### 7.3 merge / create
-
-如果已有高置信匹配：
-
-- 挂到现有 `software_id`
-
-如果没有可靠匹配：
-
-- 生成新的 `software_id`
-- 标记 `normalization_status = provisional`
-
-### 7.4 external id mapping
-
-对同一软件实体：
-
-- 生成或关联 `purl`
-- 生成或关联一个或多个 `cpe_candidates`
-- 记录匹配置信度和来源
-
-### 7.5 vulnerability enrichment
-
-只有在有足够可靠的外部标识后才进入漏洞 enrichment。
+解析不到包归属（自编译程序、脚本、容器内）时：`version_id = null` + `version_text` 保留 + `install_source = unknown`，
+`normalization_status = provisional`。**`unknown` 不是"干净"**。
 
 ---
 
-## 8. 漏洞 enrichment 设计
+## 8. 漏洞匹配（enrichment）
 
-### 8.1 数据源分层
+### 8.1 两个事实，不是一个
 
-建议支持三类来源：
+1. **公告**（KB）：`advisory` 声明产品 X 的区间 `[a, b)` 有漏洞；
+2. **命中**（客户域）：某台机的 `installation` 落在那个区间里 → `host_software_hit`。
 
-- `vendor advisory`
-- `ecosystem advisory`
-- `CVE/NVD`
+匹配步骤：
 
-优先级建议：
+1. 取该 installation 的 `version_id`（没有就 `version_text`，尽力解析）；
+2. 按 `ecosystem` 选版本比较器，判断是否落在 `affected_range`；
+3. 命中写 `host_software_hit`，记录 `kb_version` 与 `matched_by`。
 
-1. vendor advisory
-2. ecosystem advisory
-3. NVD / generic CVE feed
+**禁止字符串比较版本**。dpkg 的 `1.0~rc1 < 1.0`、rpm 的段序、semver 的预发布，任一搞错都会产生真假两面的事故。
 
-原因：
+### 8.2 数据源分层
 
-- vendor feed 通常更贴近真实产品版本
-- ecosystem advisory 更适合语言包和依赖
-- NVD 兼容性广，但匹配误差更大
+优先级：vendor advisory > ecosystem advisory > NVD/generic CVE feed。
+原因：vendor 更贴近真实发布版本；ecosystem 更适合语言包；NVD 覆盖广但匹配误差大。
 
-### 8.2 enrichment 结果不直接等于最终风险结论
+### 8.3 命中 ≠ 风险结论
 
-必须区分：
+`host_software_hit` 只是**事实**。判断"这台机是否安全"还要叠加（全部在客户域）：
 
-- 漏洞命中事实
-- 运营风险结论
+| 叠加项 | 数据来源 |
+| --- | --- |
+| 是否真的装了（且补丁未覆盖） | `software_installation` |
+| 是否在跑 | `process_runtime_state.software_version_id` |
+| 是否对外暴露 | `instance_endpoint` / listeners |
+| 是否已有缓解（配置、隔离、封堵） | 证据（调查面）与拓扑 |
 
-中间还需要结合：
-
-- 软件是否真的安装
-- 版本是否准确
-- 是否在运行
-- 是否暴露
-- 是否有 exploit
-- 是否有 patch
-
-因此 `SoftwareVulnerabilityFinding` 只是 enrichment 事实，不直接等同“高风险告警”。
+所以 KB 永远不输出"这台机不安全"——它没有这个能力，也不该有这份数据。
 
 ---
 
-## 9. 与资源目录的关系
+## 9. 公共知识库的分发与更新
 
-建议新增一个软件关联层，而不是直接把软件属性全部塞进 `DiscoveredResource`。
+| 项 | 做法 |
+| --- | --- |
+| 形态 | 只读副本（镜像内 / 挂载卷 / 离线知识包），计算区无外网也能用 |
+| 版本 | 每次发布带 `kb_version`（含抓取时间与源 revision） |
+| 更新 | 随产品包发布，或单独同步知识包；不做逐条增量下发 |
+| 回滚 | 切换到上一份 `kb_version` 即可；客户域的 `hit` 保留旧版本号，解释得清 |
+| 写入方向 | **单向**：KB → 计算区。客户域数据（host/ip/path/命中）永不回写 |
+| 对账 | 确定性 id 让多实例、多客户可以合并统计（同一条 advisory 在各地 id 相同） |
 
-### 9.1 关联关系
+---
+
+## 10. 与资源目录的关系
 
 ```text
-ProcessResource -> SoftwareEvidence -> SoftwareEntity -> VulnerabilityFindings
-ContainerImage -> SoftwareEntity -> VulnerabilityFindings
-InstalledPackage -> SoftwareEntity -> VulnerabilityFindings
+HostInventory -> ProcessRuntimeState -> SoftwareEvidence -> (归一) -> software_installation
+                                                                  -> host_software_hit -> advisory
 ```
 
-### 9.2 回挂方式
+- 主机视图：进程数、软件数、命中摘要；
+- 进程视图：可执行路径、归属软件与版本（含"跑的版本 ≠ 装的版本"标记）；
+- 软件视图：安装主机数、版本分布、命中公告。
 
-中心查询时可为 `process` / `host` / `container` 附加：
-
-- `software_ref`
-- `software.name`
-- `software.vendor`
-- `software.version`
-- `software.lifecycle_state`
-- `software.vulnerability_summary`
-
-但边缘本地 cache 不应直接变成漏洞数据库。
+**不加的东西**（与图谱文档 §5 一致）：`host.software[]` 内嵌数组、`process` 上的版本字段、
+把 `executable.name` 当漏洞查询键。
 
 ---
 
-## 10. 边缘上报建议
+## 11. 边缘上报建议
 
-第一版边缘只需补充足够的 `SoftwareEvidence` 候选事实，不必一开始就做完整 package inventory。
+第一版边缘只补足够的候选事实，不做全量 package inventory：
 
-建议最小上报字段：
-
-- `process.executable.name`
-- `process.pid`
-- `resource_id`
+- `process.executable.name` / `process.pid`
 - 安装路径或 bundle 路径
-- 版本候选文本（若能低成本获取）
-- signer / package manager / image ref（若能低成本获取）
+- 版本候选文本（能低成本拿到才有）
+- signer / package manager / image ref（同上）
 
-边缘原则：
-
-- 低开销
-- 不阻塞采集主路径
-- 不因 enrichment 失败影响数据面
+原则：低开销、不阻塞采集主路径、enrichment 失败不影响数据面。
+**全量包清单 / 漏洞扫描属于取证**（调查面 `software` 主题），按需触发、带 TTL，不进图谱。
 
 ---
 
-## 11. 存储建议
+## 12. 存储建议
 
-第一版中心存储建议拆成：
+| 层 | 表 |
+| --- | --- |
+| 公共 KB（无 tenant，只读） | `software_product` / `software_version` / `software_external_id` / `software_advisory` |
+| 客户域（带 tenant） | `software_evidence` / `software_installation` / `host_software_hit`，以及 `process_runtime_state.software_version_id` 一格列 |
 
-- `software_entities`
-- `software_aliases`
-- `software_external_ids`
-- `software_evidence`
-- `software_vulnerability_findings`
-- `software_lifecycle_facts`
-
-如果后续接 SBOM，可再增加：
-
-- `software_components`
-- `software_dependency_edges`
+后续接 SBOM 再加 `software_component` / `software_dependency_edge`（同属 KB）。
 
 ---
 
-## 12. 第一版落地范围
+## 13. 第一版落地范围
 
-第一版建议只做：
+1. `process -> SoftwareEvidence`（边缘）
+2. 基于路径 / bundle / package name 的 product+version 归一（KB 的确定性 id）
+3. `software_installation`（含 role/reason 多值）
+4. `process.software_version_id` 回填
+5. `software_advisory` 与 `host_software_hit` 的骨架（先接一个源，不做全量情报）
 
-1. `process -> SoftwareEvidence`
-2. 基于路径 / bundle / package name 的初步 software normalization
-3. 内部 `software_id`
-4. `purl` 与 `cpe_candidates[]` 的最小映射结构
-5. 漏洞 enrichment 存储骨架
-
-第一版不建议一开始就做：
-
-- 全量 SBOM ingestion
-- 软件依赖图
-- 实时 exploit intelligence
-- 复杂许可证合规分析
+第一版不做：全量 SBOM、依赖图、实时 exploit 情报、许可证合规。
 
 ---
 
-## 13. 验收标准
+## 14. 验收标准
 
-第一版至少应满足：
-
-- 同一软件的多个 helper / renderer 进程能归到同一个 `software_id`
-- 带空格路径、bundle app、package manager 安装项能稳定识别
-- `software_id` 与 `purl` / `cpe_candidates[]` 可同时存在
-- 漏洞 enrichment 结果能说明命中来源和置信度
-- enrichment 失败不影响边缘 discovery 和 telemetry 主路径
+- 同一软件的 helper / renderer 归到同一个 `product_id`（不是同一个进程名）；
+- 升级后 `product_id` 不变、`version_id` 变；
+- 带空格路径、`.app` bundle、package manager 安装项能稳定识别；
+- 装 1.24 跑 1.23 时，`process.software_version_id` 与 `installation.version_id` 能看出差异；
+- 命中能说明 `kb_version` 与 `matched_by`，且 KB 里没有任何客户数据；
+- enrichment 失败不影响边缘 discovery 与 telemetry 主路径。
 
 ---
 
-## 14. 当前建议
+## 15. 当前建议
 
-当前建议固定为：
-
-- 软件归一化采用“内部 `software_id` + `purl` + `cpe_candidates[]`”
-- 不采用单一 `CPE` 作为唯一标准
-- 边缘只提供 evidence
-- 中心完成 software normalization 与 vulnerability enrichment
-
-一句话总结：
-
-`warp-insight` 应把软件知识库设计成中心侧软件实体目录，而不是把进程名直接当漏洞库查询键。
+- 三层：边缘出证据、客户域存事实、公共 KB 存知识；
+- KB 用确定性 id（purl/CPE 派生），客户域用本地 UUID 引用；
+- 产品与版本分层，version 才参与漏洞区间匹配；
+- 公告（KB）与命中（客户域）分离，命中带 `kb_version`；
+- 数据单向流动：客户数据不进 KB。
