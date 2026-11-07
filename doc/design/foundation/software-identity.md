@@ -119,7 +119,7 @@ OTel 的 `service.*` 本来是给**应用服务**的。中间件（数据库 / �
 
 - 指纹给的是**构建**的身份，不是版本的身份 —— 一个版本在 x86_64/aarch64、不同发行版下是不同 hash；
 - 所以它需要一张 `hash → (product, version, distro, arch)` 的库，**库本身必须从可信源构建**（详见
-  [`../center/models/software-fingerprint-learning.md`](../center/models/software-fingerprint-learning.md)）；
+  [`../center/models/software-fingerprint-verification.md`](../center/models/software-fingerprint-verification.md)）；
 - 它不靠任何宣称，所以能和宣称值**交叉验证**：声称是 X 但 hash 不是官方 X 的 → 文件被替换。
 
 所以“单位”这一层的完整答案是：**四路归一**（包反查 / 自报 / 镜像 / 指纹），

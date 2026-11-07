@@ -34,7 +34,7 @@
 | 装了但没跑 | **不进图谱** | 属取证；但“升级后没重启”会导致当前跑的版本低于磁盘版本，模型里两个都记 |
 
 > 指纹与可信源校验的完整设计见
-> [`../center/models/software-fingerprint-learning.md`](../center/models/software-fingerprint-learning.md)。
+> [`../center/models/software-fingerprint-verification.md`](../center/models/software-fingerprint-verification.md)。
 
 ---
 
