@@ -136,7 +136,7 @@ sequenceDiagram
     end
 
     Note over C: upsert_agent_status 按 agent_id 幂等落库
-    Note over C: 并推 VictoriaMetrics（agent_up / agent_info / agent_health）
+    Note over C: 并推 VictoriaMetrics（agent_up / agent_info / agent_health / agent_host_info）
     Note over C: 页面 GET /api/v1/admin/gateways/id/agents
 ```
 
@@ -221,7 +221,8 @@ sequenceDiagram
   非本机 / 缺 `gateway_id` 被拒；键集契约测试通过。
 - gwlinkd 侧：环回拉取 + 转报的 wire 形状测试通过；常驻日志出现 `AgentStatusReported`。
 - 中心侧：`GET /api/v1/admin/gateways/{id}/agents` 能读到 gwlinkd 报上来的机队；
-  中心 Web「网关详情 → Agent 状态」页出现机器卡片；VictoriaMetrics 出现 `agent_up` / `agent_info` / `agent_health`。
+  中心 Web「网关详情 → Agent 状态」页出现机器卡片；VictoriaMetrics 出现 `agent_up` / `agent_info` /
+  `agent_health`（有主机名 / 网卡地址时再加一条 `agent_host_info{hostname,host_ip}`）。
 - 全绿：`gx run lint` / `gx run test`（gateway + gwlinkd）；`jumo verify jumo/model` 0 error。
 
 ## 11. 未决与后续

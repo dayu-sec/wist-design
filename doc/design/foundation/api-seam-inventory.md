@@ -53,6 +53,19 @@ seam = { 端点(route+method), 请求体, 响应体, 归属方(owner), 兼容策
 > **回话**的通道；新增命令只加一个 `kind` 词表值，不改报文形状，也不新增 seam。
 > 命令种类变多时应改开 `wist-api` 下的 `commands:poll`，而不是继续往回执里塞字段。
 
+### 2.3 管理面命令通道（手加端点，未建模）
+
+| entry | route | 请求体 | 响应体 |
+|---|---|---|---|
+| ViewAgentFactRefresh | `GET /api/v1/admin/agents/{agent_id}/fact-refresh` | — | `AgentCommandResponse`（网关本地） |
+| RequestAgentFactRefresh | `POST /api/v1/admin/agents/{agent_id}/fact-refresh` | — | 同上 |
+| DispatchAgentRefresh | `POST /api/v1/admin/agents/{agent_id}/refresh` | `wist_api::status::RefreshParams` | 同上 |
+
+> 这三条是**管理面手加端点**（`api/mod.rs` 里的 `NOTE(hand-added)`，模型未声明）。报文体不另起一套：
+> `what` 用 `wist_api::status::refresh_what::ALL` 这个闭集，命令种类用 `command_kind`，命令本身仍然
+> 走 `SubmitAgentStatus` 回执（`AgentStatusAck.commands`）送下去 —— **不新增跨进程通道**，只多一条
+> 管理侧入队入口。设计见 `wist-agentd/docs/design/metrics-selection-labels.md` §3.2 / §10。
+
 ## 3. 代码实际用的 wire 类型（与模型对照）
 
 | seam/端点 | 代码里的 wire 类型 | 定义在 | 与模型一致？ |

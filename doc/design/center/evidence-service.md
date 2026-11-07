@@ -40,7 +40,7 @@
 | **D4** | 一个 region 一个桶；**租户靠前缀 + 每客户 CMK + 前缀级 STS 隔离** | 桶不是隔离边界；每客户一桶会让配置面变成 N 份并开始漂移 |
 | **D5** | **保留期由服务驱动删除**；桶生命周期只做存储降级，不做删除 | 生命周期前缀是字面匹配，按「租户 × 档位」铺规则会撞上限，且一次误配就是批量删 |
 | **D6** | 写入顺序 **先对象、后索引**；**索引可从对象元数据重建** | 反过来会出现"索引说有、点开 404"；索引可重建才敢说它是衍生物 |
-| **D7** | **租户只从身份来**；对象键由服务端拼 | 请求体里的 `tenant_id` / `prefix` 一律不可信 |
+| **D7** | **对象键由服务端拼**；租户身份来自写端证书（P1） | 请求体里的 `prefix` 一律不信任。P0 写端不做认证，`cust_id` 由写入方自述（内网可信），上 mTLS 后用证书 claim 交叉核对 |
 | **D8** | 读默认**短签名（60s、单对象）**；批量消费者用**前缀级 STS** | 预签名是 bearer token；STS 让 atlas/AI 直连，省带宽 |
 | **D9** | **center 零 COS 凭据**，只持 `evidence_ref` | 接入区被攻破也拿不到正文 |
 | **D10** | `kind` 决定默认保留档，`sensitivity` 决定可见范围与是否脱敏 | 两轴正交：体检 30 天、调查按敏感度 7–180 天 |
@@ -232,15 +232,16 @@ x-cos-meta-command-id: cmd_...
 
 ## 6. 写入
 
-写入方是**数据面的 wparse**：它按 `agent_uplink_ivsrep` 规则把 ` IVSREP: ` 帧解析成记录，
+写入方是**数据面的 wparse**：OML 把 ` IVSREP: ` 帧解析成**三字段**（`cust_id` / `cmd_id` / `content`），
 再用 `http_sink` 直接 POST 给证据服务。链路：
 
 ```text
 agentd ──IVSREP──▶ 网关数据面 ──上行──▶ 平台数据面（wparse）
-                                            │ http_sink（明文 + 站点 token）
+                                            │ http_sink（明文，只在内网）
                                             ▼
                               POST /internal/evidence
-                                            │ 1) PUT 对象（带元数据 + sha256）
+                                            │ {cust_id, cmd_id, content}
+                                            │ 1) PUT 对象（带元数据）
                                             │ 2) 写索引（唯一键去重）
                                             ▼
                                           COS
@@ -265,22 +266,21 @@ wparse 的 http 连接器只有 `endpoint / method / headers / username / passwo
 | 约束 | 后果 |
 |---|---|
 | 无 TLS | 写端点**只绑内网**、明文 HTTP；与读端点（mTLS）**分端口、分信任域** |
-| 身份只有 header / basic auth | 用**每站点一个写入 token**（`headers` 注入），服务端映射到 `tenant_id`；不用证书 |
+| 身份只有 header / basic auth | 现在**不校验**（内网可信）；P1 由 HTTPS 双向认证接管，不再用站点 token 映射 |
 | 非 2xx 会重试 `max_retries` 次后落 rescue 文件 | 重复投递是常态 → 写接口必须**幂等**，重复回 `200` 而不是 `4xx` / `409` |
 | 一段 body 可能是一条记录，也可能是数组（`batch_size > 1`） | 接口同时接受单对象与数组 |
-| 记录是 `{schema, agent, ts, seq, body}`，`body` 是**契约对象的 JSON 字符串** | 服务端要再解析一层（与 `wist-gateway` 的 `api/ingest.rs` 同一条纪律） |
+| 契约只有三个字段：`{cust_id, cmd_id, content}` | 服务端不再解析信封；`kind` / `schema_id` / `sensitivity` 用部署默认值 |
 | `batch_size` 目前是 1 | 批量路径先支持，但不是 P0 的验收项 |
 
 ### 6.2 顺序与幂等
 
-1. 校验信封：`kind` 在枚举内，`schema_id` / `sensitivity` 齐全且合法；
-2. **身份先于内容**：token → `tenant_id`；记录里的 `agent` / `gateway` 与中心绑定交叉核对，
-   不一致 → `403`（不信上报方自述，也不信正文里的 `tenant_id`）；
-3. `PUT` 对象（带 §5.2 元数据）；`sha256` 不符 → 丢弃并记 `evidence_integrity_failed`；
-4. 写索引：`(tenant_id, kind, subject_id, dedupe_key)` 唯一（`dedupe_key` = `command_id`，
-   无命令的产物用 `artifact_id`）。**同键同 `sha256` = 重投** → `200` + 已有 `artifact_id`，
+1. 校验三字段：`cust_id` / `cmd_id` 必须存在且是**安全的键段**（它们直接进对象键）；
+2. **身份只有一个维度**：`cust_id` 就是租户，它既是对象键第一段也是索引分区列，
+   请求体里没有第二份可自述的身份，因此不存在"自述与身份不符"这个分支；
+3. `PUT` 对象（带 §5.2 元数据）→ 写索引：`(cust_id, kind, subject_id, dedupe_key)` 唯一
+   （`dedupe_key` = `cmd_id`）。**同键同 `sha256` = 重投** → `200` + 已有 `artifact_id`，
    不改行、不报错；同键不同 `sha256` 按 `reported_at` 取新，旧对象标 `superseded`；
-5. 返回 `artifact_id` + `durability`。
+4. 返回 `artifact_id` + `durability`。
 
 ### 6.3 失败与对账
 

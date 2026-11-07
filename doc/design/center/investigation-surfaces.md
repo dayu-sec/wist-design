@@ -212,6 +212,11 @@ agentd 侧已实现（0.11.0），网关/数据面侧的 WPL/OML/sink 与落库�
 > `wp-infra` 1.2.0（`business.d/agent_ivsrep.toml`，`base = "./data/ivsrep/"`）。
 > 回归测试 `wist-gateway-stack/dev/tests/agent-uplink-ivsrep.test.sh` 用**上游**模型跑 `wparse batch`，
 > 钉住信封四字段与 `body` 里的 `command_id` / `report_schema` 原样保留。
+>
+> 后续增量：`command_id` **同时进信封**（`opt(chars)@command_id`，agentd ≥ 记录该字段的版本）。
+> 原因：计算区证据服务要 `cmd_id` 做幂等键，而数据面（WPL/OML）解不了 `body` 里的 JSON ——
+> 用 `json(...)` 解会弄丢网关读的 `body` 原文。旧 agentd 不带该键时 OML 回落 `event_id`，
+> 但 `event_id` 每帧递增，所以**旧 agentd 的重投不会去重**（幂等只在新 agentd 上成立）。
 
 明确**不**做：报告不进 spool、不重试队列 —— 它是一次提问的证据，迟到就没意义；发失败就把原因
 写进 ack，人直接看本机那份。

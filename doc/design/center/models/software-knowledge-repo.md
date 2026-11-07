@@ -43,6 +43,8 @@ wist-software-kb/
     <ecosystem>/<product>.toml
   profiles/                        # curated：**部署画像**（认出之后怎么管）
     <product>/<form>.toml          # form = default|deb|rpm|apk|tarball|container|macos|k8s
+  fingerprints/                    # 可信源库：官方制品的 sha256（**待定是否入本仓**）
+    <product>.jsonl                #   (product, version, distro, arch) → sha256 + 制品摘要 + 来源 url
   versions/                        # curated：版本特例（只有需要修正时才写）
     <product_id>/<version>.toml
   advisories/                      # curated：人工修正/补充/供应商公告
