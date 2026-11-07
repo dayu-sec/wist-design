@@ -18,7 +18,7 @@
    - **客户域**（计算区）：这台机**装了哪份、跑的是哪份、对外开了什么、命中了什么** —— 带 `tenant_id`，一客一份；
    - **公共知识库**（下称 KB）：产品、版本、外部标识、漏洞公告 —— **跨租户共享、只读、无 `tenant_id`**。
 2. **数据只向一个方向流**：KB → 客户域。客户数据（主机名、IP、安装路径、命中结果）**永不回写 KB**。
-3. **KB 的主键必须确定性**（由规范化 purl/CPE 派生），客户域用本地 UUID 引用它。否则跨实例无法对账，KB 也无法随包分发。
+3. **KB 的主键必须确定性**（由**人定的权威名 `canonical_id`** = `<vendor>/<name>` 派生；purl/CPE 只当别名），客户域用本地 UUID 引用它。否则跨实例无法对账，KB 也无法随包分发。
 4. **版本是独立一层**，不挂在产品上。产品（`nginx`）与版本（`1.24.0`）分开，否则升级即换身份、漏洞区间匹配无处落。
 5. **漏洞要拆成"公告"与"命中"**：`software_advisory`（公共：这个产品的这些版本有问题）与 `host_software_hit`（客户域：这台机命中了哪条，用哪版 KB 算的）。
 6. **KB 只说"这个版本有问题"，不说"这台机不安全"** —— 后者要叠加客户域的安装、运行、暴露与证据。
@@ -107,7 +107,8 @@ SoftwareEvidence {
 
 ```text
 software_product {
-  product_id           # 确定性：hash(normalized purl 或 cpe 产品段)
+  product_id           # 确定性：hash(canonical_id)
+  canonical_id         # 权威名：<vendor>/<name>，人定、小写、定了不许改
   canonical_name
   vendor?
   package_type?        # deb | rpm | brew | app | npm | pypi | ...
@@ -242,9 +243,14 @@ host_software_hit {
 
 | 对象 | 主键 | 派生方式 |
 | --- | --- | --- |
-| `software_product` | `product_id` | `hash(normalized_purl 去掉版本)`，退化时用 `hash(vendor|name)` |
+| `software_product` | `product_id` | `hash(canonical_id)`，`canonical_id = <vendor>/<name>`（人定） |
 | `software_version` | `version_id` | `hash(product_id + raw_version)` |
 | `software_advisory` | `advisory_id` | `hash(source + advisory_ref)` |
+
+**为什么不用 purl 派生**（2026-11-07 修正）：purl 是「包在某个生态里的坐标」，同一产品在不同
+生态名字不同（`redis-server` / `redis`）；自研或发行版不打包的软件根本没有 purl，只能手写
+`pkg:generic/…`。拿 purl 当权威，等于把主键交给「哪一个生态先被收录」。详见
+[`software-knowledge-repo.md`](software-knowledge-repo.md) §4。
 
 为什么不用随机 UUID：每个计算区各生成一套 id，则
 

@@ -39,43 +39,94 @@
 ```text
 wist-software-kb/
   kb.toml                          # kb_version / schema_version / sources / licenses
-  products/                        # curated：产品（归一后的身份）
-    <ecosystem>/<vendor>/<product>.toml
+  products/                        # curated：**产品固有**（身份 + 类别 + 识别判据）
+    <ecosystem>/<product>.toml
+  profiles/                        # curated：**部署画像**（认出之后怎么管）
+    <product>/<form>.toml          # form = default|deb|rpm|apk|tarball|container|macos|k8s
   versions/                        # curated：版本特例（只有需要修正时才写）
     <product_id>/<version>.toml
   advisories/                      # curated：人工修正/补充/供应商公告
     <source>/<osv_id>.toml
   bulk/                            # 机器灌（CI 生成，不在 PR 里手改）
     osv/<ecosystem>/<year>.jsonl
-    nvd/<year>.jsonl
     distro/<distro>/<year>.jsonl
-    cpe/dictionary-<part>.jsonl
   overlays/                        # 示例：客户私有覆盖层长什么样（真正的私有层不入本仓）
     example/products/... toml
-  schemas/                         # JSON Schema：product / version / advisory
+  schemas/                         # JSON Schema：product / profile / version / advisory
   scripts/
+    validate.py                    # PR 闸门
     package.sh                     # 打包 + sha256 + 签名（改造自 wist-knowledge）
     gen-signing-key.sh             # 沿用同一把内容签名密钥
   dist/                            # 产出制品（wist-software-kb-<ver>.tar.gz + .sha256 + .sig）
   .github/workflows/
-    validate.yml                   # PR 闸门
-    refresh-bulk.yml               # 定时拉 OSV/NVD/发行版 → 提 PR
+    ci.yml                         # PR 闸门
+    release.yml                    # tag → 打包 + 签名 + Release
 ```
+
+**为什么产品和部署画像分开**（2026-11-07 修正）：同一个 postgresql，systemd 上是 `restart`，
+k8s 里是滚动替换 Pod；配置一个在本机文件、一个在 ConfigMap。这些是**环境属性**，塞进产品表
+客户一不一样就改不动。而**判据则相反** —— `/usr/sbin/nginx` 换个装法也成立，所以留在产品层。
 
 ### 3.1 curated：一对象一文件
 
 ```toml
 # products/deb/nginx/nginx.toml
-product_id     = "sha256:…"        # 确定性：hash(normalized purl 去版本)
+canonical_id   = "f5/nginx"       # 权威名：人定，小写 <vendor>/<name>，定了不许改
+product_id     = "sha256:…"        # = hash(canonical_id)
 canonical_name = "nginx"
 vendor         = "F5"
 package_type   = "deb"
-external_ids   = [
+external_ids   = [                 # 别名：只用于识别，不参与 id 派生
   { kind = "purl", value = "pkg:deb/debian/nginx" },
+  { kind = "purl", value = "pkg:apk/alpine/nginx" },
   { kind = "cpe",  value = "cpe:2.3:a:f5:nginx" },
 ]
 aliases        = ["NGINX", "nginx"]
 lifecycle_state = "supported"
+categories     = ["web-server"]     # **多值**：elasticsearch 同时是 ["search", "database"]
+kind           = "daemon"          # 与 categories 正交：daemon | runtime | agent | library | cli
+default_ports  = [80, 443]
+provenance     = "measured"         # measured | vendor-doc | inferred
+verified_on    = ["docker-image@2026-11-07"]
+unverified     = ["recognize.dpkg", "recognize.unit"]   # 本次验证未覆盖的判据
+
+# 识别判据（产品固有：换装法也基本成立）。每条带强度。
+[[recognize]]
+kind     = "apk"
+values   = ["nginx"]
+strength = "strong"
+
+[[recognize]]
+kind     = "path"
+values   = ["/usr/sbin/nginx"]
+strength = "strong"
+
+[[recognize]]
+kind     = "image"
+values   = ["nginx"]
+strength = "medium"             # 子串匹配：nginx-ingress 也会中
+```
+
+```toml
+# profiles/nginx/default.toml —— 认出之后「怎么管」（同一产品可有多个：default / k8s …）
+product_id = "sha256:…"
+form       = "default"          # default | deb | rpm | apk | tarball | container | macos | k8s
+
+[version_probe]
+kind     = "package"
+fallback = { kind = "binary", command = ["nginx", "-v"], stderr = true }
+
+[runtime]
+bind_scope = "public"           # 部署决定，不是产品决定
+
+[governance]
+upgrade_mode       = "reload"   # restart | reload | rolling | none | unknown
+config_paths       = ["/etc/nginx/nginx.conf"]
+requires_privilege = "root"
+
+[observability]
+log_faces    = ["ComputeWorkload"]
+metric_faces = ["HostMetrics"]
 ```
 
 ```toml
@@ -103,14 +154,25 @@ note        = "发行版回移了补丁，上游 OSV 区间不适用"
 
 ## 4. 确定性 id
 
+**权威名是 `canonical_id`，不是 purl。**
+
 | 对象 | id 派生 | 说明 |
 | --- | --- | --- |
-| product | `hash(normalized purl 去版本)`；退化 `hash(vendor|name)` | 跨实例一致，KB 才能"预生成" |
+| product | `hash(canonical_id)`，`canonical_id = <vendor>/<name>`（人定、小写、定了不许改） | 跨实例一致，KB 才能"预生成" |
 | version | `hash(product_id + raw_version)` | 版本出现即算，不需要预置 |
 | advisory | `hash(osv_id)` | 与源无关地稳定；非 OSV 源先归一成 OSV 形状 |
 
-**破坏性变更**：改 `canonical_name` / `external_ids` 导致 `product_id` 变化，等于让所有客户域的
-`installation.product_id` 悬空 —— 必须走「显式 rename 声明」而不是静默改（CI 校验，见 §6）。
+**为什么不用 purl 做权威**（这是 2026-11-07 的修正）：
+
+- purl 是「包在**某个生态**里的坐标」，同一产品在不同生态名字不同（Debian `redis-server` /
+  Alpine `redis` / 镜像 `redis`）；
+- 自研或发行版不打包的软件**根本没有 purl**，只能手写 `pkg:generic/…`（实测 10 个单元里 5 个如此）；
+- 用 `external_ids` 里「第一条 purl」派生，等于把主键交给数组顺序 —— 有权威但不可见。
+
+所以 purl / CPE / 包名全部降级为**别名**（只用于识别，不参与 id 派生）。
+
+**破坏性变更**：改 `canonical_id` 会让所有客户域的 `installation.product_id` 悬空 —— 必须走
+「显式 rename 声明」而不是静默改（CI 校验，见 §6）。改 `external_ids` / `aliases` 不受影响。
 
 ---
 
@@ -137,7 +199,11 @@ scripts/package.sh                # → dist/wist-software-kb-<ver>.tar.gz
 | schema | `schemas/*.json` 校验每个 curated 文件 |
 | 引用完整性 | `advisory.product_id` 存在；`version.product_id` 存在 |
 | 区间语法 | `affected[].introduced/fixed` 能被对应 `ecosystem` 的解析器解析 |
-| **id 稳定性** | 重算 `product_id`；与文件内声明不一致 → 失败（除非是显式 rename：同时更新 `overlays/` 与 CHANGE 记录） |
+| **id 稳定性** | 重算 `product_id`（= hash(canonical_id)）；与文件里声明不一致 → 失败。**同一 purl 被两个 canonical_id 引用 → 失败**（"一个产品裂成两条" 的典型症状）。显式 rename 需同时更新 `overlays/` 与 CHANGE 记录 |
+| **判据归属** | 同一个观测（如 `dpkg:nginx`）被两个产品认领 → 失败。这是 "mariadb 被当成 mysql" 和 "一个产品裂两条" 的共同症状 |
+| **闭集** | `categories`（多值但每项在闭集内）/ `kind` / `strength` / `form` / `bind_scope` / `upgrade_mode` 均不得发明新值 |
+| **出处** | `provenance` 必填；`measured` 必须写 `verified_on`（格式 `<env>@YYYY-MM-DD`，>90 天告警）；`vendor-doc` 必须写 `source_url` |
+| **profile 唯一** | `(product_id, form)` 不得重复 |
 | 冲突 | 同一 `osv_id` 在 curated 与 bulk 都存在 → 允许（curated 覆盖），但必须在 PR 里写明理由 |
 | 体量 | 单文件 ≤ 100 MB（GitHub 硬限）；分片后建议 ≤ 20 MB |
 | 许可证/出处 | 每条 advisory 必须有 `source` + `references`（不转存全文） |
