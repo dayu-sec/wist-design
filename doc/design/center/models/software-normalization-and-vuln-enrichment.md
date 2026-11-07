@@ -152,24 +152,40 @@ software_external_id {
 
 `purl` 天然带版本，所以**必须能挂到 version**；不带版本的 purl 才挂 product。CPE 同理（带版本段）。
 
-### 5.5 `software_advisory`（KB）
+### 5.5 `software_advisory`（KB，**OSV 兼容**）
+
+漏洞公告直接采用 [OSV schema](https://github.com/ossf/osv-schema) 的语义（它是这个领域的通用格式，
+GitHub Advisory DB / OSV.dev / 各发行版都已对齐）。我们只加一列 `product_id` 做归一后的关联：
 
 ```text
 software_advisory {
-  advisory_id          # 确定性：hash(source + advisory 编号)
-  source               # nvd | vendor | ecosystem
-  advisory_ref         # CVE-2024-xxxx / GHSA-... / vendor 编号
-  product_id
-  affected_range?      # 版本区间（生态语义）
-  fixed_range?
-  severity?
-  exploited_known?
-  patch_available?
+  advisory_id        # 确定性：hash(osv_id)；非 OSV 源先归一成 OSV 形状再算
+  osv_id             # 主标识：GHSA-… / CVE-… / ALSA-… / RUSTSEC-…
+  aliases[]          # 同一漏洞的其他编号（CVE ↔ GHSA 互认）
+  source             # osv | nvd | distro | vendor | curated
+  ecosystem          # Debian:11 / npm / PyPI / Go / …（与安装侧 `ecosystem` 同一词表）
+  package_name       # 生态内的包名
+  product_id?        # 归一后的产品（未归一为空，不阻断入库）
+  affected[]         # OSV ranges/events：introduced / fixed / last_affected
+  severity           # 取最高 + 保留原始数组
+  references[]       # 链接（**不转存全文**）
+  exploited_known?   # 有则记来源
+  revoked?           # OSV 也有撤回
   published_at / modified_at
 }
 ```
 
 这是**公共事实**：任何地方的这个产品这些版本都有问题。不含主机、不含客户。
+
+#### 5.5.1 bulk 与 curated 两级（同一个包）
+
+| 层 | 内容 | 形态 | 谁写 | 量级 |
+| --- | --- | --- | --- | --- |
+| **bulk** | OSV / NVD / 发行版 tracker 的机器镜像 | OSV JSON 分片（按源 + 年份/首字母） | CI 定时拉 | 十万级 |
+| **curated** | 产品归一、别名、purl/CPE 映射、区间修正、供应商补充 | 一对象一文件（可评审） | 人（PR） | 千级 |
+
+同一 `osv_id` 两边都有时，**curated 覆盖 bulk**（人工修正优先）。仓结构与打包见
+[`software-knowledge-repo.md`](software-knowledge-repo.md)。
 
 ### 5.6 `software_installation`（客户域）
 
@@ -324,14 +340,17 @@ SoftwareEvidence（边缘）
 
 ## 9. 公共知识库的分发与更新
 
+源数据不自建：批量层直接用现成生态（OSV / NVD / 发行版 tracker），我们只写 curated 层
+（归一、别名、区间修正、私有产品）。打包与分发照 `wist-knowledge` 的现成套路：
+
 | 项 | 做法 |
 | --- | --- |
-| 形态 | 只读副本（镜像内 / 挂载卷 / 离线知识包），计算区无外网也能用 |
-| 版本 | 每次发布带 `kb_version`（含抓取时间与源 revision） |
-| 更新 | 随产品包发布，或单独同步知识包；不做逐条增量下发 |
-| 回滚 | 切换到上一份 `kb_version` 即可；客户域的 `hit` 保留旧版本号，解释得清 |
-| 写入方向 | **单向**：KB → 计算区。客户域数据（host/ip/path/命中）永不回写 |
-| 对账 | 确定性 id 让多实例、多客户可以合并统计（同一条 advisory 在各地 id 相同） |
+| 形态 | 只读**内容包**（`wist-software-kb-<ver>.tar.gz` + `.sha256` + Ed25519 签名），镜像/卷带走，离线可用 |
+| 版本 | `kb_version` = 包版本 + 内容 hash；导入时落到 `host_software_hit.kb_version` |
+| 更新 | 随产品包发布，或单独投放新包；不做逐条增量下发 |
+| 回滚 | 换回上一份包重新导入即可；旧 `kb_version` 的命中保留，解释得清 |
+| 写入方向 | **单向**：KB → 计算区。客户数据（host/ip/path/命中）永不回写 |
+| 对账 | 确定性 id 让多实例、多客户可以合并统计（同一条 OSV 记录在各地 id 相同） |
 
 ---
 
@@ -404,5 +423,7 @@ HostInventory -> ProcessRuntimeState -> SoftwareEvidence -> (归一) -> software
 - 三层：边缘出证据、客户域存事实、公共 KB 存知识；
 - KB 用确定性 id（purl/CPE 派生），客户域用本地 UUID 引用；
 - 产品与版本分层，version 才参与漏洞区间匹配；
-- 公告（KB）与命中（客户域）分离，命中带 `kb_version`；
+- 公告按 **OSV schema** 存（`affected[].ranges` 表达区间），不自己发明字段集；
+- bulk（OSV/NVD/发行版）与 curated（人写）两级同包，curated 覆盖 bulk；
+- 命中（客户域）带 `kb_version`；
 - 数据单向流动：客户数据不进 KB。

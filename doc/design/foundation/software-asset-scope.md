@@ -118,7 +118,8 @@ ps / -zsh                  27 / 23 采集器自己与登录 shell
 
 **范围边界**：KB 里没有、也不收客户数据（主机名 / IP / 安装路径 / 命中）；客户域只存对 KB 的**引用**
 （`product_id` / `version_id` / `advisory_id`）。这样 KB 能跨实例共享、随包分发、离线可用，
-客户数据也永远不出计算区。
+客户数据也永远不出计算区。KB 的组织、打包与导入见
+[`../center/models/software-knowledge-repo.md`](../center/models/software-knowledge-repo.md)。
 
 **不加的东西**（防止模型膨胀）：`host.software[]` 内嵌数组、`process` 上的版本文本字段、
 把 `executable.name` 当漏洞查询键 —— 三者在 `host-process-software-vulnerability-graph.md` §5 已明确禁止。
