@@ -23,7 +23,7 @@ variant CollectionFamily {
   meta {
     label zh "采集面"
     label en "Collection Family"
-    summary zh "工作内容的分类面（**闭集**，共 24 个）：登录、提权、软件变更、服务、崩溃、网络、重启、系统杂项、指标、容器日志、流量检测，以及 macOS 侧重、Linux 侧重与外部系统指标的面。面描述**需求**（要看见什么类别的事件），不是**载体**（从哪个文件/接口拿）；只增不改名，改名即新面 + 旧面 deprecated。"
+    summary zh "工作内容的分类面（**闭集**，共 26 个，其中 22 个在用、4 个已废弃）：登录、提权、软件变更、服务、崩溃、网络、重启、系统杂项、指标、容器日志、流量检测，以及 macOS 侧重、Linux 侧重与外部系统指标的面。面描述**需求**（要看见什么类别的事件），不是**载体**（从哪个文件/接口拿）；只增不改名，改名即新面 + 旧面 deprecated。"
     tags "control", "collection", "content"
   }
 
@@ -49,5 +49,14 @@ variant CollectionFamily {
 
   // 外部系统指标（平台 linux）：端点 / 协议 / 凭据只来自 agentd 本机自探，
   // 工作单元的 source `target` 只认 `auto`。与上面的「日志面」并列，但走 `collect_metrics`。
+  //
+  // 粒度是**领域**（「要看见什么」），不是产品：数据库指标一个面，消息队列指标一个面。
+  // 产品差异由单元的 `CollectionSourceKind` 承载（`PostgresInstance` / `MysqlInstance` /
+  // `DorisCluster` / `KafkaCluster`），不再由面承担 —— 见 `collection-families.md` §3.1。
+  DatabaseMetrics MessageQueueMetrics
+
+  // 已废弃（0.9.3 起不再有单元）：仅为了「历史数据可解释」与词表**追加式**校验保留。
+  // KafkaMetrics → MessageQueueMetrics；
+  // PostgresMetrics / MysqlMetrics / DorisMetrics → DatabaseMetrics。
   KafkaMetrics PostgresMetrics MysqlMetrics DorisMetrics
 }

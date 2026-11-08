@@ -34,7 +34,7 @@
 
 ## 2. 闭集与维护规矩
 
-**共 24 个**（清单见 §3）。三条规矩：
+**共 26 个**（22 个在用 + 4 个已废弃，清单见 §3）。三条规矩：
 
 1. **只增不改名。** 面名一旦进入协议（数据帧 / 记录 / 接口），改名就是**破坏性变更**：
    历史数据里那个值会变成"不存在的面"，按面统计与回溯都会断。
@@ -46,7 +46,7 @@
 **谁校验**：网关装载采集目录时按词表拒未知面 —— 面名写错会**报错**，不会被静默收下；
 词表本身还要过**追加式校验**（不得删除 / 改名 / 复用已退场 ID）。
 
-## 3. 24 个面一览
+## 3. 面一览（22 个在用 + 4 个已废弃）
 
 > 「载体」一列只是让你知道**大概从哪来**，会随系统版本与策展变；**以 `catalog.toml` 为准**。
 > 同一个面也可能有多个载体（如 `NetworkFirewall` 的 macOS 侧 = `wifi.log` + 统一日志 `com.apple.alf`）。
@@ -71,17 +71,40 @@
 | `ComputeWorkload` | 作业调度与加速卡 | Linux | `slurm/*`、`dmesg:nvidia-xid`（容器 stdout **不在这个面**，见下） |
 | `ContainerWorkload` | 容器 stdout（business / gateway / k8s_pod） | Linux | k8s：`/var/log/containers/*.log`；纯 Docker：`/var/lib/docker/containers/*/*-json.log*`（13/15/16 同一批流） |
 | `BackupJob` | 备份与批处理 | Linux | `borg/*`、`restic/*` |
-| `NetworkService` | 网络服务（NFS/SMB/防火墙规则） | Linux | `nginx/*`、`samba/*` |
+| `NetworkService` | 网络服务（NFS/SMB/防火墅规则） | Linux | `nginx/*`、`samba/*` |
 | `TrafficInspection` | 流量的入侵检测事件（镜像点） | Linux | `/opt/suricata/logs/eve.json`（显式单路径跟尾，一行一条 JSON） |
-| `KafkaMetrics` | Kafka 集群指标（broker 拓扑 / 容量 / 消费组 lag 与状态） | Linux | `KafkaCluster auto`（端点由 agentd 自探） |
-| `PostgresMetrics` | PostgreSQL 指标（连接 / 事务 / IO / 复制） | Linux | `PostgresInstance auto`（同上；单元先 draft） |
-| `MysqlMetrics` | MySQL / TiDB 指标（连接 / 线程 / QPS / InnoDB / 复制） | Linux | `MysqlInstance auto`（同上；单元先 draft） |
-| `DorisMetrics` | Doris 指标（BE 存活 / 容量 / tablet） | Linux | `DorisCluster auto`（同上；单元先 draft） |
+| `DatabaseMetrics` | 数据库运行指标（连接 / 事务 / IO / 复制 / 容量 / tablet） | Linux | `PostgresInstance` / `MysqlInstance`（含 TiDB）/ `DorisCluster`，均 `auto` |
+| `MessageQueueMetrics` | 分布式消息队列指标（broker 拓扑 / 容量 / 消费组 lag） | Linux | `KafkaCluster auto`（端点由 agentd 自探） |
+
+### 3.1 为什么指标面按领域切，不按产品切
+
+判据只有一条（就是 §1 那句）：**面描述「要看见什么」，不是「从哪拿」。**
+
+| 且法 | 数量 | 例子 |
+| --- | --- | --- |
+| 事件 / 领域 | **22** | `LoginSession`、`CrashPanic`、`DatabaseService`、`HostMetrics` |
+| 外部产品名 | **0**（在用） | — |
+
+合并的**硬边界**是三条同时成立，否则不能合：
+
+1. 同一 `capability` —— DB 指标与 `DatabaseService`（日志）不能合，那是 `collect_logs`；
+2. 同一平台；
+3. 同一「要看见什么」的粒度 —— 数据库指标与消息队列指标不能合。
+
+产品差异落到**单元**与 `CollectionSourceKind`（`PostgresInstance` / `MysqlInstance` /
+`DorisCluster` / `KafkaCluster`），**指标命名空间**（`pg_*` / `mysql_*` / `doris_*` / `kafka_*`）
+仍各自独立 —— 那是源系统的语义，不是面的语义。
+
+> 旧面（`KafkaMetrics` / `PostgresMetrics` / `MysqlMetrics` / `DorisMetrics`）**保留在词表里、
+> 但不再有任何单元**：一是历史数据可解释，二是词表的追加式校验（不得删面）能过。
 
 > **外部系统指标的共同约定**：source 的 `target` 只认 `auto` —— 端点 / 协议 / 凭据全部由
 > agentd 本机自探，工作里写具体地址会被判 `unsupported`（不扩大 SSRF 面）；
 > `requires_privilege = root`（要读别的用户的 `/proc/<pid>`）；平台只有 Linux（自探读 /proc）。
-> 派单闸门仍是单元的 `status`：目前只开 `KafkaMetrics`（真集群验过），其余三个为 `draft`。
+> 派单闸门仍是单元的 `status`：目前只开 `linux-kafka-metrics`（真集群验过），
+> `linux-postgres-metrics` / `linux-mysql-metrics` / `linux-doris-metrics` 为 `draft`。
+> 合面之后，页面要靠**单元级**就绪度回答「哪个产品能采」—— 面级只能回答「这一类整体可用吗」，
+> 「部分就绪」是合法状态。
 
 > **`HostMetrics` 的磁盘口径**（Linux）：容量分两个角色 —— `system` = 根文件系统 `/`（系统盘，
 > 看使用率），`data` = 其余本地块设备挂载点汇总（数据盘，看剩余可用）。多块数据盘按容量汇总，
