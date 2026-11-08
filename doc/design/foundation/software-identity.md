@@ -29,7 +29,9 @@
 
 **没有任何一个标准同时覆盖两者。** purl 描述的是「制品从哪来」，它不知道也不关心这份二进制此刻在谁的机器上、以什么名字、占哪个端口、属于哪条业务。反过来 OTel 的 `service.name` 只要求「同一服务横向扩缩容时取值相同」，它不知道这个名字对应哪个 purl。
 
-这就是为什么 atlas 里既要 `software_installation`（包视角）又要 `process_runtime_state` / `instance_endpoint`（运行视角）—— 不是设计啰嗦，是两个世界本来就不通。
+这就是为什么 `software_instance` 上必须同时挂着两边的坐标：`claimed_*`（包视角：包名、版本、来源）与
+`anchor` / `current_artifact_id`（部署与运行视角）—— 不是设计啰嗦，是两个世界本来就不通，
+而**同一个部署位**是唯一能把它们对上的东西。
 
 ### 2.1 我们说的每个词，对应标准里的哪个字段
 
@@ -37,12 +39,16 @@
 | --- | --- | --- | --- |
 | **产品** | purl 去掉 version | ✅ purl | `software_product`（KB） |
 | **版本** | purl 的 version 段 | ✅ purl | `software_version`（KB） |
-| **安装** | （包 × 主机）这个事实 | ❌ **没有标准** | `software_installation`（客户域） |
-| **部署单元** | `service.name` / `service.namespace`（部分） | ⚠️ 只能部分对齐 | `metrics-app-registry.toml` 的 `app` |
-| **运行实例** | `service.instance.id` | ✅ OTel Resource | `process_runtime_state` |
+| **安装 / 部署单元** | （包 × 主机）这个事实；以及它用什么方式跑起来 | ❌ **两者都没有标准** | `software_instance`（`anchor` + `claimed_*`，客户域） |
+| **运行实例** | `service.instance.id` | ✅ OTel Resource | `process_runtime_state`（指向 `software_instance`） |
 | **主机** | `host.*` | ✅ OTel Resource | `host_inventory` |
 
-注意「安装」这一行：**没有任何标准表达「这台机器上装了这份包」**。CycloneDX / SPDX 表达的是「一个制品由哪些组件构成」（供应链），不是「某台主机的安装状态」。所以 `software_installation` 只能自己定义 —— 但它很窄（包 id + 主机 id + 来源 + 时间），不构成设计负担。
+注意「安装 / 部署单元」这一行：**没有任何标准同时表达这两件事**。CycloneDX / SPDX 表达的是
+「一个制品由哪些组件构成」（供应链），不是「某台主机的安装状态」；`service.name` 又不知道自己是哪个包。
+所以 `software_instance` 只能自己定义 —— 但它很窄（anchor + 包名 + 版本 + 来源 + 时间），不构成设计负担。
+
+> 早期的 `software_installation` 已并入这一行（2026-11-08）：包视角不再单独成表，
+> 否则同一个部署位会在两张表里各有一份、迟早不一致。
 
 ### 2.2 「产品」的权威名不是 purl
 
@@ -121,9 +127,13 @@ OTel 的 `service.*` 本来是给**应用服务**的。中间件（数据库 / �
 - 所以它需要一张 `hash → (product, version, distro, arch)` 的库，**库本身必须从可信源构建**（详见
   [`../center/models/software-fingerprint-verification.md`](../center/models/software-fingerprint-verification.md)）；
 - 它不靠任何宣称，所以能和宣称值**交叉验证**：声称是 X 但 hash 不是官方 X 的 → 文件被替换。
+- **它也是主机上这个软件实例的唯一权威身份 ID**（2026-11-08 定）：实例身份由「当前跑着的字节」定，不由
+  `service.name` / 包名 / 路径定；`service.instance.id` 之类的名字只是**位置锚点**，用于跨升级保持连续。
+  两者不能互相代替 —— 详见
+  [`../center/models/software-fingerprint-verification.md`](../center/models/software-fingerprint-verification.md) §6.1。
 
 所以“单位”这一层的完整答案是：**四路归一**（包反查 / 自报 / 镜像 / 指纹），
-其中只有指纹能回答“这是不是原厂那份字节”。
+其中只有指纹能回答“这是不是原厂那份字节”，也只有它能给未知软件一个可用 ID。
 
 ---
 
@@ -139,6 +149,9 @@ OTel 的 `service.*` 本来是给**应用服务**的。中间件（数据库 / �
 | 手工前台 | 没有单元 —— 只有进程 | 只能到进程粒度 |
 
 **这一层没有任何标准。** `wist-knowledge/metrics-app-registry.toml` 就是它的第一版：把「部署者命名的证据」（unit 名 / 容器名）映射到 `app` / `role` 闭集。
+atlas 侧它落到 `software_instance.anchor_kind` / `anchor_value`（见
+[`../center/models/software-fingerprint-verification.md`](../center/models/software-fingerprint-verification.md) §6.1）——
+也是为什么这个对象的键不是 `product_id`：同一产品可以在一台机上有多个部署位。
 
 那条文件里已经写明为什么必须是**闭集**：`app` 是选择类 label，改了取值会让「同一台机器按 app 查的历史断成两段且查不回来」。软件定义层的 `category` 将来会以同样方式进入查询条件，必须遵守同一条纪律。
 
@@ -209,5 +222,5 @@ OTel 的 `service.*` 本来是给**应用服务**的。中间件（数据库 / �
 
 1. **中间件是否继续用 `service.*`**（§2.2 的语义拉扯），还是引入自有命名空间（如 `mw.*`）。倾向继续用 `service.*` + 自有 `app`/`role` 并存，但要在指标规范里写明不等价。
 2. **`service.name` 的取值域由谁定**：目前是 `metrics-app-registry.toml`（网关侧）。如果软件定义层也要写这个值，两处会漂移 —— 需要定「谁是权威」。
-3. **安装（installation）没有标准**，是否需要同时输出一份 CycloneDX SBOM 作为取证产物（取证可复用标准，图谱仍用自己的表）。
+3. **「安装 × 主机」这个事实没有标准**，是否需要同时输出一份 CycloneDX SBOM 作为取证产物（取证可复用标准，图谱仍用自己的表）。
 4. **第三段（运行实例 → 软件）的实现位置**：agentd 上报原始证据，还是网关/中心反查？这决定了 `dpkg-query -S` 这类动作在哪一侧执行，以及是否需要给 agentd 开新的权限面。

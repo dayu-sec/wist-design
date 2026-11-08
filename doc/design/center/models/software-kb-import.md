@@ -32,6 +32,12 @@
 
 所以 P0 导入时 `profiles` **照样验签和落库**（它是包的一部分，不完整性要检查），但 atlas 的匹配逻辑不读它。将来如果要给 agentd，再拆包 —— 见 [`software-knowledge-repo.md`](software-knowledge-repo.md) §11。
 
+> **指纹事实不在这份包里。** `software_artifact`（一份构建的 sha256）来自独立的
+> `wist-artifact-hash` 包，见
+> [`software-fingerprint-verification.md`](software-fingerprint-verification.md) §12。
+> 两个包用同一条验签链，但写入语义不同：KB 整表替换，hash 包增量 upsert（且不对
+> `software_version` 加级联删除）。
+
 ---
 
 ## 3. 包从哪来（计算区无外网）

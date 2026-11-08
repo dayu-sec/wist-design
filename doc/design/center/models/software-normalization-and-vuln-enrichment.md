@@ -28,7 +28,7 @@
 ```text
 process / package / bundle facts  →  SoftwareEvidence（边缘）
    → 归一（客户域引用 KB 的确定性 id）
-   → software_installation / process.software_version_id / host_software_hit（客户域）
+   → software_instance / process.software_version_id / host_software_hit（客户域）
    ← software_advisory（公共 KB，只读）
 ```
 
@@ -42,7 +42,9 @@ process / package / bundle facts  →  SoftwareEvidence（边缘）
 | --- | --- |
 | `SoftwareEntity` | `software_product` + `software_version`（两个层次） |
 | `SoftwareVulnerabilityFinding` | `software_advisory`（公共）+ `host_software_hit`（客户域） |
-| `Host -> SoftwareEntity -> Findings` | `Host -> software_installation -> host_software_hit -> software_advisory` |
+| `Host -> SoftwareEntity -> Findings` | `Host -> software_instance -> host_software_hit -> software_advisory` |
+| `software_installation`（本仓早期版） | **已并进 `software_instance`**（2026-11-08）。包视角不再单独成表：`claimed_package_name` / `claimed_version` / `claimed_source` / `role[]` / `reason[]` 都长在 instance 上，见 [`software-fingerprint-verification.md`](software-fingerprint-verification.md) §10.1 |
+| `installation_id` | `instance_id` |
 
 ---
 
@@ -63,7 +65,7 @@ process / package / bundle facts  →  SoftwareEvidence（边缘）
 | | 边缘（agentd） | 客户域（计算区） | 公共知识库（KB） |
 | --- | --- | --- | --- |
 | 回答什么 | 看到了什么线索 | 这台机的软件事实与命中 | 这个产品这个版本有什么问题 |
-| 数据 | 可执行路径 / 包名 / 版本文本 / 签名 / 镜像 ref | installation、跑着的版本、暴露、hit | product / version / external id / advisory |
+| 数据 | 可执行路径 / 包名 / 版本文本 / 签名 / 镜像 ref | `software_instance`（部署位 + 声称值 + 跑着的字节）、暴露、hit | product / version / external id / advisory |
 | 属主 | 客户 | **客户** | 平台 |
 | 跨租户 | — | **不互通** | **共享、只读** |
 | 主键 | 本地 | 本地 UUID | **确定性 hash** |
@@ -188,28 +190,38 @@ software_advisory {
 同一 `osv_id` 两边都有时，**curated 覆盖 bulk**（人工修正优先）。仓结构与打包见
 [`software-knowledge-repo.md`](software-knowledge-repo.md)。
 
-### 5.6 `software_installation`（客户域）
+### 5.6 `software_instance`（客户域）
+
+> 早期版本叫 `software_installation`，只有「包 × 主机」一层。2026-11-08 并入
+> [`software-fingerprint-verification.md`](software-fingerprint-verification.md) §10.1 的
+> `software_instance`：因为**部署单元（systemd unit / 容器 / socket）没有任何标准**
+> （`software-identity.md` §4），而它是图谱节点必须有的位置锚点；再单独维护一张包视角的表，
+> 所有字段都能在 instance 上找到归宿，却要多一条 join。
 
 ```text
-software_installation {
-  installation_id      # 本地 UUID
+software_instance {
+  instance_id          # 本地 UUID
   tenant_id
-  host_id / container_id
-  product_id           # 引用 KB（确定性 id）
-  version_id           # 引用 KB；解析失败时为空 + version_text 保留
-  version_text         # 原文兜底（KB 里没有这个版本时仍可展示）
-  install_source       # dpkg | rpm | brew | app_bundle | container_image | unknown
-  install_path?
+  host_id
+  anchor_kind / anchor_value   # 部署单元（唯一键的其余部分）
+  current_artifact_id  # sha256:<hex>；算不出时为空
+  identity_missing_reason
+  claimed_package_name # 'postgresql-16'（包名）
+  claimed_product_id   # 引用 KB（产品）
+  claimed_version      # 原样；来自包元数据时即 version_installed
+  claimed_source       # path_package | probe | image_tag
   role[]               # exposed-service | business-runtime | middleware | runtime | agent
   reason[]             # listener | service-binding | governance-class
-  first_seen_at / last_seen_at
-  stale_at?
+  status               # official | claimed_mismatch | ours | human_confirmed | ai_suspected | observed | identity_missing
+  first_seen_at / last_seen_at / stale_at?
 }
 ```
 
 - `role` / `reason` 是**多值**：同一软件在一台机上可能既监听又承担业务；
-- 它们放在 installation 而不是 product 上 —— 同一软件在不同主机角色不同；
-- 它们同时是**入库凭据**（见 scope 文档）：能解释"为什么这条在图上"。
+- 它们放在 instance 而不是 product 上 —— 同一软件在不同主机角色不同；
+- 它们同时是**入库凭据**（见 scope 文档）：能解释"为什么这条在图上"；
+- **包名与产品名不合并**：`postgresql-16` 是包，`postgresql` 是产品。只存 `claimed_product_id`
+  会让「这台机装的是哪个发行版包」不可追溯，而补丁与 advisory 恰恰按包发。
 
 ### 5.7 `process_runtime_state.software_version_id`（客户域，一格列）
 
@@ -223,7 +235,7 @@ host_software_hit {
   hit_id
   tenant_id
   host_id
-  installation_id
+  instance_id          # 早期是 installation_id
   advisory_id          # 引用 KB
   kb_version           # 算这条命中时 KB 是哪一版
   matched_by           # version-range | cpe | purl
@@ -290,7 +302,7 @@ SoftwareEvidence（边缘）
 -> candidate match         优先级：package+version > 签名 bundle > 路径+版本元数据 > hash 目录 > 别名启发
 -> product / version upsert  命中即复用确定性 id；未命中建 provisional
 -> external id mapping     purl / cpe（带置信度与来源）
--> back-reference          installation、process.software_version_id
+-> back-reference          software_instance、process.software_version_id
 ```
 
 ### 7.1 人工纠错出口（必须有）
@@ -304,8 +316,8 @@ SoftwareEvidence（边缘）
 
 ### 7.2 失败时不许装成"没有"
 
-解析不到包归属（自编译程序、脚本、容器内）时：`version_id = null` + `version_text` 保留 + `install_source = unknown`，
-`normalization_status = provisional`。**`unknown` 不是"干净"**。
+解析不到包归属（自编译程序、脚本、容器内）时：`claimed_version` 保留原文（KB 里没这个版本仍可展示）、
+`claimed_source = unknown`、`claimed_product_id` 为空、`current_artifact_id` 仍可能有值（hash 不靠宣称）。
 
 ---
 
@@ -314,11 +326,13 @@ SoftwareEvidence（边缘）
 ### 8.1 两个事实，不是一个
 
 1. **公告**（KB）：`advisory` 声明产品 X 的区间 `[a, b)` 有漏洞；
-2. **命中**（客户域）：某台机的 `installation` 落在那个区间里 → `host_software_hit`。
+2. **命中**（客户域）：某台机的 `software_instance` 落在那个区间里 → `host_software_hit`。
+   区间比对的版本是 **`current_artifact_id` 反查出的 `version_running`**；
+   `claimed_version`（`version_installed`）只用于展示「重启后会变什么」。
 
 匹配步骤：
 
-1. 取该 installation 的 `version_id`（没有就 `version_text`，尽力解析）；
+1. 取该 instance 的 `version_running`（`current_artifact_id` 反查得到）；拿不到则退到 `claimed_version`，并标 `unknown`；
 2. 按 `ecosystem` 选版本比较器，判断是否落在 `affected_range`；
 3. 命中写 `host_software_hit`，记录 `kb_version` 与 `matched_by`。
 
@@ -388,7 +402,7 @@ version_running    1.22（有洞）   ← 当前暴露
 ## 10. 与资源目录的关系
 
 ```text
-HostInventory -> ProcessRuntimeState -> SoftwareEvidence -> (归一) -> software_installation
+HostInventory -> ProcessRuntimeState -> SoftwareEvidence -> (归一) -> software_instance
                                                                   -> host_software_hit -> advisory
 ```
 
@@ -420,7 +434,7 @@ HostInventory -> ProcessRuntimeState -> SoftwareEvidence -> (归一) -> software
 | 层 | 表 |
 | --- | --- |
 | 公共 KB（无 tenant，只读） | `software_product` / `software_version` / `software_external_id` / `software_advisory` |
-| 客户域（带 tenant） | `software_evidence` / `software_installation` / `host_software_hit`，以及 `process_runtime_state.software_version_id` 一格列 |
+| 客户域（带 tenant） | `software_evidence` / `software_instance` / `host_software_hit`，以及 `process_runtime_state.software_version_id` 一格列 |
 
 后续接 SBOM 再加 `software_component` / `software_dependency_edge`（同属 KB）。
 
@@ -430,7 +444,7 @@ HostInventory -> ProcessRuntimeState -> SoftwareEvidence -> (归一) -> software
 
 1. `process -> SoftwareEvidence`（边缘）
 2. 基于路径 / bundle / package name 的 product+version 归一（KB 的确定性 id）
-3. `software_installation`（含 role/reason 多值）
+3. `software_instance`（部署单元 + 声称值 + role/reason 多值）
 4. `process.software_version_id` 回填
 5. `software_advisory` 与 `host_software_hit` 的骨架（先接一个源，不做全量情报）
 
@@ -443,7 +457,7 @@ HostInventory -> ProcessRuntimeState -> SoftwareEvidence -> (归一) -> software
 - 同一软件的 helper / renderer 归到同一个 `product_id`（不是同一个进程名）；
 - 升级后 `product_id` 不变、`version_id` 变；
 - 带空格路径、`.app` bundle、package manager 安装项能稳定识别；
-- 装 1.24 跑 1.23 时，`process.software_version_id` 与 `installation.version_id` 能看出差异；
+- 装 1.24 跑 1.23 时，`version_running`（`current_artifact_id` 反查）与 `claimed_version` 能看出差异；
 - 命中能说明 `kb_version` 与 `matched_by`，且 KB 里没有任何客户数据；
 - enrichment 失败不影响边缘 discovery 与 telemetry 主路径。
 

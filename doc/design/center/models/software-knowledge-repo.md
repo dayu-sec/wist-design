@@ -173,7 +173,7 @@ note        = "发行版回移了补丁，上游 OSV 区间不适用"
 
 所以 purl / CPE / 包名全部降级为**别名**（只用于识别，不参与 id 派生）。
 
-**破坏性变更**：改 `canonical_id` 会让所有客户域的 `installation.product_id` 悬空 —— 必须走
+**破坏性变更**：改 `canonical_id` 会让所有客户域的 `software_instance.claimed_product_id` 悬空 —— 必须走
 「显式 rename 声明」而不是静默改（CI 校验，见 §6）。改 `external_ids` / `aliases` 不受影响。
 
 ---
@@ -270,10 +270,13 @@ wist-atlas kb import <pack> [--dry-run]
 
 ## 10. 与其它文档的衔接
 
-- **对象模型**（product / version / external_id / advisory / installation / hit）：`software-normalization-and-vuln-enrichment.md` §5；
+- **对象模型**（product / version / external_id / advisory / instance / hit）：`software-normalization-and-vuln-enrichment.md` §5；
 - **范围**（哪些软件成为资产）：`../../foundation/software-asset-scope.md`；
 - **关系图**：`host-process-software-vulnerability-graph.md`；
-- **情报源与格式**：`public-vulnerability-source-ingestion.md`（本文的 bulk 层就是它的产线）。
+- **情报源与格式**：`public-vulnerability-source-ingestion.md`（本文的 bulk 层就是它的产线）；
+- **制品指纹包**（`wist-artifact-hash`）：本仓只放**定义层**；一份构建的 sha256 事实是独立产线与
+  独立包（public 只要 GitHub、私有 overlay 不进仓），见
+  [`software-fingerprint-verification.md`](software-fingerprint-verification.md) §12。
 
 ---
 

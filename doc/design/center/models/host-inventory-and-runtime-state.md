@@ -295,10 +295,10 @@ HostInventory
   -> SoftwareEvidence[]
 
 SoftwareEvidence
-  -> software_installation（客户域）
+  -> software_instance（客户域）
   -> software_product / software_version（公共知识库）
 
-software_installation
+software_instance
   -> host_software_hit -> software_advisory（公共知识库）
 ```
 
