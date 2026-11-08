@@ -104,7 +104,8 @@
 来源：`jumo/model/static/control/module/agent/content/families.mju`。
 
 1. **只增不改名**：面名进入数据帧、接口和历史数据，改名就是破坏性变更；
-2. **要改语义就出新面**：旧面保留并标 `deprecated`（退场机制尚未实现，靠评审守住）；
+2. **要改语义就出新面**：旧面默认保留并标 `deprecated`（退场机制尚未实现，靠评审守住）。
+   **例外**：确认协议与历史数据里**都没有**旧面值时，可以直接从词表与网关闭集里删除（一次性清理，不走 deprecated）；
 3. **加面只动词表**：目标态下词表是知识库数据（§5.5），模型由词表生成或由 CI 双向比对；现状是「模型 + 网关常量各改一处」，收敛路径见 §12.1。
 
 ### 5.4 护栏分层
@@ -126,7 +127,9 @@
 3. agentd 能力**真实存在**：能力 ID 可验证，不是文档承诺；
 4. 授权显式且可审计：谁、何时、给哪台机器、为什么；
 5. 版本兼容与可回退：`requires` + `last_known_good`；
-6. 预期 vs 实际的观测：授权面 ≠ 实际上报面时能告警。
+6. 预期 vs 实际的**观测**：agentd 在每个面的本机工作视图里上报 `collection`
+   （`ok` / `degraded` / `failed` / `unknown` / `paused` + 原因），管理面据此区分
+   「授权了但没采成」与「没授权」；自动告警/告警阈值仍待定（现在只是页面可见）。
 
 模型生成闭集只是第 1 条的**防漂移辅助**，不是护栏本身。
 
@@ -325,6 +328,15 @@ flowchart TD
 | 中心/Web | 中心/网关 API | 展示预检结果与最终事实，**不替代执行判定** |
 
 **重要**：网关预检通过 ≠ 真能采。最终证据是 agentd 没有报 `unsupported`，且数据真的到达。
+
+**页面上的「可授权」必须等于网关的判定**：授权时网关用目录 **+ 事实** 展开模板，
+该面的单元全被排除就回 409（`no unit selected for <family>: <unit>=<reason>`）。
+所以 Web 的行状态不能只看目录（模板包含 + 平台就绪），还要叠加
+`GET /api/v1/admin/agents/{id}/collection-preflight` 的**面级结论**：
+`grantable` 之外（`absent` / `source_unresolved` / `unreadable` / `agent_too_old` /
+`not_ready` / `unprobed`）一律按「不可授权 + 原因 + 预检按钮」呈现，
+否则界面会把人推去做一次必然 409 的授权（典型：`mac-db-service` 要求
+Homebrew 的 `var/log` / `var/mysql`，没装本地库的 Mac 一条都匹配不上）。
 
 ---
 
@@ -618,6 +630,7 @@ wist-verify collect \
 ## 14. 未决问题
 
 1. **面的退场机制**：目前 `families.mju` 没有 `deprecated` 状态；需要定义 tombstone 与校验规则。
+   （确认无历史数据时已做过一次性删除，见 §5.3 规则 2 的例外；这不等于有了正式退场机制。）
 2. **能力 ID 的完整闭集**：需要把现有 `EXPORTER_IDS` / `SOURCE_KINDS` / `is_executable_source` 收敛成 manifest，并覆盖所有执行路径。
 3. **agentd 能力上报的兼容性**：旧 agentd 不带 capabilities，网关/中心如何降级判断（版本粗门 vs 未知）。
 4. **中心是否承担知识包发布**：`CatalogOrigin::Center` 的同步路径需要与 `requires` 校验对齐。

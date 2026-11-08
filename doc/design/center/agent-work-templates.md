@@ -4,7 +4,7 @@
 
 | 层 | 模型项 | 作用 |
 |---|---|---|
-| 采集面 | `variant CollectionFamily`（`families.mju`） | 按事件/资源类别切的面，平台无关。**闭集（26 个，22 在用）、只增不改名**；含义与维护规矩见 `collection-families.md` |
+| 采集面 | `variant CollectionFamily`（`families.mju`） | 按事件/资源类别切的面，平台无关。**闭集（22 个）、只增不改名**；含义与维护规矩见 `collection-families.md` |
 | 采集单元 | `struct CollectionUnit`（`items.mju`） | 某面上的具体条目，带 `family` 与 `rule_ref`（绑数据面 rule/oml） |
 | 内容包 | `struct ContentPack` + `variant PackKind`（`items.mju`） | 可复用的单元组合：平台基线或特性面，模板的积木 |
 | 常驻工作模板 | `struct WorkTemplate` + `variant MachineClass` | 某类机器的开箱组合 = 平台基线包 ⊕ 若干特性包 |
@@ -98,7 +98,7 @@
 `ServiceLifecycle`/`CrashPanic`/`NetworkFirewall`/`RebootPower`/`MiscSystem`/`HostMetrics`）两侧都有单元；
 macOS 侧重面（`PrivacyTcc`/`GatekeeperQuarantine`/`DevToolchain`）只有 mac 单元，
 Linux 侧重面（`KernelSystem`/`DatabaseService`/`StorageHealth`/`ComputeWorkload`/`BackupJob`/`NetworkService`）
-只有 Linux 单元。22 个在用面全部有单元（4 个已废弃面没有）。
+只有 Linux 单元。22 个面全部有单元。
 
 → 结论：`macos-daily`/`macos-dev` 有可跑起来的一部分（指标 + 少数日志面）；
 Linux 侧目前先开了 `linux-host-metrics` 一个面（指标周期采，不依赖解析规则），其余面仍**只是内容定义**、
@@ -127,7 +127,7 @@ Linux 侧目前先开了 `linux-host-metrics` 一个面（指标周期采，不�
 
 模型只给**类型与词表**（`Control.Agent.Content`），内容值落在三个 TOML：
 
-- `wist-knowledge/catalog.toml`：采集目录（37 个单元、26 个面（22 在用），字段与 `CollectionUnit` 一一对应）
+- `wist-knowledge/catalog.toml`：采集目录（37 个单元、22 个面，字段与 `CollectionUnit` 一一对应）
 - `wist-knowledge/packs.toml`：内容包（平台基线 + 特性包，字段与 `ContentPack` 一一对应）
 - `wist-knowledge/templates.toml`：5 个模板（只带 `pack_refs`，字段与 `WorkTemplate` 一一对应）
 

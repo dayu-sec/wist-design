@@ -34,19 +34,20 @@
 
 ## 2. 闭集与维护规矩
 
-**共 26 个**（22 个在用 + 4 个已废弃，清单见 §3）。三条规矩：
+**共 22 个**（清单见 §3）。三条规矩：
 
 1. **只增不改名。** 面名一旦进入协议（数据帧 / 记录 / 接口），改名就是**破坏性变更**：
    历史数据里那个值会变成"不存在的面"，按面统计与回溯都会断。
-2. **要改语义就出新面**：旧面保留（历史仍可解释）、标 `deprecated` 退场。
-   （**退场机制尚未实现** —— 见 §4。）
+2. **要改语义就出新面**：旧面默认保留（历史仍可解释）、标 `deprecated` 退场。
+   （**退场机制尚未实现** —— 见 §4。例外：确认没有历史数据时可直接删除，
+   2026-11-08 已用这种方式清掉了四个指标旧面。）
 3. **加面只动词表。** 词表是知识库数据（`catalog.toml` 的 `[[families]]`），模型与词表由测试
    双向比对；网关的 `FAMILIES` 常量只作旧包回落（不在新包路径上）。
 
 **谁校验**：网关装载采集目录时按词表拒未知面 —— 面名写错会**报错**，不会被静默收下；
 词表本身还要过**追加式校验**（不得删除 / 改名 / 复用已退场 ID）。
 
-## 3. 面一览（22 个在用 + 4 个已废弃）
+## 3. 面一览（22 个）
 
 > 「载体」一列只是让你知道**大概从哪来**，会随系统版本与策展变；**以 `catalog.toml` 为准**。
 > 同一个面也可能有多个载体（如 `NetworkFirewall` 的 macOS 侧 = `wifi.log` + 统一日志 `com.apple.alf`）。
@@ -95,14 +96,21 @@
 `DorisCluster` / `KafkaCluster`），**指标命名空间**（`pg_*` / `mysql_*` / `doris_*` / `kafka_*`）
 仍各自独立 —— 那是源系统的语义，不是面的语义。
 
-> 旧面（`KafkaMetrics` / `PostgresMetrics` / `MysqlMetrics` / `DorisMetrics`）**保留在词表里、
-> 但不再有任何单元**：一是历史数据可解释，二是词表的追加式校验（不得删面）能过。
+> 旧面（`KafkaMetrics` / `PostgresMetrics` / `MysqlMetrics` / `DorisMetrics`）已在
+> 2026-11-08 从词表与网关闭集里删除 —— 确认过没有历史数据，不需要保留 tombstone。
 
 > **外部系统指标的共同约定**：source 的 `target` 只认 `auto` —— 端点 / 协议 / 凭据全部由
 > agentd 本机自探，工作里写具体地址会被判 `unsupported`（不扩大 SSRF 面）；
-> `requires_privilege = root`（要读别的用户的 `/proc/<pid>`）；平台只有 Linux（自探读 /proc）。
-> 派单闸门仍是单元的 `status`：目前只开 `linux-kafka-metrics`（真集群验过），
-> `linux-postgres-metrics` / `linux-mysql-metrics` / `linux-doris-metrics` 为 `draft`。
+> `requires_privilege = root`（要读别的进程的 argv / `/proc`）。
+> **平台**：Linux 走 `/proc`（进程 netns 视角，容器里的库也看得到）；
+> macOS 走 libproc + `sysctl(KERN_PROCARGS2)`（只换事实来源），**容器里的库**改由
+> 容器探针从 Docker API 拿「容器名 + 发布端口」（与 Linux 容器侧同口径，凭据按容器名）。
+> 覆盖不到的只有：没把端口发布到宿主的容器，与需要显式端点覆盖的远端库。
+> 派单闸门仍是单元的 `status`：Linux 四个单元（`linux-kafka-metrics` / `linux-postgres-metrics` /
+> `linux-mysql-metrics` / `linux-doris-metrics`）自知识包 `0.9.5-alpha` 起全部 `active`；
+> macOS 三个单元（`mac-postgres-metrics` / `mac-mysql-metrics` / `mac-doris-metrics`）
+> 自 `0.10.0-alpha` 起 `active`，且都带 `match` 门控（`container:` / `port:` / Homebrew 数据目录）——
+> `macos-dev` 是开发机大包，不门控会把没装库的机器也派上活。
 > 合面之后，页面要靠**单元级**就绪度回答「哪个产品能采」—— 面级只能回答「这一类整体可用吗」，
 > 「部分就绪」是合法状态。
 
@@ -115,9 +123,35 @@
 > 主指标；上面的 `system`/`data` 只是兼容汇总。完整方案（Linux/macOS 过滤规则、标签、
 > 告警与成本）见 [`disk-capacity-collection.md`](../edge/disk-capacity-collection.md)。
 
+### 3.2 运行期采集结果（到底采成没采成）
+
+「授权了什么」（网关 `StandingWork.spec`）、「本机准备采什么」（`local.standing[].tasks`）
+都不是「真采到了」。agentd 额外把每个面的**本 tick 采集结果**随状态心跳上报：
+`AgentLocalStandingWork.collection`（契约 `AgentLocalCollection`）。
+
+| 状态 | 含义 | 典型原因 |
+|---|---|---|
+| `ok` | 本轮**没有观测到采集失败** | 文件已生效、安静待着也算（**不代表这轮有新数据**） |
+| `degraded` | 还有内容在采，但部分失败 | 多个文件里一个不存在、部分指标目标失败、单元来源 agentd 接不了 |
+| `failed` | 这个面没有可采内容，或全部失败 | 所有文件都不存在 / 导出器没装 / 指标域全部失败 / 工作参数解析失败 |
+| `unknown` | 已授权，但还没有可判定的观测 | 指标首轮未完成 / 尚无目标 |
+| `paused` | **不是失败**：本就不该采 | 工作被暂停、数据面上送关闸（待命） |
+
+汇总来源（由 agentd 在每 tick 全量重算）：日志任务的失败面（缺文件 / 读失败 / 多行无头 /
+截断 / spool 满 / 出口写失败）、导出器运行（工具缺失 / 运行失败 / 上送失败）、指标采集域
+（`host_metrics` / `pg_metrics` / `mysql_metrics` / `doris_metrics` / `kafka_broker_metrics`）、
+签发时就折算不了的单元，以及工作参数解析失败。
+
+展示：管理面「Agent 工作」卡片上，「采集结果」与工作状态 / 确认状态**并列**；
+摘要区单独统计「采集异常」（`failed` / `degraded`），与「漂移」（没拉到授权）分开。
+
+> 诚实性边界：`ok` 只说「没观测到失败」，不臆造健康；没有可判定观测时给 `unknown`；
+> 暂停 / 关闸给 `paused`。把正常的安静文件或待命报成失败，会让这个信号迅速失去意义。
+
 ## 4. 已知不足 / 待决
 
 1. **面的退场机制没有**：单元有 `status = deprecated`，面这一层没有 —— 规矩 2 目前只能靠评审守住。
+   （无历史数据时的一次性删除不算退场机制：那要求先确认协议/数据里从未出现过该值。）
 2. **归属含糊的活例子**：`launchd.log` 在 `macos-security-audit-log-sources.md` §5.3 被归在
    「系统与软件变更」，在模型里却是 `ServiceLifecycle`。同一件事两种说法。
 3. **一个单元塞了两件事**：`mac-network-wifi` = `/var/log/wifi.log` **+** 统一日志 `com.apple.alf` ——
