@@ -395,7 +395,7 @@ ExecutableIdentity {
   artifact_id       // 'sha256:<hex>'，即唯一权威 ID
   size_bytes
   build_id?         // ELF .note.gnu.build-id
-  path?             // 仅 claimed_mismatch 时填，见 7.4.4
+  path?             // 默认不带；见 7.4.4（identity_missing / 边缘判出与包记录不符时才填）
 }
 
 ClaimedPackage {
@@ -428,12 +428,13 @@ ClaimedPackage {
 
 | 情况 | 带不带 path |
 | --- | --- |
-| `status` 将由中心判成 `claimed_mismatch` | **必须带**（否则中心无法复查「到底哪个文件不对」，§5 矩阵右上角那格的价值折一半） |
-| 其余 | **不带**；要时另行按需拉取 |
-| 根本拿不到 hash（`identity_missing`） | 带上——此时 path 是唯一可调查的线索，且这种条目本来就少 |
+| 根本拿不到 hash（`identity_missing`） | **带上**——此时 path 是唯一可调查的线索，且这种条目本来就少 |
+| 边缘自己能判出「与包记录不符」 | **带上**（`dpkg -V` / `rpm -V`：本地 `md5sums` 就是发行版官方值，不需要可信源库） |
+| 其余 | **不带**。**P0 不提供拉取通道**；P1 需要时走 `investigate` 的 `software` topic（报告进 evidence，不进图谱） |
 
-判定放在边缘：agentd 自己先比一次 `claimed.version` 与已知产物 hash，
-不一致就带 path（它比中心更清楚包反查结果）。
+**注意：`claimed_mismatch` 的最终判定在中心，不在边缘。** 边缘只能看出「与包记录不符」，
+「与官方制品不符」要可信源库（§5 结论分级）。所以中心判出 mismatch 而边缘没带 path 时，
+**指不到具体文件** —— P0 接受这个限制，见 §14 待定第 3 条。
 
 #### 7.4.5 上限
 

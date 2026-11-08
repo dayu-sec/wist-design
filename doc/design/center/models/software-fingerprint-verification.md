@@ -268,17 +268,34 @@ nginx -v → nginx/1.27.5        ← 丢了 -r1，而 Alpine 的安全修复常�
 **必传**（构成权威 ID 与交叉验证）：
 
 ```text
-artifact_id (sha256) · size_bytes · build_id · anchor · 声称值 · status · version_running
+anchor · artifact_id (sha256) · size_bytes · build_id · 声称值
 ```
 
-**默认只落本机报告，按需拉取**：
+**中心侧派生，不上报**（边缘没有判据，报了也只能是猜）：
+
+| 字段 | 为什么不能在边缘算 |
+| --- | --- |
+| `status` | `official` / `claimed_mismatch` 要可信源库（hash → 构建），库在中心 |
+| `version_running` | 要 `artifact_id` 反查 KB 才得到版本 |
+| `role[]` / `reason[]` | 要 `instance_endpoint` + `runtime_binding`（A/B/C 档规则，属 scope 文档） |
+
+**默认只落本机报告**（P0 不提供拉取通道）：
 
 - 文件绝对路径、inode、mtime —— 不进摘要通道。理由不是敏感，而是**体积与抖动**：
   一台机几十条路径、容器里路径每轮会变，进摘要只会把去重打散；
 - 包元数据的其余细节。
 
-**例外：`claimed_mismatch` 必须同时上传 path。** 否则中心只能信客户端的结论、无法复查
-「到底哪个文件不对」，§5 右上角那格的价值会折掉一半。
+**两个例外，必须同时上传 path**：
+
+| 情况 | 为什么 |
+| --- | --- |
+| `claimed_mismatch` | 否则中心只能信客户端的结论、无法复查「到底哪个文件不对」，§5 右上角那格的价值会折掉一半 |
+| `identity_missing` | 此时 path 是唯一可调查的线索，而且这种条目本来就少（§6.4） |
+
+> **要不要一条「拉路径」的通道？P0 不做。** 真正需要复查的两种已经在帧里了；
+> 其余是调查行为，P1 用已有的 `AgentCommand{kind:"investigate", params:{topic:"software"}}` 即可
+> —— 报告走 `IVSREP` 落 evidence，**不进图谱**。不新开通道的理由：`AgentCommand.kind` 是
+> 开放字符串，旧 agent 回 `unsupported` 不崩；而往 `DiscoverySnapshot` 里加字段要排队升级（§7.4.6）。
 
 ### 6.7 跨租户：身份全局，授权隔离
 
@@ -445,7 +462,7 @@ CREATE TABLE software_instance_observation (
     PRIMARY KEY (instance_id, artifact_id, observed_at)
 );
 
--- ④ 本机报告（不进摘要通道）；`claimed_mismatch` 时才随证据上报
+-- ④ 本机报告（不进摘要通道）；仅 `identity_missing` 与「边缘判出与包记录不符」时随帧上送
 CREATE TABLE software_artifact_path (
     instance_id  UUID NOT NULL REFERENCES software_instance,
     path         TEXT NOT NULL,
@@ -508,7 +525,7 @@ CREATE TABLE software_artifact_popularity (
    `tenant_id` 只用于归属与授权，**不参与 ID 派生**。
 2. **`current_artifact_id` 可为 NULL，且必须带 `identity_missing_reason`** —— 允许“没有 ID”，
    但不允许“假装有 ID”（§6.4）。
-3. **`software_artifact_path` 与摘要通道分开** —— 路径只在 `claimed_mismatch` 时随证据上送（§6.6）。
+3. **`software_artifact_path` 与摘要通道分开** —— 路径只在 `identity_missing` 与「边缘能判出与包记录不符」时随帧上送（§6.6）。
 
 ---
 
@@ -700,3 +717,7 @@ private overlay（不进 Git）      ← ours / human_confirmed，按租户
 1. 容器场景：镜像内文件与发行版包不一致（镜像构建时可能改写），`anchor` 取容器 ID 还是镜像 digest。
 2. 告警的默认档位：`claimed_mismatch` 是否默认进告警列表；`identity_missing` 是否要提示提权。
 3. 已有 `observed` 存量在新库入库后如何批量回填（一次性重算 vs 下次上报时懒回填）。
+4. **要不要干脆总是带 path**（§6.6 现在是「默认不带 + 两个例外」）。反方理由是体积与抖动；
+   但实测算下来价格很小：29 条候选 × ≈ 60 B ≈ **2 KB**，相对 512 KB 块上限可忽略；而抖动只在
+   「path 被当作去重键」时才伤人 —— 我们的去重键是 `artifact_id`，不是 path。若采纳，§6.6
+   与 §7.4.4 可以整段删掉，也顺带解决「中心判出 mismatch 却没 path」那个限制。
