@@ -327,6 +327,7 @@ snapshot: DiscoverySnapshot
 - payload 内包含：
   - `resources[]`
   - `targets[]`
+  - `executables[]`（软件指纹，按部署位；见 §7.4。旧 agentd 不带此字段）
 - `meta.json` 中的额外本地缓存字段不要求原样进入线上协议
 
 ---
@@ -339,6 +340,7 @@ snapshot: DiscoverySnapshot
 
 - `DiscoverySnapshot` 中的 `resources[]`
 - `DiscoverySnapshot` 中的 `targets[]`
+- `DiscoverySnapshot` 中的 `executables[]`（仅声明了 `fingerprint:sha256` 的 agentd）
 - 与该快照强绑定的版本与时间字段
 
 ### 7.2 不建议直接上传的内容
@@ -369,6 +371,138 @@ snapshot: DiscoverySnapshot
 - `DiscoveredTarget` 仍是 discovery 事实对象
 - 它不是最终 `CandidateCollectionTarget`
 - 中心不应把它直接等同于已下发采集配置
+
+### 7.4 软件指纹块（按部署位）
+
+> 2026-11-08 定。语义与模型见
+> [`center/models/software-fingerprint-verification.md`](models/software-fingerprint-verification.md) §6 / §10。
+
+**一条记录 = 一个部署位，不是一份文件。** 原因是「一个实例只认一个主二进制」这条规则
+（同文档 §6.2）需要 `anchor` 才能执行；放到中心做等于把判断拆到两个仓，而且中心拿不到
+unit / cgroup 这些环境知识（`software-identity.md` §4）。
+
+```text
+ExecutableEvidence {            // snapshot.executables[]
+  anchor_kind       // systemd_unit | container | socket | argv0 | install_root | process
+  anchor_value
+  identity          // ExecutableIdentity?；为空 ⇔ identity_missing
+  identity_missing_reason?   // identity 为空时必填
+  claimed           // ClaimedPackage?；取不到可空
+  sub_artifacts[]   // SubArtifact{ artifact_id, role }；不带 path
+}
+
+ExecutableIdentity {
+  artifact_id       // 'sha256:<hex>'，即唯一权威 ID
+  size_bytes
+  build_id?         // ELF .note.gnu.build-id
+  path?             // 仅 claimed_mismatch 时填，见 7.4.4
+}
+
+ClaimedPackage {
+  source            // path_package | probe | image_tag
+  package_name      // 'postgresql-16'（包名，不是产品名）
+  version           // 原样保留
+  product_hint?     // 归一前的提示，可为空
+}
+```
+
+#### 7.4.1 唯一性
+
+`(anchor_kind, anchor_value)` 在同一快照内唯一。同一部署位只出现一次；出现两次视为
+边缘 bug，中心取最后一条并记 warn（不整帧拒收——拒收会丢掉同帧所有其他事实）。
+
+#### 7.4.2 主二进制规则在边缘执行
+
+按 §6.2 的五条判据（JVM 优先 → 对外监听 → `ExecStart` argv[0] → 包元数据 main binary → 兜底）
+选出主二进制算 `identity`，其余进 `sub_artifacts[]`。
+
+`sub_artifacts[]` **只带 `artifact_id` 与 `role`**，不带 path / inode / mtime——
+否则 §6.6 的「体积与抖动」理由就白写了（容器内路径每轮会变，进摘要只会把去重打散）。
+
+#### 7.4.3 `identity` 允许为空，但不许伪造
+
+`identity` 为空时必须带 `identity_missing_reason`，枚举与判定口径**只以模型文档 §6.4 为准**（本文不复制一份，避免两边漂）。
+**绝不能用 `claimed` 拼一个 `artifact_id`**——那会把「可信度」偷换成猜测（§7 的结论分级会直接失效）。
+
+#### 7.4.4 `path` 的规则
+
+| 情况 | 带不带 path |
+| --- | --- |
+| `status` 将由中心判成 `claimed_mismatch` | **必须带**（否则中心无法复查「到底哪个文件不对」，§5 矩阵右上角那格的价值折一半） |
+| 其余 | **不带**；要时另行按需拉取 |
+| 根本拿不到 hash（`identity_missing`） | 带上——此时 path 是唯一可调查的线索，且这种条目本来就少 |
+
+判定放在边缘：agentd 自己先比一次 `claimed.version` 与已知产物 hash，
+不一致就带 path（它比中心更清楚包反查结果）。
+
+#### 7.4.5 上限
+
+| 项 | 上限 | 超了怎么办 |
+| --- | --- | --- |
+| 条目数 | 200 / 快照 | 按 §3 候选集优先级截断，被截数量写进 `report.limits` |
+| 单个文件参与 hash | 64 MB | 跳过，记 `oversize` 原因 |
+| 整块序列化后 | 512 KB | 截断 `sub_artifacts`；仍超则只带 `identity` |
+
+实测参考：一台开发机 713 个可执行里只有 29 个（4%）够格，正常块在几 KB 量级。
+
+#### 7.4.6 兼容：`deny_unknown_fields` 决定了升级顺序
+
+`DiscoverySnapshot` 及内层 7 个 struct 都带 `#[serde(deny_unknown_fields)]`（`wist-contracts/src/discovery.rs`）——
+**旧端收到新字段会整帧拒收**，不是忽略。所以不能靠「未知字段自然忽略」：
+
+| 方向 | 结果 | 处理 |
+| --- | --- | --- |
+| 旧 agentd → 新中心 | ✅ 字段缺省即空 | 新端 `#[serde(default)]`，语义是「未上报」而非「没有软件」 |
+| 新 agentd → 旧网关/中心 | ❌ **整帧拒收** | **必须门控**：不支持就不发这个字段 |
+| 新 agentd → 旧中心，走了老 `api_version` | ❌ 同上 | 同上 |
+
+**因此发布纪律是：网关 → 中心 → agentd，不可逆序。** 门控靠既有的能力协商：
+
+- agentd 在 `CapabilityReport` 里声明 `fingerprint:sha256` 与 `pkg_query:dpkg|rpm|apk`；
+- 中心/网关回执（或配置下发）告诉 agentd 本区是否启用该块；
+- agentd 侧另有本地开关，默认关，开启需两者同时满足。
+
+> 不引入「宽松解析」来绕开这个限制。`deny_unknown_fields` 是契约测试能起作用的前提，
+> 为了一次升级把它拆掉，以后每个字段都会变成静默兼容问题。
+
+#### 7.4.7 与 `revision` 的关系
+
+**只有指纹变了也要推进 `revision`。** 否则中心看到的 `snapshot` 视图停在旧字节上，
+而 §8 的变化检测与归因全部以此为基线——升级（hash 变、进程表不变）将完全不可见。
+
+#### 7.4.8 示例
+
+三个典型条目（省略未变字段）：
+
+```json
+{
+  "executables": [
+    {
+      "anchor_kind": "systemd_unit", "anchor_value": "nginx.service",
+      "identity": { "artifact_id": "sha256:0145bbac…", "size_bytes": 1572864, "build_id": "9f2c…" },
+      "claimed": { "source": "path_package", "package_name": "nginx", "version": "1.27.5-r1" }
+    },
+    {
+      "anchor_kind": "systemd_unit", "anchor_value": "postgresql@16-main.service",
+      "identity": { "artifact_id": "sha256:d3f1c9e2…", "size_bytes": 7340032 },
+      "claimed": { "source": "path_package", "package_name": "postgresql-16", "version": "16.15-1.pgdg13+2" },
+      "sub_artifacts": [
+        { "artifact_id": "sha256:7b21…", "role": "sub_artifact" },
+        { "artifact_id": "sha256:4c8e…", "role": "sub_artifact" }
+      ]
+    },
+    {
+      "anchor_kind": "argv0", "anchor_value": "/opt/kafka/bin/kafka-server-start.sh",
+      "identity": { "artifact_id": "sha256:5a0d…", "size_bytes": 12800000 },
+      "claimed": { "source": "image_tag", "package_name": "apache/kafka", "version": "3.7.0" }
+    }
+  ]
+}
+```
+
+注意第三条的 `anchor_value` 是启动脚本，但 `identity` 是 **`libs/kafka_2.13-3.7.0.jar` 的 hash**——
+这正是 §6.2「JVM 必须排第一」与「主文件要选带版本语义的那个」两条规则的结果；
+两边（边缘选主文件 / 库里 `main_file`）不对齐，命中率会静默归零。
 
 ---
 
@@ -517,6 +651,27 @@ DiscoveryIngestAck {
 - 该层不是 `ReportDiscoverySnapshot` 的直接镜像表
 - 需要独立的归并任务和生命周期规则
 
+### 10.4 指纹块落到哪
+
+`executables[]` **不新增接收层**，它跟着同一个 blob 进，只在最后一层被拆表：
+
+```text
+ReportDiscoverySnapshot
+  → 10.1 ingress receipt        （整帧原样，含 executables[]）
+  → 10.2 agent snapshot 索引      （不动）
+  → 10.3 资源目录归并
+        ├─ resources / targets → 现有资源表
+        └─ executables[]       → software_fingerprint / software_instance
+                                 （见 software-fingerprint-verification.md §10.1）
+```
+
+两条约束：
+
+1. **归并失败不能回退整帧**。单条 `executables[]` 写不进去（未知 anchor_kind、hash 格式错）
+   就丢那一条并记 warn，其余照常落库——与 §7.4.1 同一条纪律。
+2. **`product_hint` 只作提示**。命中 KB 的唯一依据是 `artifact_id` 与 `claimed.package_name`，
+   `product_hint` 不能直接写进 `claimed_product_id`（否则等于把边缘猜测当归一结果）。
+
 ---
 
 ## 11. 与其它控制面对象的关系
@@ -536,6 +691,17 @@ DiscoveryIngestAck {
   表达“本机当前发现到了什么”
 
 二者语义独立，不应混为一个对象。
+
+但**前者是后者的门控前提**：`DiscoverySnapshot` 开了 `deny_unknown_fields`，
+新字段只能在对方明确支持之后才发（§7.4.6）。软件指纹依赖两个能力位：
+
+| 能力位 | 含义 | 缺失时的行为 |
+| --- | --- | --- |
+| `fingerprint:sha256` | 能对候选二进制算 sha256 | 不发 `executables[]` |
+| `pkg_query:dpkg\|rpm\|apk` | 能做包反查 | `claimed` 恒为空，但 hash 仍上报 |
+
+第二个是独立的一档：**算得出 hash、反查不了**是常态（tarball / 容器 / 自编译），
+此时仍有权威 ID，只是没有可交叉验证的声称值（结论落到 `observed`）。
 
 ### 11.3 与 `ReportActionResult`
 
