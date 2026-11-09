@@ -397,6 +397,7 @@ Idempotency-Key: 7b21...
 | kind | target | 投递 wire kind | 风险 | 审批 | 现状 | 说明 |
 |---|---|---|---|---|---|---|
 | `gateway.diagnose` | gateway | `diagnose` | R0 | 否 | 已有 | 体检，报告留网关 |
+| `gateway.report-agents` | gateway | `report-agents` | R0 | 否 | 已落地 | 立即做一次 Agent 明细 / 数据清单上报（环回拉网关机队 → 转报中心）；60s 周期仍是兜底 |
 | `gateway.refresh-policy` | gateway | `proxy` | R1 | 否 | **仅壳** | 现 `POST /admin/policies/global` 只回回执，不投递；P1 才真正入队 |
 | `gateway.restart-process` | gateway | `restart-gateway` / `restart-gwlinkd` | R2 | **是** | 已有 | payload 只允许 `{ "process": "gateway" \| "gwlinkd" }` |
 | `gateway.bind-tenant` | gateway | `bind-tenant` | R2 | **是** | 已有 | 收敛到本入口 |

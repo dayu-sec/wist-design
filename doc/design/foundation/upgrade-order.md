@@ -121,6 +121,37 @@ flowchart TD
   → agentd(0.1.26)`；`gateway` / `center` 直接改 pin（已在 0.2）。上线时按 §4 **自顶向下**。
 - **升 `wist-control` 0.6.0 → 0.6.1**：发布序 = `control → {gwlinkd, center, gateway}`；上线同样
   `center → gateway/gwlinkd`。
+- **升 `wist-control` 0.19 → 0.20（`AgentRuntimeStatus.data_manifest`：采集授权 + 调查数据清单）**：
+  - **发布序**：`control(0.20.0) → gateway(0.42.0) / center(0.34.0) / gwlinkd(0.21.0)`；
+    `center-web(0.26.0)` 与 center 同批（前端不在 Cargo 图内，但新按钮依赖新路由）。
+  - **上线序（建议）**：`center + center-web → gwlinkd → gateway → gateway-stack / center-stack`。
+  - **与 §4 的一般规则不同**：`AgentRuntimeStatus` / `ReportAgentStatus` **没有**
+    `deny_unknown_fields`，新字段是纯加性 —— 旧中心 / 旧 gwlinkd 直接忽略，不会拒收。
+    因此这次**没有**「接收端必须先升」的硬约束；上面的上线序是为了让功能尽早可见、缩短降级窗口，
+    不是兼容性要求。
+  - **功能级降级矩阵**（所有组合都不破坏既有链路；只是新能力不可见）：
+
+    | center | gwlinkd | gateway | 结果 |
+    |---|---|---|---|
+    | 新 | 新 | 新 | 完整：周期清单 + 「立即刷新」 |
+    | 新 | 新 | 旧 | 刷新命令可用；上报的机队没有清单（`data_manifest: null`） |
+    | 新 | 旧 | 新 | gwlinkd 丢弃该字段；清单不可见；刷新命令回 400 `不支持的控制命令 kind=report-agents` |
+    | 新 | 旧 | 旧 | 同上（无清单、命令 400）；既有状态上报正常 |
+    | 旧 | 新 | 新 | 中心忽略未知字段；不落库；`gateway.report-agents` 在旧中心是未知 kind，创建即拒 |
+    | 旧 | 新 | 旧 | 纯基线；新 gwlinkd 只是多一个不认识的上报字段 |
+    | 旧 | 旧 | 新 | gwlinkd 丢弃该字段；纯基线 |
+    | 旧 | 旧 | 旧 | 基线 |
+
+  - **硬门槛只有两个**：
+    1. `wist-control` 0.20 对 Rust 消费方是**编译期**破坏（结构体字面量要补字段）——
+       gateway / center / gwlinkd 必须一起升到本版本，按发布序发；
+    2. `report-agents` 需要 gwlinkd ≥ 0.21 **且** `[wparse_relay] enabled` + 配了
+       `gateway_self_endpoint`；否则命令失败（400/500），周期链路不受影响。
+  - **两个栈的钉版必须同批**：`wist-gateway-stack` 的 `GATEWAY_TAG` 与 `wist-center-stack` 的
+    `CENTER_IMAGE_TAG` + `CENTER_WEB_IMAGE_TAG`。center 与 center-web 拆开钉会出现
+    「按钮在、后端没有 `/agents/refresh`」的 404。
+  - **不扩 `requires`**：上述所有旧组合都还能工作，把 `requires` 提到新版本会把可用的降级组合
+    错误地变成 `error`。新能力是 feature-level 的，靠本文矩阵与页面提示表达，不靠版本门槛。
 
 ## 9. 相关
 
