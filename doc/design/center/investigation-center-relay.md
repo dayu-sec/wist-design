@@ -221,6 +221,7 @@ pub struct AgentInvestigationTask {
 ```
 
 与 `data_manifest` 同一套加性变更（旧中心/旧 gwlinkd 忽略即可，不加 `deny_unknown_fields`）。
+**`null` 也当空表**（`deserialize_vec_or_null`）：一个字段的脏值不能拖垮整份机队上报。
 不把状态塞进 `data_manifest`：清单回答「这台机器有什么数据」，状态回答「这条命令跑到哪了」，
 两者的生命周期与保留期都不一样。
 
@@ -375,6 +376,22 @@ GET /internal/evidence/{cmd_id}/content    → 代理读正文（本地文件模
 - 写端点（wparse sink）**本轮不动**：它是只写，滥用是脏数据不是数据外泄；
   且给 sink 发凭据意味着每个网关栈都要多一份密钥，代价不成比例；
 - 密钥进 `sec-value.yml`，栈用 `0600` 下发（与其它 `${SEC_*}` 同口径）。
+
+**两侧配置**（同一份密钥，来自 `.wist/sec-value.yml` 的 `EVIDENCE_READ_TOKEN`）：
+
+```toml
+# 证据服务（wist-evidence 0.1.16+）
+[read]
+service_token = "${SEC_EVIDENCE_READ_TOKEN}"
+
+# 中心（wist-center 0.35+）：不配 = 只显示任务状态
+[evidence]
+endpoint = "http://evidence:19174"
+read_token = "${SEC_EVIDENCE_READ_TOKEN}"
+# tenant = "cust-a"          # 缺省用网关的客户绑定
+max_sensitivity = "identities"
+timeout_seconds = 10
+```
 
 **落地形态（wist-evidence 0.1.16）**：`[read] service_token`（同样支持 `${SEC_…}`）。
 配了就**必须**带这个头；没配时**保持旧行为**并打一条启动 `warn`——
