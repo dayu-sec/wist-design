@@ -179,7 +179,8 @@ agentd **已经在报状态了**：接单那一刻回一条阶段 ack
   {
     "command_id": "cmd-…",
     "topic": "disk",          // 从 agent_commands.params 里取，不是猜的
-    "state": "queued | claimed | acked",   // presence / claimed_at / acked_at 推导
+    // 不带 `state`：`queued / claimed / acked` 由消费方按
+    // `acked_at / claimed_at / 都存在` 推导（一个事实，一处口径）
     "requested_at": "…", "claimed_at": "…", "acked_at": "…",
     "outcome": "succeeded | failed",       // 未回执时缺省
     "detail": "disk: 1 项警告；报告已回传（IVSREP, seq=42）…"
@@ -464,6 +465,9 @@ evidence 0.1.16（读口 `service_token`，先发：中心接入前它必须在�
 - **状态新鲜度 ≤ 60s**：它搭的是 gwlinkd 的机队周期；要即时就看「立即刷新」。
 - **错过的终态 ack**：agentd 重启可能错过终态，网关那行停在 `claimed`，直到超窗回收 ——
   页面要有“超时未回执”这个状态，不能一直转圈。
+- **G4 是 check-then-act**：两条**不同 id** 的并发下发理论上能同时越过（中心按钮串行；
+  gwlinkd 的重试是**同 id**，已被幂等分支挡住）。要彻底收口得把「同 kind 未确认」的唯一性
+  放进 `enqueue_agent_command` 的事务里，本轮按设计接受这道小闸，不做。
 - **id 冲突面**：`command_id` 现在跳系统复用，必须在一个地方定义校验规则
   （建议放 `wist-control` 或 `wist-api` 的常量，网关与中心共用，别再各写一份）。
 
