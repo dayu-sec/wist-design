@@ -247,9 +247,13 @@ pub struct AgentInvestigationTask {
 - payload（中心侧校验，`deny_unknown_fields`）：
 
   ```jsonc
-  { "agent_id": "…", "topic": "disk", "path": null, "top": null,
+  { "agent_id": "…", "topic": "disk", "top": null,
     "min_size": null, "depth": null, "max_seconds": null }
   ```
+
+  **`path` 恒为 `null`（已定）**：不允许中心指定扫描根——目录名本身就是情报。
+  由题目自己挑（磁盘题：最紧张的文件系统挂载点）。网关侧对 `path` 的校验仍然保留，
+  但中心 **不提供输入框**，payload 里也不带这个键。
 - 预检：`gwlinkd ≥ 0.22`（认得该 wire kind）。沿用 `REPORT_AGENTS_MIN_GWLINKD` 那套：
   **版本未知不拦**，回执说真话
 - REST（与既有 Agent 路由同一棵树）：
@@ -347,6 +351,18 @@ GET /internal/evidence/{cmd_id}            → 元数据（kind/verdict/大小/�
 GET /internal/evidence/{cmd_id}/content    → 代理读正文（本地文件模式没有签名 URL）
 ```
 
+**凭据来源（已定）**：复用栈的 `${SEC_*}` 机制 —— 值放 `.wist/sec-value.yml`，
+配置里只写占位符，与 `center_admin_token` / `center_hmac_secret` 同一套写法。
+
+**前置：证据库读口要先有鉴权。** 现状 `principal_from_headers()` 完全信任请求头
+（`x-evidence-tenant` / `x-evidence-scopes` / `x-evidence-max-sensitivity`），
+边界只有网络隔离——内网里任何进程改个头就能读任何租户。中心接入前需要一道**最小鉴权**：
+
+- 读端点校验 `x-evidence-service-token`（与配置里的 `${SEC_EVIDENCE_READ_TOKEN}` 比）；
+- 写端点（wparse sink）**本轮不动**：它是只写，滥用是脏数据不是数据外泄；
+  且给 sink 发凭据意味着每个网关栈都要多一份密钥，代价不成比例；
+- 密钥进 `sec-value.yml`，栈用 `0600` 下发（与其它 `${SEC_*}` 同口径）。
+
 v1 **中心不落索引行**（每次按需查）；正文一律不存。等「跨网关/跨 Agent 的调查列表」
 真需要了，再按 `evidence-service.md` §5.1 的 center 行补一张
 `command_id → evidence_ref` 的小表。
@@ -395,7 +411,7 @@ control 0.21（`AgentRuntimeStatus.investigations`，**编译期**破坏结构�
 | --- | --- |
 | 网关 | gateway-plane 端点要 mTLS（无证书 401）；`command_id` 校验与幂等；同 id 不同参 → 409；未授权面 403 不被绕过；G4 在飞 409；admin 端点行为不变（仍自行铸号 + 取代） |
 | gwlinkd | `investigate-agent` 是 control kind；payload 缺 `command_id`/`agent_id` → 明确失败；网关 4xx 原文回传；环回未配置时不静默成功 |
-| 中心 | 词表拒绝未知 kind；`requires_explicit_dispatch` 生效；gwlinkd 0.21 预检拦、版本未知不拦；REST 返回的 `command_id` 与 payload 里的同一个；回执 4xx 带出原文 |
+| 中心 | 词表拒绝未知 kind；`requires_explicit_dispatch` 生效；gwlinkd 0.22 预检拦、版本未知不拦；REST 返回的 `command_id` 与 payload 里的同一个；回执 4xx 带出原文 |
 | 控制 / 网关 / 中心 | `investigations` 空表不擦旧值（与 `data_manifest` 同口径）；旧报文缺该字段时保持上一次可信值 |
 | 证据库 | 按 `cmd_id` 存与取；同 `cmd_id` 重投幂等（`dedupe_key = cmd_id`）；不可见时统一 404 不泄露存在性 |
 | 端到端（Linux 预演机） | 下发 → `agent_commands` 出现该 id（claimed → acked）→ 机队上报里能看到状态 → 报告进证据库 → 按 `cmd_id` 能取到正文；全程只有一条 id |
@@ -414,3 +430,17 @@ control 0.21（`AgentRuntimeStatus.investigations`，**编译期**破坏结构�
   页面要有“超时未回执”这个状态，不能一直转圈。
 - **id 冲突面**：`command_id` 现在跳系统复用，必须在一个地方定义校验规则
   （建议放 `wist-control` 或 `wist-api` 的常量，网关与中心共用，别再各写一份）。
+
+## 11. 决策记录（已定）
+
+| # | 问题 | 结论 |
+| --- | --- | --- |
+| 1 | 中心拿证据服务身份的凭据从哪来 | 复用栈的 `${SEC_*}`（`.wist/sec-value.yml`）；**前置**是证据库读口先加最小 token 鉴权 |
+| 2 | `path` 要不要对中心开放 | **不开放**：恒 `null`，UI 不出输入框 |
+| 3 | 调查要不要审批 | **不要**：R1 + 显式 dispatch + 配额 + 二次确认 + 审计 |
+| 4 | 状态带多少 | 最近 **3 条**、**7 天内**；更早不再上报 |
+| 5 | 幂等 vs 在飞闸 | **先按 `command_id` 幂等**，再判在飞 → 409 |
+| 6 | 证据就绪延迟 | 404 时文案「报告同步中」+ 自动重试 3 次 × 5s |
+| 7 | 取消 / 重试 | 都不做（`disk` 不可中断；失败让人手动重点） |
+| 8 | 客户 id 与证据库键 | `cust_id` 是对象键第一段，必须不含 `/` `\\` 控制字符 |
+| 9 | 批量 / 跨 Agent 列表 / 正文转存 | 都不做 |
