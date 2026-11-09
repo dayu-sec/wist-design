@@ -46,6 +46,83 @@ struct AgentRuntimeStatus {
   hostname: String?
   // 形如 `en0 192.168.1.5/24`；空表 = 还没报过 / 确实没有地址。
   ip_addresses: List<String>?
+  // 数据清单：采集授权 + 调查数据（网关从工作授权、agentd 本机视图与调查报告派生）。
+  // null = 旧版生产者不报 —— 中心页据此区分「还没上报」与「确实什么数据都没有」。
+  data_manifest: AgentDataManifest?
+}
+
+// 数据清单里的一条采集来源。与 `wist_contracts::work::WorkSpecSource` 同源（kind + target），
+// 但只带「采什么」，不带 multiline / filters 这类执行参数 —— 清单是数据目录，不是可重放的工作副本。
+struct AgentDataSource {
+  meta {
+    label zh "采集来源"
+    label en "Agent Data Source"
+    summary zh "数据清单里的一条采集来源：来源类型与目标（文件路径 / exporter / 指标间隔 / auto）。"
+    tags "control", "agentd", "data-manifest"
+  }
+
+  kind: String
+  target: String
+}
+
+// 数据清单里的一条采集授权（一个采集面 = 一份常驻工作）。
+// 期望侧来自网关的 StandingWork，实测侧来自 agentd 上报的 AgentLocalWork；缺就是 null。
+struct AgentCollectionEntry {
+  meta {
+    label zh "采集授权条目"
+    label en "Agent Collection Entry"
+    summary zh "一条采集授权：采集面、授权状态、期望/已确认版本、agentd 实测结论与覆盖来源。"
+    tags "control", "agentd", "data-manifest", "collection"
+  }
+
+  family: String
+  work_id: String
+  // active | paused（撤回与被取代的历史版本不进清单）。
+  status: String
+  plan_version: Int
+  acknowledged_version: Int?
+  // agentd 的实测采集结论：ok / degraded / failed / unknown / paused；null = 本机还没报过。
+  collection_status: String?
+  collection_detail: String?
+  inputs: List<AgentDataSource>
+}
+
+// 数据清单里的一份调查数据（一条已落盘报告的摘要，正文不在这里）。
+struct AgentInvestigationEntry {
+  meta {
+    label zh "调查数据条目"
+    label en "Agent Investigation Entry"
+    summary zh "一份调查报告的摘要：关联键、面、观测时刻、结论档、判定与四类计数（不含正文）。"
+    tags "control", "agentd", "data-manifest", "investigation"
+  }
+
+  command_id: String
+  topic: String
+  observed_at: DateTime
+  // ok | warn | fail；报告里没写就是 unknown。
+  overall: String
+  verdict: String
+  findings_ok: Int
+  findings_warn: Int
+  findings_fail: Int
+  // 无法判定（读不到 / 平台不支持 / 源不存在）。不能省：少了它，“没读到”会被当成“正常”。
+  findings_unknown: Int
+  judged: Boolean
+}
+
+// 一台 Agent 的数据清单：采集授权 + 调查数据。
+// 两段都按清单口径裁剪，不带正文 —— 中心页回答「有什么数据」，不是「数据里写了什么」。
+struct AgentDataManifest {
+  meta {
+    label zh "Agent 数据清单"
+    label en "Agent Data Manifest"
+    summary zh "一台 Agent 的数据清单：采集授权（面/版本/实测结论/来源）与调查数据（报告摘要）。"
+    tags "control", "agentd", "data-manifest"
+  }
+
+  collected_at: DateTime
+  collection: List<AgentCollectionEntry>
+  investigations: List<AgentInvestigationEntry>
 }
 
 struct AgentOverviewMetrics {
