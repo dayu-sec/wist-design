@@ -273,7 +273,9 @@ pub struct AgentInvestigationTask {
 
   等价于「`create`（`dispatch_now=false`）+ `dispatch`」两步合一；`target.ids` 用网关 id，
   `agent_id` 只出现在 payload 里 —— 与 §3.1 的多目标口径一致
-- 回执：复用 `report_command_result`；`targets[].result_status/result_error` 原样透出
+- 回执：复用 `report_command_result`；`targets[].result_status/result_error` 原样透出。
+  状态接口的 `last_dispatch` 就带这两项 —— **网关拒绝时不会有任务上报**，没有它页面只会显示
+  「点了没反应」。
 - 任务状态：来自随 `AgentRuntimeStatus` 上来的 `investigations`（落 `agent_status`，
   JSONB，同 `data_manifest` 的 `COALESCE` 写法：旧报文的空表不擦旧值）
 - 证据读口配置（中心自己的 `[evidence]`）：`endpoint`、`read_token`（写 `${SEC_EVIDENCE_READ_TOKEN}`）、
