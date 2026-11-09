@@ -404,7 +404,7 @@ Idempotency-Key: 7b21...
 | `gateway.publish-rules` | gateway | `proxy` | R2 | **是** | 已有 | 沿用 `wparse-proxy` 命令通道 |
 | `agent.refresh-facts` | agent | 控制指令 | R0 | 否 | 部分 | 控制指令通道已有，缺下发入口 |
 | `agent.rotate-identity` | agent | `RotateIdentityHint` | R2 | **是** | 部分 | 模型已有对象，缺下发入口 |
-| `investigation.run` | agent | `investigate`（经网关转投） | R1 | 否 | 已有（网关侧） | 只读证据；三道闸 G1/G2/G3 在网关判，见 §7.6.2 |
+| `gateway.agent-investigate` | gateway（payload 带 `agent_id`） | `investigate-agent` → 网关 `POST /api/v1/gateway/agents/{id}/investigations` → agentd `investigate` | R1 | **是**（显式 dispatch） | 设计已定，待实现 | 只读证据；G1 允许集 / G2 能力 / G3 配额 / G4 在飞**都在网关判**。中心铸 `command_id` 并一路透传，结果按同一 id 归并 —— 见 [investigation-center-relay.md](./investigation-center-relay.md)。取代原 `investigation.run`（agent 目标）条目 |
 
 > 「仅壳」必须显式标出来：`DispatchAgentFleetCommand` 和 `AdminDispatchGlobalPolicy` 今天都只生成回执、
 > 不产生任何投递。把它们归入同一个 `Command` 入口后，壳才变成真实现。
