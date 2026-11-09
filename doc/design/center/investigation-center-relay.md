@@ -232,8 +232,12 @@ pub struct AgentInvestigationTask {
 
   ```jsonc
   { "command_id": "cmd-…", "agent_id": "agent-host-…", "topic": "disk",
-    "path": null, "top": null, "min_size": null, "depth": null, "max_seconds": null }
+    "path": null, "top": null, "min_size": null, "depth": null, "max_seconds": null,
+    "requested_by": null }
   ```
+
+  `command_id` / `agent_id` 必填（缺任一 → 400）：没有 id 就没有可关联的报告。
+  `requested_by` 可省（网关缺省回落成 `center`），gwlinkd 只搬运。
 - 动作：`POST {gateway_self_endpoint}/api/v1/gateway/agents/{agent_id}/investigations`，mTLS
 - 回传：沿用 `report_wparse_command_result` 的 `UpstreamResult`（状态码 + 错误原文），
   网关的 4xx 原文原样带给中心 —— 中心不需要翻译第二遍
@@ -253,7 +257,11 @@ pub struct AgentInvestigationTask {
 
   **`path` 恒为 `null`（已定）**：不允许中心指定扫描根——目录名本身就是情报。
   由题目自己挑（磁盘题：最紧张的文件系统挂载点）。网关侧对 `path` 的校验仍然保留，
-  但中心 **不提供输入框**，payload 里也不带这个键。
+  但中心 **不提供输入框**，payload 里也不带这个键（`deny_unknown_fields` 会把带 `path` 的请求直接拒掉）。
+- 铸号与 payload 的关系（实现细节）：`command_id` **不进 payload**（幂等重放比较的是 payload，
+  随机 id 会让重试变成冲突）；它在 **dispatch 阶段注入 wire body**，与 `agent_id`/`topic`/参数并列下发。
+- `requested_by`：中心不传 actor（审计主体在 `commands.created_by` / `dispatched_by` 里）；
+  gwlinkd 也不带，网关回落到 `center`。
 - 预检：`gwlinkd ≥ 0.22`（认得该 wire kind）。沿用 `REPORT_AGENTS_MIN_GWLINKD` 那套：
   **版本未知不拦**，回执说真话
 - REST（与既有 Agent 路由同一棵树）：
@@ -268,6 +276,9 @@ pub struct AgentInvestigationTask {
 - 回执：复用 `report_command_result`；`targets[].result_status/result_error` 原样透出
 - 任务状态：来自随 `AgentRuntimeStatus` 上来的 `investigations`（落 `agent_status`，
   JSONB，同 `data_manifest` 的 `COALESCE` 写法：旧报文的空表不擦旧值）
+- 证据读口配置（中心自己的 `[evidence]`）：`endpoint`、`read_token`（写 `${SEC_EVIDENCE_READ_TOKEN}`）、
+  `tenant?`（缺省用网关的客户绑定）、`max_sensitivity`（缺省 `identities`）、`timeout_seconds`。
+  **未配置不是错误**：状态接口会把每一行标成 `evidence.reason = evidence_not_configured`。
 - 状态查询：`GET /api/v1/admin/gateways/{gateway_id}/agents/{agent_id}/investigations`
   - 两个来源拼起来：自己库里的**任务状态**（按 `command_id` 匹配）
     + **现场查证据服务**拿 `evidence: {available, kind, verdict, size, sensitivity, retention_days}`
@@ -363,6 +374,11 @@ GET /internal/evidence/{cmd_id}/content    → 代理读正文（本地文件模
   且给 sink 发凭据意味着每个网关栈都要多一份密钥，代价不成比例；
 - 密钥进 `sec-value.yml`，栈用 `0600` 下发（与其它 `${SEC_*}` 同口径）。
 
+**落地形态（wist-evidence 0.1.16）**：`[read] service_token`（同样支持 `${SEC_…}`）。
+配了就**必须**带这个头；没配时**保持旧行为**并打一条启动 `warn`——
+这样现有部署升级不会被拒，但日志会直接把待办列出来。比较用常量时间。
+中心侧对应 `[evidence] read_token`，与上面是同一份密钥。
+
 v1 **中心不落索引行**（每次按需查）；正文一律不存。等「跨网关/跨 Agent 的调查列表」
 真需要了，再按 `evidence-service.md` §5.1 的 center 行补一张
 `command_id → evidence_ref` 的小表。
@@ -387,12 +403,13 @@ web 0.26/0.27 的 Agent 卡片与详情页上那块「调查数据」读的就�
 ## 8. 发布序与兼容
 
 ```
-control 0.21（`AgentRuntimeStatus.investigations`，**编译期**破坏结构体字面量）
-  → gateway 0.43（新增 gateway-plane 下发端点 + 机队视图带 investigations; 依赖 control 0.21）
-    → gwlinkd 0.22（新 kind `investigate-agent`，依赖网关端点）
-      → center 0.35（开 kind + 预检 + 落 `investigations`）（依赖 control 0.21）
-        → center-web 0.28（发起/状态/证据入口）
-          → 两个栈
+evidence 0.1.16（读口 `service_token`，先发：中心接入前它必须在）
+  → control 0.21（`AgentRuntimeStatus.investigations`，**编译期**破坏结构体字面量）
+    → gateway 0.43（新增 gateway-plane 下发端点 + 机队视图带 investigations; 依赖 control 0.21）
+      → gwlinkd 0.22（新 kind `investigate-agent`，依赖网关端点）
+        → center 0.35（开 kind + 预检 + 落 `investigations`）（依赖 control 0.21）
+          → center-web 0.28（发起/状态/证据入口）
+            → 两个栈（`.wist/sec-value.yml` 加 `EVIDENCE_READ_TOKEN`）
 ```
 
 - 除 `control 0.21` 外都是**加性**变更；`compat.json` 不用改。
