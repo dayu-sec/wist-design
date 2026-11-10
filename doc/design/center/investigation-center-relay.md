@@ -395,6 +395,14 @@ timeout_seconds = 10
 
 不配（缺 endpoint 或 token）= 只显示任务状态，页面标 `evidence_not_configured`。
 
+> **当前状态（2026-11-10）：暂不启用这条读口。** 现场 `EVIDENCE_ENABLED=false`，
+> 中心只显示任务状态与回执摘要，报告正文由使用方拿 `command_id` 直接去证据库查。
+> 原因是 TLS 校名对不上：field-web 叶证书 SAN 只有 `localhost` / `127.0.0.1`，
+> 中心从容器内经 `host.docker.internal` 访问会握手失败（日志 `evidence_unavailable`）。
+> 要恢复：先给 field-web 叶证书补 `DNS:host.docker.internal`（`sys/scripts/init-web-tls.sh`
+> 的 SAN 行；CA 不重签，`evidence-ca.pem` 不用换），再把 `EVIDENCE_ENABLED` 改回 `true`。
+> 控制面回执不受影响（它走 `agent_commands` → gwlinkd → `agent_status.investigations`，见 §7.1）。
+
 **证据服务自己的 `[read] service_token`（wist-evidence 0.1.16+）仍然保留**，但它保护的是
 `/internal/*` 这一跳；这一跳的调用方是 **BFF**，所以只有在 field-api 也支持发送该头之后
 才应开启。当前计算区**不要**配它（否则 BFF 读不了），本轮的鉴权落在 BFF 的 `wcr_` 上。
