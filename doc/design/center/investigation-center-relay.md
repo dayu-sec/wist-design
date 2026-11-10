@@ -358,13 +358,18 @@ agentd 每 3s 心跳：accepted（已取走，扫描中）→ 终态（succeeded
 
 ### 7.3 正文怎么取
 
-中心向证据服务要（服务身份 + `evidence:read` scope + 租户 + 敏感度，见
-`evidence-service.md` §7.2）：
+**走 BFF（`wist-field-api`），不直连证据服务。** 证据服务的读监听（`/internal/evidence/*`）
+按设计只在计算区 compose 网络内，对外面本来就是 BFF（浏览器也到不了内部口）：
 
 ```
-GET /internal/evidence/{cmd_id}            → 元数据（kind/verdict/大小/敏感度/保留期）
-GET /internal/evidence/{cmd_id}/content    → 代理读正文（本地文件模式没有签名 URL）
+GET {field-api}/api/evidence/{cmd_id}           → 元数据（Artifact 原样透传）
+GET {field-api}/api/evidence/{cmd_id}/content   → 代理读正文（本地文件模式没有签名 URL）
 ```
+
+鉴权：`Authorization: Bearer wcr_…`（wist-cred 操作员令牌）。租户 / scope / 敏感度由
+**BFF 自己的身份与 `[evidence]` 配置**决定，中心不传这些头（少一处可与 BFF 漂移的口径）。
+BFF 的响应是原样透传，所以 404 仍是「不可见」、401/403 是「令牌不对或没权限」——
+中心必须把这两类分开（见 §6 与页面文案）。
 
 **凭据来源（已定）**：复用栈的 `${SEC_*}` 机制 —— 值放 `.wist/sec-value.yml`，
 配置里只写占位符，与 `center_admin_token` / `center_hmac_secret` 同一套写法。
@@ -378,26 +383,21 @@ GET /internal/evidence/{cmd_id}/content    → 代理读正文（本地文件模
   且给 sink 发凭据意味着每个网关栈都要多一份密钥，代价不成比例；
 - 密钥进 `sec-value.yml`，栈用 `0600` 下发（与其它 `${SEC_*}` 同口径）。
 
-**两侧配置**（同一份密钥，来自 `.wist/sec-value.yml` 的 `EVIDENCE_READ_TOKEN`）：
+**中心侧配置**（`wcr_…` 来自 `.wist/sec-value.yml` 的 `evidence_read_token`）：
 
 ```toml
-# 证据服务（wist-evidence 0.1.16+）
-[read]
-service_token = "${SEC_EVIDENCE_READ_TOKEN}"
-
-# 中心（wist-center 0.35+）：不配 = 只显示任务状态
 [evidence]
-endpoint = "http://evidence:19174"
-read_token = "${SEC_EVIDENCE_READ_TOKEN}"
-# tenant = "cust-a"          # 缺省用网关的客户绑定
-max_sensitivity = "identities"
+endpoint = "https://field.example:8088"   # 计算区对外入口（field 栈 web，HTTPS）
+read_token = "${SEC_EVIDENCE_READ_TOKEN}"  # wcr_…
+ca_file = "/wist-center/ca/evidence-ca.pem" # 计算区自签站点的信任锚；公网 CA 时留空
 timeout_seconds = 10
 ```
 
-**落地形态（wist-evidence 0.1.16）**：`[read] service_token`（同样支持 `${SEC_…}`）。
-配了就**必须**带这个头；没配时**保持旧行为**并打一条启动 `warn`——
-这样现有部署升级不会被拒，但日志会直接把待办列出来。比较用常量时间。
-中心侧对应 `[evidence] read_token`，与上面是同一份密钥。
+不配（缺 endpoint 或 token）= 只显示任务状态，页面标 `evidence_not_configured`。
+
+**证据服务自己的 `[read] service_token`（wist-evidence 0.1.16+）仍然保留**，但它保护的是
+`/internal/*` 这一跳；这一跳的调用方是 **BFF**，所以只有在 field-api 也支持发送该头之后
+才应开启。当前计算区**不要**配它（否则 BFF 读不了），本轮的鉴权落在 BFF 的 `wcr_` 上。
 
 v1 **中心不落索引行**（每次按需查）；正文一律不存。等「跨网关/跨 Agent 的调查列表」
 真需要了，再按 `evidence-service.md` §5.1 的 center 行补一张
