@@ -32,6 +32,20 @@ usecase BindGatewayCustomer {
   outcome Control.GatewayCustomerBinding
 }
 
+// 释放已归档网关的实例号
+usecase ReleaseGatewayWpInsId {
+  meta {
+    label zh "释放实例号"
+    label en "Release Gateway Event Instance Id"
+    summary zh "仅允许已归档（离线）的网关释放实例号；释放后该车道可被其他网关重新绑定，网关重新上线时中心会自动分配空闲车道。"
+    tags "gateway", "provisioning", "customer"
+  }
+
+  actor Control.BusinessAdministrator
+  trigger Control.AdminReleaseGatewayWpInsId
+  outcome Control.GatewayCustomerBinding
+}
+
 // 发布WistAgentd
 usecase PublishWistAgentd {
   meta {

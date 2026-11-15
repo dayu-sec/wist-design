@@ -435,6 +435,13 @@ bind GatewayProvisioningInterface {
     actor_identity BusinessAdministrator.id from jwt.sub
     status GatewayCustomerBinding 200
   }
+
+  entry AdminReleaseGatewayWpInsId {
+    route POST "/api/v1/admin/gateways/{gateway_id}/wp-ins-id:release"
+    auth bearer
+    actor_identity BusinessAdministrator.id from jwt.sub
+    status GatewayCustomerBinding 200
+  }
 }
 
 bind GatewayOpsInterface {

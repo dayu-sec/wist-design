@@ -231,13 +231,13 @@ sequenceDiagram
     participant W as wparse
     participant G as wist-gateway
 
-    Admin->>C: POST /admin/gateways/bind {gateway_id, customer_id}
+    Admin->>C: POST /admin/gateways/bind {gateway_id, customer_id, wp_ins_id}
     C->>DB: upsert 绑定，revision++
-    C->>Q: enqueue kind=bind-tenant {tenant_id, revision}
+    C->>Q: enqueue kind=bind-tenant {tenant_id, revision, wp_ins_id}
     L->>C: GET /api/v1/gateway/commands (mTLS)
     C-->>L: bind-tenant
     L->>L: 落盘 business-identity.json
-    L->>ENV: 合并写入 WIST_TENANT_ID
+    L->>ENV: 合并写入 WIST_TENANT_ID / WP_INS_ID
     L->>W: 重启 wparse（dev: svc.sh / release: gops）
     W->>W: 启动时读取 .env，${WIST_TENANT_ID} 进入 tags
     L->>G: linkd-status 携带 tenant_id/revision
@@ -257,6 +257,7 @@ sequenceDiagram
 | `customer_id` | TEXT NOT NULL | 不变（权威值；映射为 `tenant_id`） |
 | `status` | TEXT | `bound`（已下发待生效）/ `applied`（已生效）/ `drift`（网关自报不一致）/ `failed`（生效命令失败） |
 | `revision` | BIGINT NOT NULL DEFAULT 1 | 绑定版本 |
+| `wp_ins_id` | BIGINT NOT NULL DEFAULT 100 | wparse 事件号实例段（`100..=1123`）；客户或车道变化都递增 `revision` |
 | `bound_at` | TIMESTAMPTZ | 不变 |
 | `applied_revision` | BIGINT NULL | 网关已生效的 revision |
 | `applied_at` | TIMESTAMPTZ NULL | **最近一次变为已生效**的时间（心跳不刷新） |
@@ -266,6 +267,9 @@ sequenceDiagram
 **必须补表**：`01_schema.sql` 增加 `CREATE TABLE IF NOT EXISTS gateway_customer_bindings`；
 已有库用 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 幂等升级。
 
+> `wp_ins_id` 是**全中心唯一**的车道（含已归档网关）；校验与写入在同一事务内完成，见 §7.2。
+> 旧数据迁移出的重复 `wp_ins_id` 不会被自动改写，重新绑定时由校验逼着换到空闲车道。
+
 换绑审计另起一表（只增；每网关保留最近 100 条）：
 
 ```sql
@@ -274,6 +278,7 @@ CREATE TABLE IF NOT EXISTS gateway_binding_audit (
   gateway_id TEXT NOT NULL,
   customer_id TEXT NOT NULL,
   previous_customer_id TEXT,
+  wp_ins_id BIGINT NOT NULL DEFAULT 100,
   revision BIGINT NOT NULL DEFAULT 1,
   requested_by TEXT NOT NULL DEFAULT '',
   at TIMESTAMPTZ NOT NULL
@@ -281,7 +286,7 @@ CREATE TABLE IF NOT EXISTS gateway_binding_audit (
 ```
 
 > 审计与绑定在**同一次原子写**里完成（PgStore 用事务 + `SELECT … FOR UPDATE`；FileStore 在同一个
-> `update` 闭包里）。只在**归属变化**时记录：同客户重复绑定不写事件（它不改变归属）。
+> `update` 闭包里）。只在**归属或 `wp_ins_id` 变化**时记录：同客户同车道重复绑定不写事件。
 
 ### 7.2 绑定接口
 
@@ -295,9 +300,23 @@ CREATE TABLE IF NOT EXISTS gateway_binding_audit (
    ^[A-Za-z0-9_.:/=@+,-]{1,64}$
    ```
    不合法 → 400（错误码如 `customer_id_not_tag_safe`；数据面字段名为 `tenant_id`）。
-3. upsert 绑定，`revision = revision + 1`（换绑也递增）。
-4. 记录 `requested_by`（目前只校验非空、未落库；建议写审计日志或加列）。
-5. 已初始化网关 → 入队 `bind-tenant` 命令，payload 用 `tenant_id`。
+3. **校验 `wp_ins_id` 属于 `100..=1123`**（wparse `WP_INS_ID` 的 10 bit 实例段），
+   否则 400 `wp_ins_id_invalid`；它是必填参数，缺省会被请求体校验拒掉。
+4. **校验 `wp_ins_id` 全中心唯一**（排除自己、**包含已归档**）：已被另一台网关占用 →
+   `409 wp_ins_id_conflict`，消息带占用者 `gateway_id`。检查与 upsert 必须在同一个
+   事务/临界区（PgStore：`pg_advisory_xact_lock` + 冲突查询；FileStore：`update` 锁内扫快照），
+   不能“先 SELECT 再 INSERT”。
+5. upsert 绑定；`customer_id` 或 `wp_ins_id` 任一变化 → `revision = revision + 1`。
+6. 记录 `requested_by`（目前只校验非空、未落库；建议写审计日志或加列）。
+7. 已初始化网关 → 入队 `bind-tenant` 命令，payload 用 `tenant_id` + `wp_ins_id`。
+
+**释放实例号（仅已归档且离线）**：`POST /api/v1/admin/gateways/{gateway_id}/wp-ins-id:release`，body
+`{requested_by}`。未归档 → `409 gateway_not_archived`；归档标记已写但心跳仍是 online →
+`409 gateway_online_cannot_release`（避免“在线网关的车道被释放后还在继续发号”）；无绑定 →
+`404 gateway_binding_not_found`。
+释放写 `wp_ins_id_released_at` / `wp_ins_id_released_by`（幂等，保留首次值），该车道不再参与
+唯一性校验。**已释放车道的网关重新上线**（状态上报 / 拉取初始配置）时，中心自动分配最小空闲
+车道并 `revision++`，随 `desired_business_identity` 下发；1024 个车道全满时绑定标 `failed`。
 6. 未初始化网关 → 不入队；写入 `GatewayInitialConfig`，首次 link-upstream 自带。
 7. 返回体增加 `revision`、`applied_revision`、`applied_at`（可为 null）。
 
@@ -568,6 +587,14 @@ tags = ["env:dev", "tenant_id:${WIST_TENANT_ID:unbound}"]
 由 gwlinkd 写；不进入 `sys/`，也不被 `project_remote` 覆盖。
 `data-plane-run/` 属于 `protect`（升级不覆盖）且不进备份；换机/重装后由 Center 重新下发。
 
+同一个文件里还有 **`WP_INS_ID`**（wparse ≥ 0.36.2）：`wp_event_id` 的布局是
+`秒 32 | 实例 10 | 每秒计数器 22`，实例段取 `WP_INS_ID - 100`，合法区间 `100..=1123`。
+它由 Center「绑定客户」的 `wp_ins_id` 下发（`bind-tenant` / 初始配置 / 状态回执补偿同一份），
+gwlinkd 写进 `.env`；**网关栈 compose 不注入这个进程变量**（wparse 的优先级是
+进程环境 > `.env`，注入了绑定值就不生效）。旧中心不带该字段时 gwlinkd 不动现场值；
+未绑定时 wparse 回退默认 `100`（打 WARN）。多个站点汇到同一个中心时，车道必须互不相同，
+否则同一秒发号会产重复 `wp_event_id`。
+
 | 形态 | `.env` 路径 |
 |---|---|
 | 开发态 | `<stack>/data-plane-run/dev/.env` |
@@ -608,13 +635,15 @@ wparse 可能先于 gwlinkd 首次写入 `.env` 启动：
 
 | 契约 | 变更 | 兼容性 |
 |---|---|---|
-| `GatewayCustomerBinding` | 增 `revision` / `applied_revision` / `applied_at` / `last_error`；管理面仍用 `customer_id` | 新字段可选 |
-| `GatewayStatusAccepted` | 增 `desired_business_identity {tenant_id, revision}`（中心权威期望值） | `#[serde(default)]`，旧 gwlinkd 忽略 |
+| `GatewayCustomerBinding` | 增 `revision` / `applied_revision` / `applied_at` / `last_error`；管理面仍用 `customer_id`。另增 `wp_ins_id`（wparse 事件号实例段，`100..=1123`）与 `wp_ins_id_released_at` / `wp_ins_id_released_by`（显式释放） | `wp_ins_id` 缺省 100；释放字段为 `Option` |
+| `GatewayStatusAccepted` | 增 `desired_business_identity {tenant_id, revision, wp_ins_id?}`（中心权威期望值） | `wp_ins_id` 为 `Option`，旧 gwlinkd 忽略 |
 | `ReportGatewayStatus` | 增 `tenant_id` / `binding_revision` | `#[serde(default)]`，旧中心忽略 |
 | `GwlinkdStatus` | 增 `tenant_id` / `binding_revision` | 旧网关忽略 |
-| `GatewayInitialConfig` | 增 `tenant_id` / `binding_revision` | 旧 gwlinkd 忽略 |
-| `wist-center` store trait | 增 `record_customer_binding_report(...)` / `mark_binding_failed(...)` / `get_customer_binding(...)` / `list_binding_audit(...)`；`bind_gateway_customer(...)` 增 `requested_by` 并在同一次原子写里记审计 | FileStore + PgStore 双实现 |
-| `wist-center` schema | 补 `gateway_customer_bindings` 表及列；新增 `gateway_binding_audit`（换绑审计） | `CREATE/ALTER ... IF NOT EXISTS` |
+| `GatewayInitialConfig` | 增 `tenant_id` / `binding_revision` / `wp_ins_id` | 旧 gwlinkd 忽略 |
+| `AdminBindGatewayCustomer` | 增必填 `wp_ins_id`（`100..=1123`，越界 `400 wp_ins_id_invalid`；被占用 `409 wp_ins_id_conflict`） | **破坏性**：调用方需补字段；与 center-web 同批升级 |
+| `AdminReleaseGatewayWpInsId` | 新增：`POST /api/v1/admin/gateways/{id}/wp-ins-id:release`（仅已归档；幂等） | 新端点，旧前端不调用 |
+| `wist-center` store trait | 增 `record_customer_binding_report(...)` / `mark_binding_failed(...)` / `get_customer_binding(...)` / `list_binding_audit(...)`；`bind_gateway_customer(...)` 增 `wp_ins_id` / `requested_by`，并在同一次原子写里记审计 | FileStore + PgStore 双实现 |
+| `wist-center` schema | 补 `gateway_customer_bindings` 表及列（含 `wp_ins_id`）；新增 `gateway_binding_audit`（换绑审计，含 `wp_ins_id`） | `CREATE/ALTER ... IF NOT EXISTS` |
 | `AdminGetGatewayBindingHistory` | 新增 `GET /api/v1/admin/gateways/{id}/bindings`（`GatewayBindingAuditEvent[]`） | 新端点，旧前端不调用 |
 | `wist-control` Jumo 模型 | 同步新增字段/实体 | 需 `jumo-model-align` |
 
@@ -630,8 +659,8 @@ wparse 可能先于 gwlinkd 首次写入 `.env` 启动：
 
   > 实现要点：补偿在 **relay 任务**里做（它才是 `.env` / 身份文件的唯一写者），命令处理与补偿
   > 不会并发写；同一期望值失败后至少隔 60s 才重试（生效命令可能要重启整栈）。判据：
-  > `tenant_id` 不同 / `revision` 落后 / 同版本但 `wparse_applied = false`。因此**中心侧漂移也会自愈**
-  > —— 网关自报值与权威值不一致时，下一次回执的期望值会把它改回来。
+  > `tenant_id` 不同 / `revision` 落后 / 同版本但 `wp_ins_id` 不同 / 同版本但 `wparse_applied = false`。
+  > 因此**中心侧漂移也会自愈** —— 网关自报值与权威值不一致时，下一次回执的期望值会把它改回来。
 - **Center 侧检测漂移后重新入队**（未做）：状态上报显示 `binding_revision` 落后时，重新 enqueue。
 
 ### 11.2 应用失败

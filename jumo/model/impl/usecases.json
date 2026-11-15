@@ -138,6 +138,18 @@
       ]
     },
     {
+      "name": "System.WistCenter.ReleaseGatewayWpInsId",
+      "status": "Complete",
+      "progress": 100,
+      "entries": [
+        {
+          "name": "AdminReleaseGatewayWpInsId",
+          "route": "POST /api/v1/admin/gateways/:gateway_id/wp-ins-id:release",
+          "handler": "wist-center:admin_ops.rs:admin_release_gateway_wp_ins_id"
+        }
+      ]
+    },
+    {
       "name": "System.WistCenter.RenewGatewayCredential",
       "status": "Complete",
       "progress": 100,

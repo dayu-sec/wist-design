@@ -33,6 +33,14 @@ message<command> AdminCreateGatewayInstance = OperatorRequest {
 message<command> AdminBindGatewayCustomer = OperatorRequest {
   gateway_id: String
   customer_id: String
+  // wparse 事件号的实例段（`wp_event_id` = 秒 | 实例 | 计数器）。
+  // **多站点汇到同一个中心时必须各不相同**，否则同一秒发号会撞 ID；取值 100..=1123。
+  wp_ins_id: Int
+}
+
+// 显式释放已归档网关的实例号（可被其他网关重新使用）。
+message<command> AdminReleaseGatewayWpInsId = OperatorRequest {
+  gateway_id: String
 }
 
 message<command> AdminQueryHostInventory = OperatorRequest {

@@ -35,6 +35,8 @@ struct GatewayInitialConfig {
   // 首次接入时随配置带出业务身份；旧 gwlinkd 忽略。
   tenant_id: String?
   binding_revision: Int?
+  // wparse 事件号的实例段（`wp_event_id` 的 10 bit 实例位）；旧 gwlinkd 忽略。
+  wp_ins_id: Int?
 }
 
 struct GatewayStatusAccepted {
@@ -62,6 +64,8 @@ struct DesiredBusinessIdentity {
 
   tenant_id: String
   revision: Int
+  // 事件号实例段（wparse `WP_INS_ID`）；旧网关忽略，缺省不动现场值。
+  wp_ins_id: Int?
 }
 
 // Gateway 运行态领域事实（注册后的版本/状态/健康/最近上报），非 View DTO。
@@ -148,6 +152,11 @@ struct GatewayCustomerBinding {
   bound_at: DateTime
   // 绑定版本：同客户重复绑定不递增；换绑递增。
   revision: Int
+  // wparse 事件号的实例段（`WP_INS_ID`，100..=1123）。
+  wp_ins_id: Int
+  // 显式释放实例号的时刻 / 操作者；空 = 仍占用（唯一性只看这一对为空的行）。
+  wp_ins_id_released_at: DateTime?
+  wp_ins_id_released_by: String?
   applied_revision: Int?
   applied_at: DateTime?
   last_error: String?
