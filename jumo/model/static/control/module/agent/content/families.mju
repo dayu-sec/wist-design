@@ -24,7 +24,7 @@ variant CollectionFamily {
   meta {
     label zh "采集面"
     label en "Collection Family"
-    summary zh "工作内容的分类面（**闭集**，共 23 个）：登录、提权、软件变更、服务、崩溃、网络、重启、系统杂项、指标、容器日志、流量检测、关键进程指标，以及 macOS 侧重、Linux 侧重与外部系统指标的面。面描述**需求**（要看见什么类别的事件），不是**载体**（从哪个文件/接口拿）；只增不改名，改名即新面 + 旧面 deprecated。"
+    summary zh "工作内容的分类面（**闭集**，共 24 个）：登录、提权、软件变更、服务、崩溃、网络、重启、系统杂项、指标、容器日志、流量检测、网络流记录、关键进程指标，以及 macOS 侧重、Linux 侧重与外部系统指标的面。面描述**需求**（要看见什么类别的事件），不是**载体**（从哪个文件/接口拿）；只增不改名，改名即新面 + 旧面 deprecated。"
     tags "control", "collection", "content"
   }
 
@@ -45,8 +45,13 @@ variant CollectionFamily {
   // ComputeWorkload 作业/调度/加速卡（slurm 作业、GPU Xid —— 描述计算节点的需求，与容器无关）、
   // BackupJob 备份与批处理、NetworkService 网络服务（NFS/SMB/防火墙规则）、
   // TrafficInspection 流量检测（镜像点的 IDS 事件：Suricata `eve.json` ——
-  //   与 NetworkFirewall 不同：那个是 nft/iptables 的规则快照，这里是 GB/天级的事件流）。
-  KernelSystem DatabaseService StorageHealth ContainerWorkload ComputeWorkload BackupJob NetworkService TrafficInspection
+  //   与 NetworkFirewall 不同：那个是 nft/iptables 的规则快照，这里是 GB/天级的事件流）、
+  // NetworkFlow 网络流记录（主机与外部地址的 TCP/UDP/ICMP 五元组窗口聚合 ——
+  //   与 NetworkFirewall 不同：那个回答「被拦了什么、策略变没变」，这里回答「和谁、
+  //   哪个端口、多大量」；与 TrafficInspection 也不同：那个是 IDS 的告警事件，这里是
+  //   无告警的通信事实。四个网络相关的面（NetworkFirewall / NetworkService /
+  //   TrafficInspection / NetworkFlow）各回答一个问题，不合并）。
+  KernelSystem DatabaseService StorageHealth ContainerWorkload ComputeWorkload BackupJob NetworkService TrafficInspection NetworkFlow
 
   // 外部系统指标（平台 linux）：端点 / 协议 / 凭据只来自 agentd 本机自探，
   // 工作单元的 source `target` 只认 `auto`。与上面的「日志面」并列，但走 `collect_metrics`。
