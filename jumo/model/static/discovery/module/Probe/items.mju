@@ -112,6 +112,17 @@ struct ProbeOutput {
   probe
   resources
   targets
+  // 探针**看见了但读不了**的位置（空表 = 没有这种情况）。`Ok` + 空列表本身有歧义：
+  // 「确实没有」与「看不见」对采集记账的结论相反（空集 vs 该采而采不了），只有探针知道是哪种。
+  unobserved: List<UnobservedSource>
+}
+
+// 一条「看不见」的记录：哪个域、哪个位置、什么原因。`subject` 是稳定的域键（如
+// `container_runtime`），下游据此把「看不见」挂到对应采集域上。
+struct UnobservedSource {
+  subject
+  location
+  detail
 }
 
 struct DiscoveryProbeError {
@@ -134,6 +145,8 @@ struct DiscoveryRefreshResult {
   last_error
   store_failure
   successful_probes
+  // 本轮快照实际用到的各探针输出里的「看不见」记录（含未到期、沿用缓存的那部分）。
+  unobserved: List<UnobservedSource>
 }
 
 struct SuccessfulProbeRefresh {

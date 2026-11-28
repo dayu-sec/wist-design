@@ -34,7 +34,7 @@
 
 ## 2. 闭集与维护规矩
 
-**共 23 个**（清单见 §3）。三条规矩：
+**共 25 个**（清单见 §3）。三条规矩：
 
 1. **只增不改名。** 面名一旦进入协议（数据帧 / 记录 / 接口），改名就是**破坏性变更**：
    历史数据里那个值会变成"不存在的面"，按面统计与回溯都会断。
@@ -47,7 +47,7 @@
 **谁校验**：网关装载采集目录时按词表拒未知面 —— 面名写错会**报错**，不会被静默收下；
 词表本身还要过**追加式校验**（不得删除 / 改名 / 复用已退场 ID）。
 
-## 3. 面一览（23 个）
+## 3. 面一览（25 个）
 
 > 「载体」一列只是让你知道**大概从哪来**，会随系统版本与策展变；**以 `catalog.toml` 为准**。
 > 同一个面也可能有多个载体（如 `NetworkFirewall` 的 macOS 侧 = `wifi.log` + 统一日志 `com.apple.alf`）。
@@ -74,9 +74,11 @@
 | `BackupJob` | 备份与批处理 | Linux | `borg/*`、`restic/*` |
 | `NetworkService` | 网络服务（NFS/SMB/防火墅规则） | Linux | `nginx/*`、`samba/*` |
 | `TrafficInspection` | 流量的入侵检测事件（镜像点） | Linux | `/opt/suricata/logs/eve.json`（显式单路径跟尾，一行一条 JSON） |
+| `NetworkFlow` | 主机与外部地址的 TCP/UDP/ICMP 五元组窗口聚合 | Linux | tc + eBPF（观测哪张网卡由本机判定） |
 | `DatabaseMetrics` | 数据库运行指标（连接 / 事务 / IO / 复制 / 容量 / tablet） | Linux | `PostgresInstance` / `MysqlInstance`（含 TiDB）/ `DorisCluster`，均 `auto` |
 | `MessageQueueMetrics` | 分布式消息队列指标（broker 拓扑 / 容量 / 消费组 lag） | Linux | `KafkaCluster auto`（端点由 agentd 自探） |
 | `ProcessMetrics` | **关键进程**的运行指标（rss / cpu / state，每个服务一个代表进程） | Linux | `KeyProcessMetrics`（展策签名选目标，agentd 按本机事实判定） |
+| `ContainerMetrics` | **每个容器**的运行指标（内存 / CPU / 状态） | Linux | `ContainerMetrics auto`（容器由本机发现；Linux 走宿主 `/proc` + cgroup，macOS 待接 Docker API 载体） |
 
 ### 3.1 为什么指标面按领域切，不按产品切
 
@@ -84,14 +86,15 @@
 
 | 且法 | 数量 | 例子 |
 | --- | --- | --- |
-| 事件 / 领域 | **23** | `LoginSession`、`CrashPanic`、`DatabaseService`、`HostMetrics` |
+| 事件 / 领域 | **25** | `LoginSession`、`CrashPanic`、`DatabaseService`、`HostMetrics` |
 | 外部产品名 | **0**（在用） | — |
 
 合并的**硬边界**是三条同时成立，否则不能合：
 
 1. 同一 `capability` —— DB 指标与 `DatabaseService`（日志）不能合，那是 `collect_logs`；
 2. 同一平台；
-3. 同一「要看见什么」的粒度 —— 数据库指标与消息队列指标不能合。
+3. 同一「要看见什么」的粒度 —— 数据库指标与消息队列指标不能合；**整机读数与每容器读数也不能合**
+   （所以 `ContainerMetrics` 从 `HostMetrics` 拆了出去，与 `ProcessMetrics` 拆出去的理由同构）。
 
 产品差异落到**单元**与 `CollectionSourceKind`（`PostgresInstance` / `MysqlInstance` /
 `DorisCluster` / `KafkaCluster`），**指标命名空间**（`pg_*` / `mysql_*` / `doris_*` / `kafka_*`）
